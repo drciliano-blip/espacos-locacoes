@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation'
 import { Bell, User, Sun, Moon } from 'lucide-react'
 import { getEspacoBySlug } from '@/lib/espacos-config'
 import { useTheme } from '@/components/ThemeProvider'
+import type { NivelAcesso } from '@/types'
 
 const titles: Record<string, string> = {
   '/dashboard': 'Dashboard',
@@ -11,9 +12,16 @@ const titles: Record<string, string> = {
   '/pagamentos': 'Pagamentos',
   '/contratos': 'Contratos',
   '/relatorios': 'Relatórios',
+  '/contas-a-pagar': 'Contas a Pagar',
+  '/usuarios': 'Gestão de Usuários',
 }
 
-export default function Header() {
+interface HeaderProps {
+  userName: string
+  userRole: NivelAcesso
+}
+
+export default function Header({ userName, userRole }: HeaderProps) {
   const pathname = usePathname()
   const { theme, toggle } = useTheme()
 
@@ -24,12 +32,17 @@ export default function Header() {
     title = config ? config.nome : 'Espaço'
   }
 
+  const roleLabel: Record<NivelAcesso, string> = {
+    admin: 'Admin',
+    financeiro: 'Financeiro',
+    operacional: 'Operacional',
+    visualizador: 'Visualizador',
+  }
+
   return (
     <header className="flex h-14 items-center justify-between border-b border-app-border bg-app-surface px-6 print-hidden">
       <h1 className="text-base font-semibold text-app-text">{title}</h1>
       <div className="flex items-center gap-2">
-
-        {/* Theme toggle */}
         <button
           onClick={toggle}
           title={theme === 'dark' ? 'Mudar para modo claro' : 'Mudar para modo escuro'}
@@ -47,7 +60,10 @@ export default function Header() {
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-500/20 border border-violet-500/30">
             <User className="h-4 w-4 text-violet-400" />
           </div>
-          <span className="text-sm text-app-text2 font-medium">Admin</span>
+          <div className="leading-tight">
+            <p className="text-sm text-app-text2 font-medium leading-none">{userName}</p>
+            <p className="text-xs text-app-subtle">{roleLabel[userRole]}</p>
+          </div>
         </div>
       </div>
     </header>
