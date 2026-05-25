@@ -141,7 +141,7 @@ export default function DashboardPage() {
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.05)" />
                   <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 10 }} tickFormatter={(v) => `${v/1000}k`} />
                   <YAxis type="category" dataKey="espaco" tick={{ fill: '#9ca3af', fontSize: 11 }} width={55} />
-                  <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={{ background: '#1a1a2e', border: '1px solid #2a2a4a', borderRadius: 8 }} />
+                  <Tooltip formatter={(v) => formatCurrency(Number(v))} contentStyle={{ background: '#1a1a2e', border: '1px solid #2a2a4a', borderRadius: 8 }} />
                   <Bar dataKey="receita" radius={[0, 4, 4, 0]}>
                     {comparativoData.map((entry) => (
                       <Cell key={entry.espaco} fill={espacoColors[ESPACOS.find(e => e.startsWith(entry.espaco)) ?? ''] ?? '#8b5cf6'} fillOpacity={0.8} />
@@ -177,7 +177,7 @@ export default function DashboardPage() {
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.05)" />
                   <XAxis type="number" domain={[0, 100]} tick={{ fill: '#6b7280', fontSize: 10 }} tickFormatter={(v) => `${v}%`} />
                   <YAxis type="category" dataKey="espaco" tick={{ fill: '#9ca3af', fontSize: 11 }} width={55} />
-                  <Tooltip formatter={(v: number) => `${v}%`} contentStyle={{ background: '#1a1a2e', border: '1px solid #2a2a4a', borderRadius: 8 }} />
+                  <Tooltip formatter={(v) => `${Number(v)}%`} contentStyle={{ background: '#1a1a2e', border: '1px solid #2a2a4a', borderRadius: 8 }} />
                   <Bar dataKey="ocupacao" radius={[0, 4, 4, 0]}>
                     {comparativoData.map((entry) => (
                       <Cell key={entry.espaco} fill={espacoColors[ESPACOS.find(e => e.startsWith(entry.espaco)) ?? ''] ?? '#8b5cf6'} fillOpacity={0.8} />
