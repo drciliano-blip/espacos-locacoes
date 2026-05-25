@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Light mode defaults ────────────────────────────────── */
+:root {
+  --app-bg:       #f8fafc;
+  --app-surface:  #ffffff;
+  --app-surface2: #f1f5f9;
+  --app-surface3: #e2e8f0;
+  --app-border:   #e2e8f0;
+  --app-border2:  #cbd5e1;
+  --app-text:     #0f172a;
+  --app-text2:    #334155;
+  --app-muted:    #64748b;
+  --app-subtle:   #94a3b8;
+  --chart-grid:   #e2e8f0;
+  --chart-tick:   #94a3b8;
+  --card-shadow:  0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.06);
+}
+
+/* ── Dark mode ──────────────────────────────────────────── */
+.dark {
+  --app-bg:       #09090b;
+  --app-surface:  #18181b;
+  --app-surface2: #27272a;
+  --app-surface3: #3f3f46;
+  --app-border:   #27272a;
+  --app-border2:  #3f3f46;
+  --app-text:     #fafafa;
+  --app-text2:    #e4e4e7;
+  --app-muted:    #71717a;
+  --app-subtle:   #52525b;
+  --chart-grid:   #27272a;
+  --chart-tick:   #71717a;
+  --card-shadow:  none;
+}
+
+/* ── Tailwind semantic tokens ───────────────────────────── */
+@theme inline {
+  --color-background:   var(--app-bg);
+  --color-foreground:   var(--app-text);
+  --color-primary:      #a78bfa;
+  --color-app-bg:       var(--app-bg);
+  --color-app-surface:  var(--app-surface);
+  --color-app-surface2: var(--app-surface2);
+  --color-app-surface3: var(--app-surface3);
+  --color-app-border:   var(--app-border);
+  --color-app-border2:  var(--app-border2);
+  --color-app-text:     var(--app-text);
+  --color-app-text2:    var(--app-text2);
+  --color-app-muted:    var(--app-muted);
+  --color-app-subtle:   var(--app-subtle);
+}
+
+body {
+  background-color: var(--app-bg);
+  color: var(--app-text);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #3f3f46 transparent;
+}
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background-color: #3f3f46; border-radius: 3px; }
+
+/* ── Print / PDF ────────────────────────────────────────── */
+@media print {
+  :root, .dark {
+    --app-bg:      #ffffff;
+    --app-surface: #ffffff;
+    --app-surface2:#f8fafc;
+    --app-border:  #e2e8f0;
+    --app-text:    #0f172a;
+    --app-text2:   #334155;
+    --app-muted:   #64748b;
+    --app-subtle:  #94a3b8;
+    --chart-grid:  #e2e8f0;
+    --chart-tick:  #94a3b8;
+  }
+
+  aside, header, .print-hidden { display: none !important; }
+
+  body { background: #fff; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  table { border-collapse: collapse; }
+  th, td { border: 1px solid #e2e8f0; padding: 4px 8px; color: #0f172a !important; }
+
+  .recharts-surface { overflow: visible; }
+  .recharts-wrapper { page-break-inside: avoid; }
+}
