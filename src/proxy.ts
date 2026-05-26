@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
+const ROLE_PERMISSIONS: Record<string, string[]> = {
+  admin:        ['dashboard', 'agenda', 'pagamentos', 'contratos', 'relatorios', 'espacos', 'contas-a-pagar', 'usuarios'],
+  financeiro:   ['dashboard', 'pagamentos', 'contratos', 'relatorios', 'contas-a-pagar'],
+  operacional:  ['dashboard', 'agenda', 'contratos', 'espacos'],
+  visualizador: ['dashboard'],
+}
+
 export function proxy(request: NextRequest) {
   const auth = request.cookies.get('auth')
   const { pathname } = request.nextUrl
@@ -8,12 +15,30 @@ export function proxy(request: NextRequest) {
   const publicPaths = ['/login']
   const isPublic = publicPaths.some((p) => pathname.startsWith(p))
 
+  // Unauthenticated → login
   if (!auth && !isPublic) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
+  // Already logged in → skip login page
   if (auth && pathname === '/login') {
     return NextResponse.redirect(new URL('/dashboard', request.url))
+  }
+
+  // Role-based access control
+  if (auth && !isPublic) {
+    try {
+      const user = JSON.parse(decodeURIComponent(auth.value))
+      const role: string = user.role ?? 'visualizador'
+      const permissions = ROLE_PERMISSIONS[role] ?? []
+      const segment = pathname.split('/')[1] // e.g. "agenda", "usuarios"
+
+      if (segment && !permissions.includes(segment)) {
+        return NextResponse.redirect(new URL('/dashboard', request.url))
+      }
+    } catch {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
   }
 
   return NextResponse.next()
