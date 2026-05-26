@@ -7,7 +7,7 @@ import {
   Building2, Upload, Trash2, FileText, FileCheck,
   File, Image, Shield, Clock, User, MapPin,
   CheckCircle2, AlertCircle, XCircle, BarChart3,
-  Activity, ChevronRight, Layers,
+  Activity, ChevronRight, Layers, Plus,
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -16,6 +16,8 @@ import type { EspacoConfig } from '@/lib/espacos-config'
 import type { Evento } from '@/types'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import EventoDrawer from '@/components/eventos/EventoDrawer'
+import NovoEventoModal from '@/components/eventos/NovoEventoModal'
+import { useEventos } from '@/contexts/EventosContext'
 
 // ─── local types ─────────────────────────────────────────────────────────────
 
@@ -116,28 +118,35 @@ function formatTimestamp(ts: string) {
 
 interface EspacoPageProps {
   config: EspacoConfig
-  eventos: Evento[]
 }
 
-export default function EspacoPage({ config, eventos }: EspacoPageProps) {
-  const [tab, setTab]                     = useState<SpaceTab>('eventos')
+export default function EspacoPage({ config }: EspacoPageProps) {
+  const { eventos: todosEventos, addEvento, updateEvento } = useEventos()
+
+  const [tab, setTab]                       = useState<SpaceTab>('eventos')
   const [selectedEvento, setSelectedEvento] = useState<Evento | null>(null)
-  const [eventosState, setEventosState]   = useState<Evento[]>(eventos)
-  const [statusFiltro, setStatusFiltro]   = useState<string>('todos')
-  const [documentos, setDocumentos]       = useState<DocumentoEspaco[]>(() => seedDocs(config.nome))
-  const [atividades]                      = useState<Atividade[]>(() => seedAtividades(config.nome))
-  const [addingDoc, setAddingDoc]         = useState(false)
-  const [newDoc, setNewDoc]               = useState<{ nome: string; categoria: DocCategoria }>({ nome: '', categoria: 'contrato' })
+  const [statusFiltro, setStatusFiltro]     = useState<string>('todos')
+  const [documentos, setDocumentos]         = useState<DocumentoEspaco[]>(() => seedDocs(config.nome))
+  const [atividades]                        = useState<Atividade[]>(() => seedAtividades(config.nome))
+  const [addingDoc, setAddingDoc]           = useState(false)
+  const [newDoc, setNewDoc]                 = useState<{ nome: string; categoria: DocCategoria }>({ nome: '', categoria: 'contrato' })
+  const [novoEventoOpen, setNovoEventoOpen] = useState(false)
+
+  // Events for this specific space, derived from global context
+  const eventosEspaco = useMemo(
+    () => todosEventos.filter(e => e.espaco === config.nome),
+    [todosEventos, config.nome],
+  )
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
   const receitaConfirmada = useMemo(
-    () => eventosState.filter(e => e.status === 'confirmado').reduce((s, e) => s + e.valor, 0),
-    [eventosState],
+    () => eventosEspaco.filter(e => e.status === 'confirmado').reduce((s, e) => s + e.valor, 0),
+    [eventosEspaco],
   )
-  const confirmados = eventosState.filter(e => e.status === 'confirmado').length
+  const confirmados = eventosEspaco.filter(e => e.status === 'confirmado').length
   const ticketMedio = confirmados > 0 ? receitaConfirmada / confirmados : 0
 
-  const eventsWithPeople = eventosState.filter(e => (e.numeroPessoas ?? 0) > 0)
+  const eventsWithPeople = eventosEspaco.filter(e => (e.numeroPessoas ?? 0) > 0)
   const mediaPessoas = eventsWithPeople.length > 0
     ? Math.round(eventsWithPeople.reduce((s, e) => s + (e.numeroPessoas ?? 0), 0) / eventsWithPeople.length)
     : 0
@@ -145,24 +154,24 @@ export default function EspacoPage({ config, eventos }: EspacoPageProps) {
 
   // ── Eventos filtrados ──────────────────────────────────────────────────────
   const eventosMostrados = useMemo(() => {
-    const base = statusFiltro === 'todos' ? eventosState : eventosState.filter(e => e.status === statusFiltro)
+    const base = statusFiltro === 'todos' ? eventosEspaco : eventosEspaco.filter(e => e.status === statusFiltro)
     return [...base].sort((a, b) => a.data.localeCompare(b.data))
-  }, [eventosState, statusFiltro])
+  }, [eventosEspaco, statusFiltro])
 
   // ── Dados para gráfico ─────────────────────────────────────────────────────
   const monthlyData = useMemo(() => {
     const acc: Record<string, number> = {}
-    eventosState.filter(e => e.status === 'confirmado').forEach(e => {
+    eventosEspaco.filter(e => e.status === 'confirmado').forEach(e => {
       const [, m] = e.data.split('-')
       const label = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][Number(m) - 1]
       acc[label] = (acc[label] ?? 0) + e.valor
     })
     return Object.entries(acc).map(([mes, valor]) => ({ mes, valor }))
-  }, [eventosState])
+  }, [eventosEspaco])
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   function handleUpdate(updated: Evento) {
-    setEventosState(prev => prev.map(e => e.id === updated.id ? updated : e))
+    updateEvento(updated)
     setSelectedEvento(updated)
   }
 
@@ -181,10 +190,10 @@ export default function EspacoPage({ config, eventos }: EspacoPageProps) {
   }
 
   const statusChips = [
-    { key: 'todos',     label: 'Todos',       count: eventosState.length },
-    { key: 'confirmado',label: 'Confirmados',  count: eventosState.filter(e => e.status === 'confirmado').length },
-    { key: 'tentativo', label: 'Tentativos',   count: eventosState.filter(e => e.status === 'tentativo').length },
-    { key: 'cancelado', label: 'Cancelados',   count: eventosState.filter(e => e.status === 'cancelado').length },
+    { key: 'todos',     label: 'Todos',      count: eventosEspaco.length },
+    { key: 'confirmado',label: 'Confirmados', count: eventosEspaco.filter(e => e.status === 'confirmado').length },
+    { key: 'tentativo', label: 'Tentativos',  count: eventosEspaco.filter(e => e.status === 'tentativo').length },
+    { key: 'cancelado', label: 'Cancelados',  count: eventosEspaco.filter(e => e.status === 'cancelado').length },
   ]
 
   const barColor = COR_HEX[config.cor] ?? '#8b5cf6'
@@ -213,10 +222,17 @@ export default function EspacoPage({ config, eventos }: EspacoPageProps) {
               </span>
               <span className="flex items-center gap-1.5 text-xs text-app-subtle">
                 <CalendarCheck className="h-3.5 w-3.5" />
-                {eventosState.length} evento{eventosState.length !== 1 ? 's' : ''} cadastrado{eventosState.length !== 1 ? 's' : ''}
+                {eventosEspaco.length} evento{eventosEspaco.length !== 1 ? 's' : ''} cadastrado{eventosEspaco.length !== 1 ? 's' : ''}
               </span>
             </div>
           </div>
+          <button
+            onClick={() => setNovoEventoOpen(true)}
+            className="flex shrink-0 items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-xs font-medium text-white hover:bg-violet-500 transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Novo Evento
+          </button>
         </div>
       </div>
 
@@ -456,7 +472,7 @@ export default function EspacoPage({ config, eventos }: EspacoPageProps) {
             <div className="grid grid-cols-3 gap-3">
               {[
                 { label: 'Receita Confirmada', value: formatCurrency(receitaConfirmada), color: config.colorClass },
-                { label: 'Receita Tentativa',  value: formatCurrency(eventosState.filter(e => e.status === 'tentativo').reduce((s, e) => s + e.valor, 0)), color: 'text-amber-400' },
+                { label: 'Receita Tentativa',  value: formatCurrency(eventosEspaco.filter(e => e.status === 'tentativo').reduce((s, e) => s + e.valor, 0)), color: 'text-amber-400' },
                 { label: 'Ticket Médio',        value: ticketMedio > 0 ? formatCurrency(ticketMedio) : '—', color: 'text-sky-400' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="rounded-lg border border-app-border2/50 bg-app-surface2/30 p-4">
@@ -495,8 +511,8 @@ export default function EspacoPage({ config, eventos }: EspacoPageProps) {
               <h4 className="text-sm font-semibold text-app-text mb-3">Categorias de Eventos</h4>
               <div className="space-y-2.5">
                 {config.categorias.map((cat) => {
-                  const total = eventosState.filter(e => e.status !== 'cancelado').length
-                  const count = eventosState.filter(e => e.tipo.toLowerCase() === cat.label.toLowerCase() && e.status !== 'cancelado').length
+                  const total = eventosEspaco.filter(e => e.status !== 'cancelado').length
+                  const count = eventosEspaco.filter(e => e.tipo.toLowerCase() === cat.label.toLowerCase() && e.status !== 'cancelado').length
                   const pct = total > 0 ? Math.round((count / total) * 100) : 0
                   return (
                     <div key={cat.label}>
@@ -566,9 +582,18 @@ export default function EspacoPage({ config, eventos }: EspacoPageProps) {
       {/* EventoDrawer */}
       {selectedEvento && (
         <EventoDrawer
-          evento={eventosState.find(e => e.id === selectedEvento.id) ?? selectedEvento}
+          evento={todosEventos.find(e => e.id === selectedEvento.id) ?? selectedEvento}
           onClose={() => setSelectedEvento(null)}
           onUpdate={handleUpdate}
+        />
+      )}
+
+      {/* Novo Evento */}
+      {novoEventoOpen && (
+        <NovoEventoModal
+          espacoPadrao={config.nome as import('@/types').Espaco}
+          onClose={() => setNovoEventoOpen(false)}
+          onSave={addEvento}
         />
       )}
     </div>

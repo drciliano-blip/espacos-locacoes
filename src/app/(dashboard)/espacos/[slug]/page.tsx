@@ -1,6 +1,5 @@
 import { notFound } from 'next/navigation'
 import { getEspacoBySlug } from '@/lib/espacos-config'
-import { eventos as todosEventos } from '@/lib/mock-data'
 import EspacoPage from '@/components/espacos/EspacoPage'
 
 interface Props {
@@ -15,9 +14,7 @@ export default async function EspacoDetailPage({ params }: Props) {
     notFound()
   }
 
-  const eventosEspaco = todosEventos.filter((e) => e.espaco === config.nome)
-
-  return <EspacoPage config={config} eventos={eventosEspaco} />
+  return <EspacoPage config={config} />
 }
 
 export function generateStaticParams() {
