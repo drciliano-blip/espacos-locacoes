@@ -253,6 +253,6 @@ export const usuarios: Usuario[] = [
   },
   {
     id: 'u6', nome: 'Visitante Demo', email: 'visitante@espacoslocacoes.com.br', senha: 'vis123',
-    role: 'visualizador', ativo: false, createdAt: '2026-01-20', ultimoAcesso: '2026-03-10',
+    role: 'visualizador', ativo: true, createdAt: '2026-01-20', ultimoAcesso: '2026-03-10',
   },
 ]
