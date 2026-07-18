@@ -2,20 +2,20 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* ── Light mode defaults ────────────────────────────────── */
+/* ── Light mode defaults (WhatsApp theme) ───────────────── */
 :root {
-  --app-bg:       #f8fafc;
-  --app-surface:  #ffffff;
-  --app-surface2: #f1f5f9;
-  --app-surface3: #e2e8f0;
-  --app-border:   #e2e8f0;
-  --app-border2:  #cbd5e1;
-  --app-text:     #0f172a;
-  --app-text2:    #334155;
-  --app-muted:    #64748b;
-  --app-subtle:   #94a3b8;
-  --chart-grid:   #e2e8f0;
-  --chart-tick:   #94a3b8;
+  --app-bg:       #F0F2F5;
+  --app-surface:  #FFFFFF;
+  --app-surface2: #F0F2F5;
+  --app-surface3: #E9EDEF;
+  --app-border:   #E9EDEF;
+  --app-border2:  #D1D7DB;
+  --app-text:     #111B21;
+  --app-text2:    #3B4A54;
+  --app-muted:    #667781;
+  --app-subtle:   #8696A0;
+  --chart-grid:   #E9EDEF;
+  --chart-tick:   #8696A0;
   --card-shadow:  0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.06);
 }
 
@@ -40,7 +40,7 @@
 @theme inline {
   --color-background:   var(--app-bg);
   --color-foreground:   var(--app-text);
-  --color-primary:      #a78bfa;
+  --color-primary:      #25D366;
   --color-app-bg:       var(--app-bg);
   --color-app-surface:  var(--app-surface);
   --color-app-surface2: var(--app-surface2);
@@ -60,11 +60,15 @@ body {
 
 * {
   scrollbar-width: thin;
+  scrollbar-color: #D1D7DB transparent;
+}
+.dark * {
   scrollbar-color: #3f3f46 transparent;
 }
 *::-webkit-scrollbar { width: 6px; height: 6px; }
 *::-webkit-scrollbar-track { background: transparent; }
-*::-webkit-scrollbar-thumb { background-color: #3f3f46; border-radius: 3px; }
+*::-webkit-scrollbar-thumb { background-color: #D1D7DB; border-radius: 3px; }
+.dark *::-webkit-scrollbar-thumb { background-color: #3f3f46; }
 
 /* ── Print / PDF ────────────────────────────────────────── */
 @media print {

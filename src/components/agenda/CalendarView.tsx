@@ -86,27 +86,43 @@ export default function CalendarView({ eventos, onDaySelect, selectedDate }: Cal
               onClick={() => onDaySelect(isSelected ? null : day)}
               className={`relative flex flex-col items-center rounded-lg p-1.5 min-h-[52px] transition-colors ${
                 isSelected
-                  ? 'bg-violet-500/20 border border-violet-500/40'
+                  ? 'bg-[#25D366]/15 border border-[#25D366]/35'
                   : 'hover:bg-app-surface2 border border-transparent'
               } ${!isCurrentMonth ? 'opacity-30' : ''}`}
             >
               <span
                 className={`text-xs font-medium mb-1 h-5 w-5 flex items-center justify-center rounded-full ${
                   isToday
-                    ? 'bg-violet-500 text-white'
+                    ? 'text-white'
                     : isSelected
-                    ? 'text-violet-300'
+                    ? 'text-[#25D366]'
                     : 'text-app-text2'
                 }`}
+                style={isToday ? { backgroundColor: '#25D366' } : undefined}
               >
                 {format(day, 'd')}
               </span>
               <div className="flex flex-wrap gap-0.5 justify-center">
                 {dayEvents.slice(0, 3).map((e, i) => (
-                  <span
-                    key={i}
-                    className={`h-1.5 w-1.5 rounded-full ${espacoColors[e.espaco] ?? 'bg-zinc-500'}`}
-                  />
+                  e.status === 'em_negociacao' ? (
+                    <span
+                      key={i}
+                      className="h-1.5 w-1.5 rounded-full border border-amber-400 bg-amber-400/30"
+                      title="Em negociação"
+                    />
+                  ) : e.status === 'cancelado' ? (
+                    <span
+                      key={i}
+                      className="h-1.5 w-1.5 rounded-full bg-red-400/60"
+                      title="Cancelado"
+                    />
+                  ) : (
+                    <span
+                      key={i}
+                      className={`h-1.5 w-1.5 rounded-full ${espacoColors[e.espaco] ?? 'bg-zinc-500'}`}
+                      title={e.espaco}
+                    />
+                  )
                 ))}
               </div>
             </button>
@@ -114,13 +130,29 @@ export default function CalendarView({ eventos, onDaySelect, selectedDate }: Cal
         })}
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-3 border-t border-app-border pt-4">
-        {Object.entries(espacoColors).map(([espaco, color]) => (
-          <div key={espaco} className="flex items-center gap-1.5">
-            <span className={`h-2 w-2 rounded-full ${color}`} />
-            <span className="text-xs text-app-muted">{espaco}</span>
+      <div className="mt-4 border-t border-app-border pt-4 space-y-2">
+        <div className="flex flex-wrap gap-3">
+          {Object.entries(espacoColors).map(([espaco, color]) => (
+            <div key={espaco} className="flex items-center gap-1.5">
+              <span className={`h-2 w-2 rounded-full ${color}`} />
+              <span className="text-xs text-app-muted">{espaco}</span>
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-emerald-400" />
+            <span className="text-xs text-app-subtle">Confirmado</span>
           </div>
-        ))}
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full border border-amber-400 bg-amber-400/30" />
+            <span className="text-xs text-app-subtle">Em negociação</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-red-400/60" />
+            <span className="text-xs text-app-subtle">Cancelado</span>
+          </div>
+        </div>
       </div>
     </div>
   )

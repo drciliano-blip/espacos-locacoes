@@ -5,9 +5,15 @@ import type { Evento, TipoEvento } from '@/types'
 import { formatDate, formatCurrency } from '@/lib/utils'
 
 const statusBadge: Record<string, string> = {
-  confirmado: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  tentativo: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  cancelado: 'bg-red-500/10 text-red-400 border-red-500/20',
+  confirmado:    'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  em_negociacao: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  cancelado:     'bg-red-500/10 text-red-400 border-red-500/20',
+}
+
+const statusLabel: Record<string, string> = {
+  confirmado:    'Confirmado',
+  em_negociacao: 'Em negociação',
+  cancelado:     'Cancelado',
 }
 
 const espacoColors: Record<string, string> = {
@@ -73,7 +79,7 @@ export default function EventList({ eventos, selectedDate, onEventoClick }: Even
                   </div>
                 </div>
                 <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadge[evento.status]}`}>
-                  {evento.status}
+                  {statusLabel[evento.status] ?? evento.status}
                 </span>
               </div>
 
@@ -86,7 +92,7 @@ export default function EventList({ eventos, selectedDate, onEventoClick }: Even
                   <Clock className="h-3 w-3" />
                   {formatDate(evento.data)} · {evento.horaInicio}–{evento.horaFim}
                 </div>
-                <div className="ml-auto text-xs font-semibold text-violet-400">
+                <div className="ml-auto text-xs font-semibold text-[#25D366]">
                   {formatCurrency(evento.valor)}
                 </div>
               </div>

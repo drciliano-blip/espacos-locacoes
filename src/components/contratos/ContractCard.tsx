@@ -1,14 +1,23 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, FileText, MessageSquare } from 'lucide-react'
+import { ChevronDown, ChevronUp, FileText, MessageSquare, User, Paperclip, FileSignature } from 'lucide-react'
 import type { Contrato } from '@/types'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import FileList from '@/components/shared/FileList'
+import FileAttachButton from '@/components/shared/FileAttachButton'
+import GerarContratoModal from '@/components/contratos/GerarContratoModal'
 
 const statusBadge: Record<string, string> = {
-  confirmado: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  tentativo: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  cancelado: 'bg-red-500/10 text-red-400 border-red-500/20',
+  confirmado:    'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  em_negociacao: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  cancelado:     'bg-red-500/10 text-red-400 border-red-500/20',
+}
+
+const statusLabel: Record<string, string> = {
+  confirmado:    'Confirmado',
+  em_negociacao: 'Em negociação',
+  cancelado:     'Cancelado',
 }
 
 const espacoColors: Record<string, string> = {
@@ -28,6 +37,7 @@ export default function ContractCard({ contrato: c }: ContractCardProps) {
   const [obs, setObs] = useState(c.observacoes)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(c.observacoes)
+  const [gerarContratoOpen, setGerarContratoOpen] = useState(false)
 
   const saldoRestante = c.valorTotal - c.valorEntrada
   const pctPago = c.valorTotal > 0 ? Math.round((c.valorEntrada / c.valorTotal) * 100) : 0
@@ -40,7 +50,7 @@ export default function ContractCard({ contrato: c }: ContractCardProps) {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-mono text-app-subtle">{c.numeroContrato}</span>
               <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadge[c.status]}`}>
-                {c.status}
+                {statusLabel[c.status] ?? c.status}
               </span>
             </div>
             <p className="text-base font-bold text-app-text mt-1">{c.cliente}</p>
@@ -65,8 +75,8 @@ export default function ContractCard({ contrato: c }: ContractCardProps) {
           </div>
           <div className="h-1.5 rounded-full bg-app-surface3 overflow-hidden">
             <div
-              className="h-full rounded-full bg-violet-500 transition-all"
-              style={{ width: `${pctPago}%` }}
+              className="h-full rounded-full transition-all"
+              style={{ width: `${pctPago}%`, backgroundColor: '#25D366' }}
             />
           </div>
           <div className="flex justify-between text-xs mt-1 text-app-subtle">
@@ -75,17 +85,30 @@ export default function ContractCard({ contrato: c }: ContractCardProps) {
           </div>
         </div>
 
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="mt-3 flex w-full items-center justify-between rounded-lg border border-app-border2/50 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 hover:text-app-text transition-colors"
-        >
-          <span className="flex items-center gap-1.5">
-            <FileText className="h-3 w-3" />
-            Detalhes do contrato
-          </span>
-          {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-        </button>
+        <div className="mt-3 flex items-center gap-2">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="flex flex-1 items-center justify-between rounded-lg border border-app-border2/50 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 hover:text-app-text transition-colors"
+          >
+            <span className="flex items-center gap-1.5">
+              <FileText className="h-3 w-3" />
+              Detalhes e documentos
+            </span>
+            {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
+          <button
+            onClick={() => setGerarContratoOpen(true)}
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#25D366]/30 bg-[#25D366]/10 px-3 py-1.5 text-xs font-medium text-[#128C7E] hover:bg-[#25D366]/20 transition-colors"
+          >
+            <FileSignature className="h-3 w-3" />
+            Gerar Contrato
+          </button>
+        </div>
       </div>
+
+      {gerarContratoOpen && (
+        <GerarContratoModal origem={{ tipo: 'contrato', dados: c }} onClose={() => setGerarContratoOpen(false)} />
+      )}
 
       {expanded && (
         <div className="border-t border-app-border bg-app-bg/50 p-4 space-y-4">
@@ -105,6 +128,16 @@ export default function ContractCard({ contrato: c }: ContractCardProps) {
             ))}
           </div>
 
+          {/* Responsável */}
+          <div className="rounded-lg border border-app-border2/50 bg-app-surface2/30 px-4 py-3">
+            <p className="text-xs font-medium text-app-muted flex items-center gap-1.5 mb-1.5">
+              <User className="h-3 w-3" />
+              Funcionário responsável
+            </p>
+            <p className="text-sm font-semibold text-app-text">{c.responsavel}</p>
+            <p className="text-xs text-app-subtle mt-0.5">Espaço: {c.espaco}</p>
+          </div>
+
           <div>
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-medium text-app-muted flex items-center gap-1.5">
@@ -112,24 +145,18 @@ export default function ContractCard({ contrato: c }: ContractCardProps) {
                 Observações
               </p>
               {!editing ? (
-                <button
-                  onClick={() => { setEditing(true); setDraft(obs) }}
-                  className="text-xs text-violet-400 hover:text-violet-300 transition-colors"
-                >
+                <button onClick={() => { setEditing(true); setDraft(obs) }}
+                  className="text-xs text-[#25D366] hover:text-[#128C7E] transition-colors">
                   Editar
                 </button>
               ) : (
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => { setObs(draft); setEditing(false) }}
-                    className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
-                  >
+                  <button onClick={() => { setObs(draft); setEditing(false) }}
+                    className="text-xs text-emerald-600 hover:text-emerald-700 transition-colors">
                     Salvar
                   </button>
-                  <button
-                    onClick={() => setEditing(false)}
-                    className="text-xs text-app-subtle hover:text-app-text2 transition-colors"
-                  >
+                  <button onClick={() => setEditing(false)}
+                    className="text-xs text-app-subtle hover:text-app-text2 transition-colors">
                     Cancelar
                   </button>
                 </div>
@@ -137,17 +164,49 @@ export default function ContractCard({ contrato: c }: ContractCardProps) {
             </div>
 
             {editing ? (
-              <textarea
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                rows={3}
-                className="w-full rounded-lg border border-violet-500/40 bg-app-surface2 px-3 py-2 text-sm text-app-text placeholder-app-subtle focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none"
+              <textarea value={draft} onChange={e => setDraft(e.target.value)} rows={3}
+                className="w-full rounded-lg border bg-app-surface2 px-3 py-2 text-sm text-app-text focus:outline-none resize-none"
+                onFocus={e => { e.currentTarget.style.borderColor = '#25D366' }}
+                onBlur={e => { e.currentTarget.style.borderColor = '' }}
               />
             ) : (
               <p className="text-sm text-app-muted bg-app-surface2/50 rounded-lg px-3 py-2 border border-app-border2/30 leading-relaxed">
                 {obs || <span className="text-app-subtle italic">Sem observações.</span>}
               </p>
             )}
+          </div>
+
+          {/* Documentos do contrato */}
+          <div>
+            <p className="text-xs font-medium text-app-muted flex items-center gap-1.5 mb-3">
+              <Paperclip className="h-3 w-3" />
+              Documentos anexados
+            </p>
+            <div className="flex flex-wrap gap-2 mb-3">
+              <FileAttachButton
+                module="contratos"
+                entityId={c.id}
+                entityName={`${c.cliente} — ${c.numeroContrato}`}
+                espaco={c.espaco}
+                categoria="contrato"
+                label="Anexar contrato"
+              />
+              <FileAttachButton
+                module="contratos"
+                entityId={c.id}
+                entityName={`${c.cliente} — ${c.numeroContrato}`}
+                espaco={c.espaco}
+                categoria="comprovante_sinal"
+                label="Anexar comprovante de sinal"
+              />
+            </div>
+            <FileList
+              module="contratos"
+              entityId={c.id}
+              entityName={`${c.cliente} — ${c.numeroContrato}`}
+              espaco={c.espaco}
+              showAttach={false}
+            />
           </div>
         </div>
       )}

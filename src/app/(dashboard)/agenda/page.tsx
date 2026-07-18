@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { Plus } from 'lucide-react'
 import CalendarView from '@/components/agenda/CalendarView'
 import EventList from '@/components/agenda/EventList'
+import GoogleCalendarView from '@/components/agenda/GoogleCalendarView'
 import EventoDrawer from '@/components/eventos/EventoDrawer'
 import NovoEventoModal from '@/components/eventos/NovoEventoModal'
 import { useEventos } from '@/contexts/EventosContext'
@@ -55,11 +56,12 @@ export default function AgendaPage() {
 
         <button
           onClick={() => setEspacosFiltro(new Set())}
-          className={`rounded-full px-3 py-1 text-xs font-medium transition-all border ${
+          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
             espacosFiltro.size === 0
-              ? 'bg-violet-500/20 text-violet-300 border-violet-500/30'
-              : 'text-app-muted border-app-border2 hover:text-app-text'
+              ? 'text-white font-bold shadow-md'
+              : 'bg-[#F0F2F5] text-[#667781] hover:bg-[#E9EDEF]'
           }`}
+          style={espacosFiltro.size === 0 ? { backgroundColor: '#25D366' } : undefined}
         >
           Todos
         </button>
@@ -68,11 +70,12 @@ export default function AgendaPage() {
           <button
             key={espaco}
             onClick={() => toggleEspaco(espaco)}
-            className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all border ${
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
               espacosFiltro.has(espaco)
-                ? 'bg-app-surface2 text-app-text border-app-border'
-                : 'text-app-muted border-app-border2 hover:text-app-text'
+                ? 'text-white font-bold shadow-md'
+                : 'bg-[#F0F2F5] text-[#667781] hover:bg-[#E9EDEF]'
             }`}
+            style={espacosFiltro.has(espaco) ? { backgroundColor: '#25D366' } : undefined}
           >
             <span className={`h-2 w-2 rounded-full shrink-0 ${espacoDotColors[espaco]}`} />
             {espaco}
@@ -88,7 +91,10 @@ export default function AgendaPage() {
         {/* Botão Novo Evento */}
         <button
           onClick={() => setNovoEventoOpen(true)}
-          className="ml-auto flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-500 transition-colors shrink-0"
+          className="ml-auto flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white shrink-0 transition-opacity"
+          style={{ backgroundColor: '#25D366' }}
+          onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#128C7E' }}
+          onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#25D366' }}
         >
           <Plus className="h-3.5 w-3.5" />
           Novo Evento
@@ -107,6 +113,9 @@ export default function AgendaPage() {
           onEventoClick={setSelectedEvento}
         />
       </div>
+
+      {/* Google Calendar */}
+      <GoogleCalendarView />
 
       {selectedEvento && (
         <EventoDrawer

@@ -11,6 +11,7 @@ import OccupancyAreaChart from './OccupancyAreaChart'
 import ProjectionChart from './ProjectionChart'
 import SummaryTable from './SummaryTable'
 import { getMonthlyAggregates, calcularProjecoes, getPeriodRange } from '@/lib/historical-data'
+import DespesasSection from './DespesasSection'
 
 function getDefaultFilters(): RelatorioFilters {
   const { inicio, fim } = getPeriodRange('anual')
@@ -96,6 +97,12 @@ export default function RelatoriosClient() {
       <ProjectionChart historico={aggregates} projecoes={projecoes} />
 
       <SummaryTable data={aggregates} selectedSpaces={filters.espacos} />
+
+      <DespesasSection
+        selectedSpaces={filters.espacos.length > 0 ? filters.espacos : undefined}
+        dataInicio={filters.dataInicio}
+        dataFim={filters.dataFim}
+      />
     </div>
   )
 }

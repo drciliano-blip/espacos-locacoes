@@ -12,7 +12,7 @@ export function proxy(request: NextRequest) {
   const auth = request.cookies.get('auth')
   const { pathname } = request.nextUrl
 
-  const publicPaths = ['/login']
+  const publicPaths = ['/login', '/ficha-cliente']
   const isPublic = publicPaths.some((p) => pathname.startsWith(p))
 
   // Unauthenticated → login
@@ -25,8 +25,9 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  // Role-based access control
-  if (auth && !isPublic) {
+  // Role-based access control (API routes are exempt from per-page permissions —
+  // they just require an authenticated session, checked above)
+  if (auth && !isPublic && !pathname.startsWith('/api/')) {
     try {
       const user = JSON.parse(decodeURIComponent(auth.value))
       const role: string = user.role ?? 'visualizador'

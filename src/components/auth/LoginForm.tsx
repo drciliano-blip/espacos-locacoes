@@ -36,8 +36,8 @@ export default function LoginForm() {
     <div className="min-h-screen bg-app-bg flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/15 border border-violet-500/25 mb-4">
-            <Building2 className="h-7 w-7 text-violet-400" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#25D366]/15 border border-[#25D366]/25 mb-4">
+            <Building2 className="h-7 w-7 text-[#25D366]" />
           </div>
           <h1 className="text-2xl font-bold text-app-text">Espaços & Locações</h1>
           <p className="text-sm text-app-muted mt-1">Painel Administrativo</p>
@@ -57,7 +57,7 @@ export default function LoginForm() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="admin@espacoslocacoes.com.br"
                   required
-                  className="w-full rounded-lg border border-app-border2 bg-app-surface2 py-2.5 pl-10 pr-4 text-sm text-app-text placeholder-app-subtle focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 transition-colors"
+                  className="w-full rounded-lg border border-app-border2 bg-app-surface2 py-2.5 pl-10 pr-4 text-sm text-app-text placeholder-app-subtle focus:border-[#25D366] focus:outline-none focus:ring-1 focus:ring-[#25D366] transition-colors"
                 />
               </div>
             </div>
@@ -74,7 +74,7 @@ export default function LoginForm() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="w-full rounded-lg border border-app-border2 bg-app-surface2 py-2.5 pl-10 pr-10 text-sm text-app-text placeholder-app-subtle focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 transition-colors"
+                  className="w-full rounded-lg border border-app-border2 bg-app-surface2 py-2.5 pl-10 pr-10 text-sm text-app-text placeholder-app-subtle focus:border-[#25D366] focus:outline-none focus:ring-1 focus:ring-[#25D366] transition-colors"
                 />
                 <button
                   type="button"
@@ -95,7 +95,7 @@ export default function LoginForm() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-lg bg-violet-600 py-2.5 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors mt-2"
+              className="w-full rounded-lg py-2.5 text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors mt-2" style={{ backgroundColor: '#25D366' }} onMouseEnter={e => (e.currentTarget.style.backgroundColor='#128C7E')} onMouseLeave={e => (e.currentTarget.style.backgroundColor='#25D366')}
             >
               {loading ? 'Entrando...' : 'Entrar'}
             </button>

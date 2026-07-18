@@ -6,7 +6,7 @@ export type Espaco =
   | 'Espaço Solon'
 
 export type StatusPagamento = 'pago' | 'pendente' | 'atrasado'
-export type StatusEvento = 'confirmado' | 'tentativo' | 'cancelado'
+export type StatusEvento = 'confirmado' | 'em_negociacao' | 'cancelado'
 export type FormaPagamento = 'PIX' | 'Transferência' | 'Dinheiro' | 'Cartão de Crédito' | 'Cartão de Débito' | 'Cheque'
 export type Decoracao = 'própria' | 'terceirizada' | 'não aplicável'
 export type StatusVistoria = 'pendente' | 'aprovada' | 'aprovada com ressalvas' | 'reprovada' | 'não realizada'
@@ -114,4 +114,74 @@ export interface Usuario {
   ativo: boolean
   createdAt: string
   ultimoAcesso?: string
+}
+
+// Espaço cadastrado manualmente pelo usuário
+export interface EspacoCustomData {
+  id: string
+  slug: string
+  nome: string
+  endereco: string
+  capacidade: number
+  descricao: string
+  status: 'ativo' | 'inativo'
+  fotoFileId?: string
+  criadoEm: string
+}
+
+// Documentos de funcionários
+export interface Funcionario {
+  id: string
+  nomeCompleto: string
+  cargo: string
+  espacoVinculado: string
+  telefone: string
+  criadoEm: string
+}
+
+// Ficha de cadastro do cliente (formulário público /ficha-cliente)
+export interface FichaCliente {
+  id: string
+  criadoEm: string
+  // Dados pessoais
+  nomeCompleto: string
+  cpf: string
+  rg?: string
+  dataNascimento?: string
+  email: string
+  telefoneCelular: string
+  endereco: {
+    rua?: string
+    numero?: string
+    complemento?: string
+    bairro?: string
+    cidade?: string
+    estado?: string
+    cep?: string
+  }
+  // Dados da empresa (opcional)
+  pessoaJuridica: boolean
+  razaoSocial?: string
+  nomeFantasia?: string
+  cnpj?: string
+  enderecoEmpresa?: {
+    rua?: string
+    numero?: string
+    complemento?: string
+    bairro?: string
+    cidade?: string
+    estado?: string
+    cep?: string
+  }
+  // Informações do evento
+  nomeEvento: string
+  espacoDesejado: string
+  tipoEvento: string
+  dataEvento: string
+  horaInicioMontagem?: string
+  horaInicioEvento?: string
+  horaTerminoEvento?: string
+  valorLocacao?: string
+  formaPagamento?: string
+  documentoFileId?: string
 }

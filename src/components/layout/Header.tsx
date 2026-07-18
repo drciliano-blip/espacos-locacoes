@@ -53,12 +53,12 @@ export default function Header({ userName, userRole }: HeaderProps) {
 
         <button className="relative flex h-8 w-8 items-center justify-center rounded-lg text-app-muted hover:bg-app-surface2 hover:text-app-text transition-colors">
           <Bell className="h-4 w-4" />
-          <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-violet-400" />
+          <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-[#25D366]" />
         </button>
 
         <div className="flex items-center gap-2 pl-1 border-l border-app-border ml-1">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-500/20 border border-violet-500/30">
-            <User className="h-4 w-4 text-violet-400" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#25D366]/15 border border-[#25D366]/30">
+            <User className="h-4 w-4 text-[#25D366]" />
           </div>
           <div className="leading-tight">
             <p className="text-sm text-app-text2 font-medium leading-none">{userName}</p>

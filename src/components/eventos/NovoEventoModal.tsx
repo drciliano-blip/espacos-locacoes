@@ -1,16 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Save, Calendar, DollarSign, User, ClipboardCheck } from 'lucide-react'
+import { X, Save, Calendar, DollarSign, User, ClipboardCheck, Paperclip } from 'lucide-react'
 import type { Evento, Espaco, TipoEvento, FormaPagamento } from '@/types'
-
-const ESPACOS: Espaco[] = [
-  'Usine',
-  'Fabrique',
-  'House Pacaembu',
-  'Complexo Jussara',
-  'Espaço Solon',
-]
+import FileAttachButton from '@/components/shared/FileAttachButton'
+import FileList from '@/components/shared/FileList'
+import { useEspacos } from '@/contexts/EspacosContext'
 
 const FORMAS_PAGAMENTO: FormaPagamento[] = [
   'PIX',
@@ -29,7 +24,7 @@ interface Draft {
   horaFim: string
   tipo: string
   tipoEvento: TipoEvento | ''
-  status: 'confirmado' | 'tentativo' | 'cancelado'
+  status: 'confirmado' | 'em_negociacao' | 'cancelado'
   valor: string
   numeroPessoas: string
   responsavel: string
@@ -47,7 +42,7 @@ function emptyDraft(espacoPadrao?: Espaco): Draft {
     horaFim: '',
     tipo: '',
     tipoEvento: '',
-    status: 'tentativo',
+    status: 'em_negociacao',
     valor: '',
     numeroPessoas: '',
     responsavel: '',
@@ -63,9 +58,16 @@ interface NovoEventoModalProps {
   onSave: (evento: Evento) => void
 }
 
+const GREEN = '#25D366'
+const DARK_GREEN = '#128C7E'
+
 export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoEventoModalProps) {
-  const [draft, setDraft] = useState<Draft>(() => emptyDraft(espacoPadrao))
+  const { espacosNomes } = useEspacos()
+  const [draft, setDraft]         = useState<Draft>(() => emptyDraft(espacoPadrao))
   const [submitted, setSubmitted] = useState(false)
+  // Generate stable ID upfront so file attachments are linked before save
+  const [eventId]                 = useState(() => `ev-${Date.now()}`)
+  const [fileCount, setFileCount] = useState(0)
 
   const errors: Partial<Record<keyof Draft, boolean>> = {
     cliente:    !draft.cliente.trim(),
@@ -87,7 +89,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
     if (hasErrors) return
 
     const evento: Evento = {
-      id:              `ev-${Date.now()}`,
+      id:              eventId,
       cliente:         draft.cliente.trim(),
       espaco:          draft.espaco as Espaco,
       data:            draft.data,
@@ -132,8 +134,10 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
           onChange={e => set(draftKey, e.target.value)}
           placeholder={placeholder}
           className={`w-full rounded-lg border ${
-            hasError ? 'border-red-500/50 focus:border-red-500' : 'border-app-border2 focus:border-violet-500'
+            hasError ? 'border-red-500/50' : 'border-app-border2'
           } bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
+          onFocus={e => { e.currentTarget.style.borderColor = hasError ? '' : GREEN }}
+          onBlur={e => { e.currentTarget.style.borderColor = '' }}
         />
         {hasError && <p className="text-xs text-red-400 mt-0.5">Campo obrigatório</p>}
       </div>
@@ -165,7 +169,10 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
               </button>
               <button
                 onClick={handleSave}
-                className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-500 transition-colors"
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-colors"
+                style={{ backgroundColor: GREEN }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = DARK_GREEN }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = GREEN }}
               >
                 <Save className="h-3.5 w-3.5" />
                 Salvar evento
@@ -205,10 +212,12 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
                   disabled={!!espacoPadrao}
                   className={`w-full rounded-lg border ${
                     submitted && errors.espaco ? 'border-red-500/50' : 'border-app-border2'
-                  } bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:border-violet-500 focus:outline-none cursor-pointer disabled:opacity-60 disabled:cursor-default`}
+                  } bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none cursor-pointer disabled:opacity-60 disabled:cursor-default`}
+                  onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
+                  onBlur={e => { e.currentTarget.style.borderColor = '' }}
                 >
                   <option value="">— Selecione um espaço —</option>
-                  {ESPACOS.map(e => <option key={e} value={e}>{e}</option>)}
+                  {espacosNomes.map(e => <option key={e} value={e}>{e}</option>)}
                 </select>
                 {submitted && errors.espaco && (
                   <p className="text-xs text-red-400 mt-0.5">Campo obrigatório</p>
@@ -223,9 +232,11 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
                 <select
                   value={draft.status}
                   onChange={e => set('status', e.target.value)}
-                  className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:border-violet-500 focus:outline-none cursor-pointer"
+                  className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none cursor-pointer"
+                  onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
+                  onBlur={e => { e.currentTarget.style.borderColor = '' }}
                 >
-                  <option value="tentativo">Tentativo</option>
+                  <option value="em_negociacao">Em negociação</option>
                   <option value="confirmado">Confirmado</option>
                   <option value="cancelado">Cancelado</option>
                 </select>
@@ -241,7 +252,9 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
                   value={draft.tipo}
                   onChange={e => set('tipo', e.target.value)}
                   placeholder="Ex: Casamento, Workshop, Show…"
-                  className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:border-violet-500 focus:outline-none"
+                  className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
+                  onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
+                  onBlur={e => { e.currentTarget.style.borderColor = '' }}
                 />
               </div>
 
@@ -251,7 +264,9 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
                 <select
                   value={draft.tipoEvento}
                   onChange={e => set('tipoEvento', e.target.value)}
-                  className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:border-violet-500 focus:outline-none cursor-pointer"
+                  className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none cursor-pointer"
+                  onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
+                  onBlur={e => { e.currentTarget.style.borderColor = '' }}
                 >
                   <option value="">— Selecione —</option>
                   <option value="Festivo">Festivo</option>
@@ -277,7 +292,9 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
                 <select
                   value={draft.formaPagamento}
                   onChange={e => set('formaPagamento', e.target.value)}
-                  className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:border-violet-500 focus:outline-none cursor-pointer"
+                  className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none cursor-pointer"
+                  onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
+                  onBlur={e => { e.currentTarget.style.borderColor = '' }}
                 >
                   <option value="">— Selecione —</option>
                   {FORMAS_PAGAMENTO.map(f => <option key={f} value={f}>{f}</option>)}
@@ -309,8 +326,55 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
               onChange={e => set('observacoes', e.target.value)}
               rows={3}
               placeholder="Observações gerais sobre o evento…"
-              className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:border-violet-500 focus:outline-none resize-none"
+              className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none resize-none"
+              onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
+              onBlur={e => { e.currentTarget.style.borderColor = '' }}
             />
+          </section>
+
+          {/* ── Anexos ─────────────────────────────────────────────────── */}
+          <section>
+            <h4 className="flex items-center gap-2 text-xs font-semibold text-app-subtle uppercase tracking-wider mb-3">
+              <Paperclip className="h-3.5 w-3.5" />
+              Documentos do Evento
+            </h4>
+            <div className="rounded-lg border border-app-border2/60 bg-app-surface2/30 p-4 space-y-3">
+              <div className="flex flex-wrap gap-2">
+                <FileAttachButton
+                  module="agenda"
+                  entityId={eventId}
+                  entityName={draft.cliente.trim() || 'Novo Evento'}
+                  espaco={(draft.espaco as Espaco) || undefined}
+                  categoria="contrato"
+                  label="Anexar contrato do evento"
+                  onUploaded={() => setFileCount(n => n + 1)}
+                />
+                <FileAttachButton
+                  module="agenda"
+                  entityId={eventId}
+                  entityName={draft.cliente.trim() || 'Novo Evento'}
+                  espaco={(draft.espaco as Espaco) || undefined}
+                  categoria="comprovante_sinal"
+                  label="Anexar comprovante do sinal"
+                  onUploaded={() => setFileCount(n => n + 1)}
+                />
+              </div>
+              {fileCount > 0 && (
+                <FileList
+                  module="agenda"
+                  entityId={eventId}
+                  entityName={draft.cliente.trim() || 'Novo Evento'}
+                  espaco={(draft.espaco as Espaco) || undefined}
+                  showAttach={false}
+                  compact
+                />
+              )}
+              {fileCount === 0 && (
+                <p className="text-xs text-app-subtle italic">
+                  Os arquivos ficam vinculados ao evento após salvar.
+                </p>
+              )}
+            </div>
           </section>
 
           {submitted && hasErrors && (

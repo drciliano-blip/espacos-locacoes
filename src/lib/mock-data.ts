@@ -47,7 +47,7 @@ export const eventos: Evento[] = [
   {
     id: '3', cliente: 'Ana Rodrigues', espaco: 'House Pacaembu', data: '2026-05-31',
     horaInicio: '16:00', horaFim: '23:00', tipo: 'Aniversário', tipoEvento: 'Festivo',
-    status: 'tentativo', valor: 8200, observacoes: 'Aguardando confirmação do cardápio.',
+    status: 'em_negociacao', valor: 8200, observacoes: 'Aguardando confirmação do cardápio.',
     numeroPessoas: 100, capacidadeUtilizada: 150, faturamentoBruto: 8200, faturamentoLiquido: 6970,
     formaPagamento: 'Cartão de Crédito', dataVencimentoSaldo: '2026-05-28', responsavel: 'Juliana Pereira',
     telefoneContato: '(11) 97654-3210', decoracao: 'terceirizada',
@@ -105,7 +105,7 @@ export const eventos: Evento[] = [
   {
     id: '8', cliente: 'Beatriz Santos', espaco: 'House Pacaembu', data: '2026-06-21',
     horaInicio: '18:00', horaFim: '00:00', tipo: 'Festa 15 anos', tipoEvento: 'Festivo',
-    status: 'tentativo', valor: 11500, observacoes: 'Verificar disponibilidade de palco.',
+    status: 'em_negociacao', valor: 11500, observacoes: 'Verificar disponibilidade de palco.',
     numeroPessoas: 120, capacidadeUtilizada: 150, faturamentoBruto: 11500, faturamentoLiquido: 9775,
     formaPagamento: 'PIX', dataVencimentoSaldo: '2026-06-18', responsavel: 'Juliana Pereira',
     telefoneContato: '(11) 97788-9900', decoracao: 'terceirizada',
@@ -179,7 +179,7 @@ export const pagamentos: Pagamento[] = [
 export const contratos: Contrato[] = [
   { id: 'c1', numeroContrato: 'EL-2026-001', cliente: 'Família Silva', cpfCnpj: '123.456.789-00', espaco: 'Usine', dataEvento: '2026-05-24', horaInicio: '14:00', horaFim: '22:00', valorTotal: 18000, valorEntrada: 9000, dataAssinatura: '2026-04-15', status: 'confirmado', tipo: 'Casamento', responsavel: 'Mariana Costa', observacoes: 'Decoração floral branca. Estacionamento reservado para 50 veículos. Acesso liberado a partir das 12h para montagem. Serviço de bar incluso no pacote.' },
   { id: 'c2', numeroContrato: 'EL-2026-002', cliente: 'TechCorp Ltda', cpfCnpj: '12.345.678/0001-90', espaco: 'Fabrique', dataEvento: '2026-05-27', horaInicio: '09:00', horaFim: '18:00', valorTotal: 12500, valorEntrada: 12500, dataAssinatura: '2026-04-20', status: 'confirmado', tipo: 'Congresso', responsavel: 'Rafael Lima', observacoes: '8 mesas redondas. Projetor duplo. Coffee break incluso. Wi-Fi corporativo solicitado.' },
-  { id: 'c3', numeroContrato: 'EL-2026-003', cliente: 'Ana Rodrigues', cpfCnpj: '987.654.321-00', espaco: 'House Pacaembu', dataEvento: '2026-05-31', horaInicio: '16:00', horaFim: '23:00', valorTotal: 8200, valorEntrada: 0, dataAssinatura: '2026-05-01', status: 'tentativo', tipo: 'Aniversário', responsavel: 'Mariana Costa', observacoes: 'Aguardando confirmação do cardápio. Cliente solicitou área exclusiva para crianças.' },
+  { id: 'c3', numeroContrato: 'EL-2026-003', cliente: 'Ana Rodrigues', cpfCnpj: '987.654.321-00', espaco: 'House Pacaembu', dataEvento: '2026-05-31', horaInicio: '16:00', horaFim: '23:00', valorTotal: 8200, valorEntrada: 0, dataAssinatura: '2026-05-01', status: 'em_negociacao', tipo: 'Aniversário', responsavel: 'Mariana Costa', observacoes: 'Aguardando confirmação do cardápio. Cliente solicitou área exclusiva para crianças.' },
   { id: 'c4', numeroContrato: 'EL-2026-004', cliente: 'Associação XPTO', cpfCnpj: '98.765.432/0001-10', espaco: 'Complexo Jussara', dataEvento: '2026-06-03', horaInicio: '19:00', horaFim: '00:00', valorTotal: 22000, valorEntrada: 0, dataAssinatura: '2026-05-08', status: 'confirmado', tipo: 'Formatura', responsavel: 'Rafael Lima', observacoes: 'Palco de 6x4m. Iluminação cênica inclusa. Buffet terceirizado aprovado pelo cliente.' },
   { id: 'c5', numeroContrato: 'EL-2026-005', cliente: 'Carlos Mendes', cpfCnpj: '456.789.123-00', espaco: 'Espaço Solon', dataEvento: '2026-06-07', horaInicio: '11:00', horaFim: '17:00', valorTotal: 4500, valorEntrada: 0, dataAssinatura: '2026-05-12', status: 'confirmado', tipo: 'Workshop', responsavel: 'Juliana Pereira', observacoes: 'Capacidade de 40 pessoas. Precisam de flip chart e ar condicionado.' },
   { id: 'c6', numeroContrato: 'EL-2026-006', cliente: 'Família Oliveira', cpfCnpj: '321.654.987-00', espaco: 'Usine', dataEvento: '2026-06-14', horaInicio: '15:00', horaFim: '23:00', valorTotal: 21000, valorEntrada: 10500, dataAssinatura: '2026-03-22', status: 'confirmado', tipo: 'Casamento', responsavel: 'Mariana Costa', observacoes: 'Sala de apoio para noivos. Entrada separada para fornecedores. Gerador de reserva solicitado.' },

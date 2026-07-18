@@ -5,17 +5,18 @@ import { DollarSign, CalendarCheck, TrendingUp, AlertCircle, BarChart3, ChevronD
 import KPICard from '@/components/dashboard/KPICard'
 import RevenueChart from '@/components/dashboard/RevenueChart'
 import OccupancyChart from '@/components/dashboard/OccupancyChart'
-import { eventos, pagamentos, ESPACOS, ESPACO_CAPACIDADE } from '@/lib/mock-data'
+import { eventos, pagamentos } from '@/lib/mock-data'
 import { formatCurrency } from '@/lib/utils'
-import type { Espaco, TipoEvento } from '@/types'
+import { useEspacos } from '@/contexts/EspacosContext'
+import type { TipoEvento } from '@/types'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
-const espacoColors: Record<string, string> = {
-  'Usine': '#8b5cf6',
-  'Fabrique': '#6366f1',
-  'House Pacaembu': '#0ea5e9',
-  'Complexo Jussara': '#10b981',
-  'Espaço Solon': '#f97316',
+const COR_HEX: Record<string, string> = {
+  violet: '#8b5cf6',
+  indigo: '#6366f1',
+  sky: '#0ea5e9',
+  emerald: '#10b981',
+  orange: '#f97316',
 }
 
 const tipoEventoColors: Record<TipoEvento, string> = {
@@ -25,14 +26,24 @@ const tipoEventoColors: Record<TipoEvento, string> = {
 }
 
 const statusBadge: Record<string, string> = {
-  confirmado: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  tentativo: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  cancelado: 'bg-red-500/10 text-red-400 border-red-500/20',
+  confirmado:    'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  em_negociacao: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  cancelado:     'bg-red-500/10 text-red-400 border-red-500/20',
 }
 
-type EspacoFiltro = Espaco | 'Todos'
+const statusLabel: Record<string, string> = {
+  confirmado:    'Confirmado',
+  em_negociacao: 'Em negociação',
+  cancelado:     'Cancelado',
+}
+
+type EspacoFiltro = string | 'Todos'
 
 export default function DashboardPage() {
+  const { espacosConfig, espacosNomes } = useEspacos()
+  const espacoColors: Record<string, string> = Object.fromEntries(
+    espacosConfig.map(e => [e.nome, COR_HEX[e.cor] ?? '#8b5cf6'])
+  )
   const [espacoSelecionado, setEspacoSelecionado] = useState<EspacoFiltro>('Todos')
   const [comparativo, setComparativo] = useState(false)
 
@@ -68,11 +79,11 @@ export default function DashboardPage() {
     .slice(0, 5)
 
   // Dados comparativos por espaço
-  const comparativoData = ESPACOS.map((esp) => {
+  const comparativoData = espacosNomes.map((esp) => {
     const evs = eventos.filter(e => e.espaco === esp)
     const pags = pagamentos.filter(p => p.espaco === esp)
     const receita = pags.filter(p => p.status === 'pago').reduce((s, p) => s + p.valor, 0)
-    const cap = ESPACO_CAPACIDADE[esp] ?? 0
+    const cap = espacosConfig.find(c => c.nome === esp)?.capacidade ?? 0
     const totalPessoas = evs.reduce((s, e) => s + (e.numeroPessoas ?? 0), 0)
     const ocupacaoMedia = evs.length > 0
       ? Math.round(evs.reduce((s, e) => s + ((e.numeroPessoas ?? 0) / (cap || 1)) * 100, 0) / evs.length)
@@ -90,43 +101,57 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Seletor de espaço */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-2 bg-app-surface border border-app-border rounded-xl p-1">
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 bg-app-surface border border-app-border rounded-xl p-1 shadow-sm">
+            <button
+              onClick={() => { setEspacoSelecionado('Todos'); setComparativo(false) }}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                espacoSelecionado === 'Todos' && !comparativo
+                  ? 'text-white font-bold shadow-md'
+                  : 'bg-[#F0F2F5] text-[#667781] hover:bg-[#E9EDEF]'
+              }`}
+              style={espacoSelecionado === 'Todos' && !comparativo ? { backgroundColor: '#25D366' } : undefined}
+            >
+              Todos
+            </button>
+            {espacosNomes.map((esp) => (
+              <button
+                key={esp}
+                onClick={() => { setEspacoSelecionado(esp); setComparativo(false) }}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                  espacoSelecionado === esp && !comparativo
+                    ? 'text-white font-bold shadow-md'
+                    : 'bg-[#F0F2F5] text-[#667781] hover:bg-[#E9EDEF]'
+                }`}
+                style={espacoSelecionado === esp && !comparativo ? { backgroundColor: '#25D366' } : undefined}
+              >
+                {esp.split(' ')[0]}
+              </button>
+            ))}
+          </div>
           <button
-            onClick={() => { setEspacoSelecionado('Todos'); setComparativo(false) }}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-              espacoSelecionado === 'Todos' && !comparativo
-                ? 'bg-violet-500/20 text-violet-300 border border-violet-500/20'
-                : 'text-app-muted hover:text-app-text'
+            onClick={() => { setComparativo(!comparativo); setEspacoSelecionado('Todos') }}
+            className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-all ${
+              comparativo
+                ? 'border-[#25D366]/30 bg-[#25D366]/10 text-[#128C7E]'
+                : 'border-app-border bg-app-surface text-app-muted hover:text-app-text'
             }`}
           >
-            Todos
+            <BarChart3 className="h-3.5 w-3.5" />
+            Comparativo
           </button>
-          {ESPACOS.map((esp) => (
-            <button
-              key={esp}
-              onClick={() => { setEspacoSelecionado(esp); setComparativo(false) }}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-                espacoSelecionado === esp && !comparativo
-                  ? 'bg-violet-500/20 text-violet-300 border border-violet-500/20'
-                  : 'text-app-muted hover:text-app-text'
-              }`}
-            >
-              {esp.split(' ')[0]}
-            </button>
-          ))}
         </div>
-        <button
-          onClick={() => { setComparativo(!comparativo); setEspacoSelecionado('Todos') }}
-          className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-all ${
-            comparativo
-              ? 'border-violet-500/30 bg-violet-500/10 text-violet-400'
-              : 'border-app-border bg-app-surface text-app-muted hover:text-app-text'
-          }`}
-        >
-          <BarChart3 className="h-3.5 w-3.5" />
-          Comparativo
-        </button>
+
+        {/* Indicador de espaço ativo */}
+        {espacoSelecionado !== 'Todos' && !comparativo && (
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: espacoColors[espacoSelecionado] }} />
+            <span className="text-xs font-medium" style={{ color: '#667781' }}>
+              Visualizando: <span className="font-semibold text-[#111B21]">{espacoSelecionado}</span>
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Modo Comparativo */}
@@ -138,13 +163,13 @@ export default function DashboardPage() {
               <p className="text-xs font-semibold text-app-subtle uppercase tracking-wider mb-4">Receita por Espaço</p>
               <ResponsiveContainer width="100%" height={180}>
                 <BarChart data={comparativoData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.05)" />
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E9EDEF" />
                   <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 10 }} tickFormatter={(v) => `${v/1000}k`} />
                   <YAxis type="category" dataKey="espaco" tick={{ fill: '#9ca3af', fontSize: 11 }} width={55} />
-                  <Tooltip formatter={(v) => formatCurrency(Number(v))} contentStyle={{ background: '#1a1a2e', border: '1px solid #2a2a4a', borderRadius: 8 }} />
+                  <Tooltip formatter={(v) => formatCurrency(Number(v))} contentStyle={{ background: '#FFFFFF', border: '1px solid #E9EDEF', borderRadius: 8, color: '#111B21' }} />
                   <Bar dataKey="receita" radius={[0, 4, 4, 0]}>
                     {comparativoData.map((entry) => (
-                      <Cell key={entry.espaco} fill={espacoColors[ESPACOS.find(e => e.startsWith(entry.espaco)) ?? ''] ?? '#8b5cf6'} fillOpacity={0.8} />
+                      <Cell key={entry.espaco} fill={espacoColors[espacosNomes.find(e => e.startsWith(entry.espaco)) ?? ''] ?? '#8b5cf6'} fillOpacity={0.8} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -156,13 +181,13 @@ export default function DashboardPage() {
               <p className="text-xs font-semibold text-app-subtle uppercase tracking-wider mb-4">Eventos por Espaço</p>
               <ResponsiveContainer width="100%" height={180}>
                 <BarChart data={comparativoData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.05)" />
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E9EDEF" />
                   <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 10 }} />
                   <YAxis type="category" dataKey="espaco" tick={{ fill: '#9ca3af', fontSize: 11 }} width={55} />
-                  <Tooltip contentStyle={{ background: '#1a1a2e', border: '1px solid #2a2a4a', borderRadius: 8 }} />
+                  <Tooltip contentStyle={{ background: '#FFFFFF', border: '1px solid #E9EDEF', borderRadius: 8, color: '#111B21' }} />
                   <Bar dataKey="eventos" radius={[0, 4, 4, 0]}>
                     {comparativoData.map((entry) => (
-                      <Cell key={entry.espaco} fill={espacoColors[ESPACOS.find(e => e.startsWith(entry.espaco)) ?? ''] ?? '#8b5cf6'} fillOpacity={0.8} />
+                      <Cell key={entry.espaco} fill={espacoColors[espacosNomes.find(e => e.startsWith(entry.espaco)) ?? ''] ?? '#8b5cf6'} fillOpacity={0.8} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -174,13 +199,13 @@ export default function DashboardPage() {
               <p className="text-xs font-semibold text-app-subtle uppercase tracking-wider mb-4">Ocupação Média (%)</p>
               <ResponsiveContainer width="100%" height={180}>
                 <BarChart data={comparativoData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.05)" />
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E9EDEF" />
                   <XAxis type="number" domain={[0, 100]} tick={{ fill: '#6b7280', fontSize: 10 }} tickFormatter={(v) => `${v}%`} />
                   <YAxis type="category" dataKey="espaco" tick={{ fill: '#9ca3af', fontSize: 11 }} width={55} />
-                  <Tooltip formatter={(v) => `${Number(v)}%`} contentStyle={{ background: '#1a1a2e', border: '1px solid #2a2a4a', borderRadius: 8 }} />
+                  <Tooltip formatter={(v) => `${Number(v)}%`} contentStyle={{ background: '#FFFFFF', border: '1px solid #E9EDEF', borderRadius: 8, color: '#111B21' }} />
                   <Bar dataKey="ocupacao" radius={[0, 4, 4, 0]}>
                     {comparativoData.map((entry) => (
-                      <Cell key={entry.espaco} fill={espacoColors[ESPACOS.find(e => e.startsWith(entry.espaco)) ?? ''] ?? '#8b5cf6'} fillOpacity={0.8} />
+                      <Cell key={entry.espaco} fill={espacoColors[espacosNomes.find(e => e.startsWith(entry.espaco)) ?? ''] ?? '#8b5cf6'} fillOpacity={0.8} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -205,7 +230,7 @@ export default function DashboardPage() {
                 </thead>
                 <tbody className="divide-y divide-app-border/40">
                   {comparativoData.map((row) => {
-                    const espNome = ESPACOS.find(e => e.startsWith(row.espaco)) ?? row.espaco
+                    const espNome = espacosNomes.find(e => e.startsWith(row.espaco)) ?? row.espaco
                     return (
                       <tr key={row.espaco} className="hover:bg-app-surface2/30 transition-colors">
                         <td className="px-5 py-3">
@@ -215,7 +240,7 @@ export default function DashboardPage() {
                           </div>
                         </td>
                         <td className="px-5 py-3 text-right text-app-text2">{row.eventos}</td>
-                        <td className="px-5 py-3 text-right font-semibold text-violet-400">{formatCurrency(row.receita)}</td>
+                        <td className="px-5 py-3 text-right font-semibold text-[#25D366]">{formatCurrency(row.receita)}</td>
                         <td className="px-5 py-3 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <div className="w-16 h-1.5 rounded-full bg-app-surface3">
@@ -243,7 +268,7 @@ export default function DashboardPage() {
               icon={DollarSign}
               trend="+18% vs abril"
               trendUp={true}
-              color="violet"
+              color="green"
             />
             <KPICard
               title="Eventos Confirmados"
@@ -252,21 +277,21 @@ export default function DashboardPage() {
               icon={CalendarCheck}
               trend="+3 vs mês anterior"
               trendUp={true}
-              color="emerald"
+              color="blue"
             />
             <KPICard
               title="A Receber"
               value={formatCurrency(pendente)}
               subtitle="Pagamentos pendentes"
               icon={TrendingUp}
-              color="sky"
+              color="orange"
             />
             <KPICard
               title="Em Atraso"
               value={formatCurrency(atrasado)}
               subtitle="Requer atenção"
               icon={AlertCircle}
-              color="amber"
+              color="red"
             />
           </div>
 
@@ -328,9 +353,9 @@ export default function DashboardPage() {
                       {e.data.split('-').reverse().join('/')} · {e.horaInicio}
                     </span>
                     <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadge[e.status]}`}>
-                      {e.status}
+                      {statusLabel[e.status] ?? e.status}
                     </span>
-                    <span className="text-sm font-semibold text-violet-400">
+                    <span className="text-sm font-semibold text-[#25D366]">
                       {formatCurrency(e.valor)}
                     </span>
                   </div>

@@ -1,14 +1,21 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Save, Edit3, Users, DollarSign, Phone, User, Calendar, ClipboardCheck, Paperclip, Upload, Trash2, FileText, FileCheck, FileWarning, FileBadge, File } from 'lucide-react'
+import { X, Save, Edit3, Users, DollarSign, Phone, User, Calendar, ClipboardCheck, Paperclip, Upload, Trash2, FileText, FileCheck, FileWarning, FileBadge, File, HardDrive } from 'lucide-react'
 import type { Evento, FormaPagamento, Decoracao, StatusVistoria, TipoEvento, Documento } from '@/types'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import FileList from '@/components/shared/FileList'
 
 const statusBadge: Record<string, string> = {
-  confirmado: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  tentativo: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  cancelado: 'bg-red-500/10 text-red-400 border-red-500/20',
+  confirmado:    'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  em_negociacao: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  cancelado:     'bg-red-500/10 text-red-400 border-red-500/20',
+}
+
+const statusLabel: Record<string, string> = {
+  confirmado:    'Confirmado',
+  em_negociacao: 'Em negociação',
+  cancelado:     'Cancelado',
 }
 
 const vistoriaStyles: Record<StatusVistoria, string> = {
@@ -34,7 +41,7 @@ const docTypeIcon: Record<string, React.ElementType> = {
 }
 
 const docTypeColor: Record<string, string> = {
-  contrato: 'text-violet-400 bg-violet-500/10',
+  contrato: 'text-[#128C7E] bg-[#25D366]/10',
   comprovante: 'text-emerald-400 bg-emerald-500/10',
   autorização: 'text-amber-400 bg-amber-500/10',
   observação: 'text-sky-400 bg-sky-500/10',
@@ -108,7 +115,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate }: EventoDrawer
             <select
               value={draft[draftKey] as string ?? ''}
               onChange={(e) => setDraft((d) => ({ ...d, [draftKey]: e.target.value }))}
-              className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:border-violet-500 focus:outline-none cursor-pointer"
+              className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:border-[#25D366] focus:outline-none cursor-pointer"
             >
               <option value="">—</option>
               {options.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -123,7 +130,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate }: EventoDrawer
             type={type}
             value={draft[draftKey] as string | number ?? ''}
             onChange={(e) => setDraft((d) => ({ ...d, [draftKey]: type === 'number' ? Number(e.target.value) || undefined : e.target.value }))}
-            className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:border-violet-500 focus:outline-none"
+            className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:border-[#25D366] focus:outline-none"
           />
         </div>
       )
@@ -148,7 +155,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate }: EventoDrawer
             value={val}
             onChange={(e) => setDraft((d) => ({ ...d, [draftKey]: e.target.value }))}
             rows={2}
-            className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:border-violet-500 focus:outline-none resize-none"
+            className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:border-[#25D366] focus:outline-none resize-none"
           />
         </div>
       )
@@ -190,7 +197,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate }: EventoDrawer
               {tab === 'detalhes' && !editing && (
                 <button
                   onClick={() => setEditing(true)}
-                  className="flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-400 hover:bg-violet-500/20 transition-colors"
+                  className="flex items-center gap-1.5 rounded-lg border border-[#25D366]/30 bg-[#25D366]/10 px-3 py-1.5 text-xs font-medium text-[#128C7E] hover:bg-[#25D366]/20 transition-colors"
                 >
                   <Edit3 className="h-3.5 w-3.5" />
                   Editar
@@ -201,7 +208,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate }: EventoDrawer
                   <button onClick={handleCancel} className="rounded-lg border border-app-border2 px-3 py-1.5 text-xs font-medium text-app-muted hover:bg-app-surface2 transition-colors">
                     Cancelar
                   </button>
-                  <button onClick={handleSave} className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-500 transition-colors">
+                  <button onClick={handleSave} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-colors" style={{ backgroundColor: '#25D366' }} onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.backgroundColor='#128C7E'}} onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.backgroundColor='#25D366'}}>
                     <Save className="h-3.5 w-3.5" />
                     Salvar
                   </button>
@@ -218,7 +225,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate }: EventoDrawer
             <button
               onClick={() => setTab('detalhes')}
               className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
-                tab === 'detalhes' ? 'border-violet-500 text-violet-400' : 'border-transparent text-app-muted hover:text-app-text'
+                tab === 'detalhes' ? 'border-[#25D366] text-[#128C7E]' : 'border-transparent text-app-muted hover:text-app-text'
               }`}
             >
               <Calendar className="h-3.5 w-3.5" />
@@ -227,13 +234,13 @@ export default function EventoDrawer({ evento, onClose, onUpdate }: EventoDrawer
             <button
               onClick={() => setTab('documentos')}
               className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
-                tab === 'documentos' ? 'border-violet-500 text-violet-400' : 'border-transparent text-app-muted hover:text-app-text'
+                tab === 'documentos' ? 'border-[#25D366] text-[#128C7E]' : 'border-transparent text-app-muted hover:text-app-text'
               }`}
             >
               <Paperclip className="h-3.5 w-3.5" />
               Documentos
               {documentos.length > 0 && (
-                <span className="ml-1 rounded-full bg-violet-500/20 text-violet-400 text-xs px-1.5 py-0.5 leading-none">
+                <span className="ml-1 rounded-full bg-[#25D366]/20 text-[#128C7E] text-xs px-1.5 py-0.5 leading-none">
                   {documentos.length}
                 </span>
               )}
@@ -247,9 +254,9 @@ export default function EventoDrawer({ evento, onClose, onUpdate }: EventoDrawer
             {/* Status e valor */}
             <div className="flex items-center gap-3">
               <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusBadge[current.status]}`}>
-                {current.status}
+                {statusLabel[current.status] ?? current.status}
               </span>
-              <span className="text-xl font-bold text-violet-400">{formatCurrency(current.valor)}</span>
+              <span className="text-xl font-bold" style={{ color: '#25D366' }}>{formatCurrency(current.valor)}</span>
             </div>
 
             {/* Informações básicas */}
@@ -269,7 +276,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate }: EventoDrawer
                     <select
                       value={draft.tipoEvento ?? ''}
                       onChange={(e) => setDraft((d) => ({ ...d, tipoEvento: e.target.value as TipoEvento || undefined }))}
-                      className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:border-violet-500 focus:outline-none cursor-pointer"
+                      className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:border-[#25D366] focus:outline-none cursor-pointer"
                     >
                       <option value="">— Selecione —</option>
                       <option value="Festivo">Festivo</option>
@@ -305,8 +312,8 @@ export default function EventoDrawer({ evento, onClose, onUpdate }: EventoDrawer
                   </div>
                   <div className="h-1.5 rounded-full bg-app-surface3">
                     <div
-                      className="h-full rounded-full bg-violet-500"
-                      style={{ width: `${Math.min(100, Math.round((current.numeroPessoas / current.capacidadeUtilizada) * 100))}%` }}
+                      className="h-full rounded-full"
+                      style={{ backgroundColor: '#25D366', width: `${Math.min(100, Math.round((current.numeroPessoas / current.capacidadeUtilizada) * 100))}%` }}
                     />
                   </div>
                 </div>
@@ -353,7 +360,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate }: EventoDrawer
                     <select
                       value={draft.statusVistoria ?? ''}
                       onChange={(e) => setDraft((d) => ({ ...d, statusVistoria: e.target.value as StatusVistoria }))}
-                      className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:border-violet-500 focus:outline-none cursor-pointer mt-0.5"
+                      className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:border-[#25D366] focus:outline-none cursor-pointer mt-0.5"
                     >
                       <option value="">—</option>
                       {(['pendente', 'aprovada', 'aprovada com ressalvas', 'reprovada', 'não realizada'] as StatusVistoria[]).map((s) => (
@@ -389,7 +396,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate }: EventoDrawer
               {!addingDoc && (
                 <button
                   onClick={() => setAddingDoc(true)}
-                  className="flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-400 hover:bg-violet-500/20 transition-colors"
+                  className="flex items-center gap-1.5 rounded-lg border border-[#25D366]/30 bg-[#25D366]/10 px-3 py-1.5 text-xs font-medium text-[#128C7E] hover:bg-[#25D366]/20 transition-colors"
                 >
                   <Upload className="h-3.5 w-3.5" />
                   Anexar arquivo
@@ -399,15 +406,15 @@ export default function EventoDrawer({ evento, onClose, onUpdate }: EventoDrawer
 
             {/* Formulário de upload */}
             {addingDoc && (
-              <div className="mb-4 rounded-lg border border-violet-500/20 bg-violet-500/5 p-4 space-y-3">
-                <p className="text-xs font-semibold text-violet-400">Novo documento</p>
+              <div className="mb-4 rounded-lg border border-[#25D366]/20 bg-[#25D366]/5 p-4 space-y-3">
+                <p className="text-xs font-semibold text-[#128C7E]">Novo documento</p>
                 <div>
                   <label className="text-xs text-app-subtle mb-1 block">Nome do arquivo</label>
                   <input
                     value={newDoc.nome}
                     onChange={(e) => setNewDoc((d) => ({ ...d, nome: e.target.value }))}
                     placeholder="Ex: Contrato assinado.pdf"
-                    className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:border-violet-500 focus:outline-none"
+                    className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:border-[#25D366] focus:outline-none"
                   />
                 </div>
                 <div>
@@ -415,7 +422,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate }: EventoDrawer
                   <select
                     value={newDoc.tipo}
                     onChange={(e) => setNewDoc((d) => ({ ...d, tipo: e.target.value as Documento['tipo'] }))}
-                    className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:border-violet-500 focus:outline-none cursor-pointer"
+                    className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:border-[#25D366] focus:outline-none cursor-pointer"
                   >
                     <option value="contrato">Contrato</option>
                     <option value="comprovante">Comprovante de Pagamento</option>
@@ -431,7 +438,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate }: EventoDrawer
                   <button
                     onClick={addDocument}
                     disabled={!newDoc.nome.trim()}
-                    className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors" style={{ backgroundColor: '#25D366' }} onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.backgroundColor='#128C7E'}} onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.backgroundColor='#25D366'}}
                   >
                     <Upload className="h-3 w-3" />
                     Anexar
@@ -483,10 +490,18 @@ export default function EventoDrawer({ evento, onClose, onUpdate }: EventoDrawer
               </div>
             )}
 
-            <div className="mt-6 rounded-lg bg-app-surface2/30 border border-app-border2/30 p-3">
-              <p className="text-xs text-app-subtle">
-                Os documentos são simulados localmente. Em produção, os arquivos seriam armazenados em um serviço de storage (ex: Supabase Storage, S3).
+            {/* Arquivos reais via IndexedDB */}
+            <div className="mt-4 border-t border-app-border/50 pt-4">
+              <p className="text-xs font-medium text-app-muted flex items-center gap-1.5 mb-3">
+                <HardDrive className="h-3 w-3 text-[#25D366]" />
+                Arquivos anexados (PDF, imagem, XLSX…)
               </p>
+              <FileList
+                module="agenda"
+                entityId={evento.id}
+                entityName={`${evento.cliente} — ${evento.espaco}`}
+                espaco={evento.espaco}
+              />
             </div>
           </div>
         )}

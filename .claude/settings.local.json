@@ -8,7 +8,28 @@
       "Bash(git init *)",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git config *)"
+      "Bash(git config *)",
+      "PowerShell(npx playwright --version 2>&1; node -e \"require\\('playwright'\\)\" 2>&1)",
+      "PowerShell(gh auth *)",
+      "PowerShell(Start-Process \"http://localhost:3000\")",
+      "Bash(npx tsc *)",
+      "Bash(npx next *)",
+      "Bash(Start-Sleep -Seconds 5)",
+      "Bash(Invoke-WebRequest -Uri \"http://localhost:3000/espacos/usine\" -UseBasicParsing)",
+      "Bash(Select-Object -ExpandProperty StatusCode)",
+      "Bash(curl *)",
+      "Bash(start *)",
+      "Bash(node -e \"require\\('@playwright/test'\\)\")",
+      "Bash(npx playwright *)",
+      "Bash(node \"C:\\\\Users\\\\usuario\\\\AppData\\\\Local\\\\Temp\\\\verify-novo-evento.mjs\")",
+      "Bash(node -e \"require\\('playwright'\\)\")",
+      "Bash(node --experimental-vm-modules \"C:\\\\Users\\\\usuario\\\\AppData\\\\Local\\\\Temp\\\\verify-novo-evento.mjs\")",
+      "Bash(node verify-novo-evento.mjs)",
+      "Bash(node -e ' *)",
+      "Bash(xargs kill -9)",
+      "PowerShell(Start-Process \"http://localhost:3001\")",
+      "Bash(Get-ChildItem *)",
+      "PowerShell(Get-NetTCPConnection *)"
     ]
   }
 }
