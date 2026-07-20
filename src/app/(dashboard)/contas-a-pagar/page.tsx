@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef } from 'react'
 import {
   Receipt, TrendingDown, CheckCircle2, AlertCircle, Clock,
-  Filter, X, Plus, FolderOpen, Paperclip, ChevronDown, ChevronUp, Sparkles,
+  Filter, X, Plus, FolderOpen, Paperclip, ChevronDown, ChevronUp, Sparkles, Camera,
 } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
@@ -35,6 +35,8 @@ function parseDataBR(data: string): string {
 }
 
 const GREEN = '#25D366'
+
+const MESES_LABEL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 
 const statusBadge: Record<StatusContaPagar, string> = {
   pago:      'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
@@ -85,6 +87,7 @@ export default function ContasPagarPage() {
   const [form,              setForm]              = useState<FormState>({ ...FORM_EMPTY, espaco: espacosNomes[0] ?? '' })
   const [saving,            setSaving]            = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [extraindoIA, setExtraindoIA] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
@@ -99,7 +102,17 @@ export default function ContasPagarPage() {
     if (!file) return
 
     const ext = file.name.split('.').pop()?.toLowerCase()
-    if (file.type !== 'application/pdf' && !file.type.startsWith('image/') && ext !== 'pdf') return
+    const isPdf = file.type === 'application/pdf' || ext === 'pdf'
+    const isImage = file.type.startsWith('image/')
+
+    if (file.type === 'image/heic' || file.type === 'image/heif') {
+      showToast('Fotos em formato HEIC não são lidas pela IA — use o botão "Tirar foto" aqui do formulário (gera JPEG) ou converta o arquivo antes de anexar.')
+      return
+    }
+    if (!isPdf && !isImage) {
+      showToast('A leitura automática funciona só com PDF ou imagem. O arquivo foi anexado, mas preencha os campos manualmente.')
+      return
+    }
 
     setExtraindoIA(true)
     try {
@@ -110,6 +123,11 @@ export default function ContasPagarPage() {
 
       if (!res.ok || data.error) {
         showToast(data.error ?? 'Não foi possível ler o documento com a IA.')
+        return
+      }
+
+      if (!data.vencimento && !data.valor && !data.fornecedor) {
+        showToast('A IA não conseguiu identificar os dados neste documento. Preencha os campos manualmente.')
         return
       }
 
@@ -127,8 +145,18 @@ export default function ContasPagarPage() {
     }
   }
 
-  const meses = [{ value: '2026-05', label: 'Maio 2026' }, { value: '2026-06', label: 'Junho 2026' }]
   const todasContas = contas
+
+  const meses = useMemo(() => {
+    const hoje = new Date()
+    const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`
+    const yearMonths = new Set([mesAtual, ...todasContas.map(c => c.dataVencimento.substring(0, 7))])
+    return Array.from(yearMonths).sort().map(ym => {
+      const [y, m] = ym.split('-')
+      const label = MESES_LABEL[Number(m) - 1]
+      return { value: ym, label: `${label} ${y}` }
+    })
+  }, [todasContas])
 
   const filtered = useMemo(() => todasContas.filter(c => {
     if (tab === 'apagar' && c.status === 'pago') return false
@@ -419,11 +447,18 @@ export default function ContasPagarPage() {
                 <label className="block text-xs text-app-muted mb-1">Documento (opcional)</label>
                 <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.doc,.docx" className="hidden"
                   onChange={e => handleAnexoSelecionado(e.target.files?.[0] ?? null)} />
-                <div className="flex items-center gap-2">
+                <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+                  onChange={e => handleAnexoSelecionado(e.target.files?.[0] ?? null)} />
+                <div className="flex items-center gap-2 flex-wrap">
                   <button onClick={() => fileRef.current?.click()} disabled={extraindoIA}
                     className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors disabled:opacity-60">
                     <Paperclip className="h-3.5 w-3.5" />
                     {pendingFile ? pendingFile.name : 'Selecionar arquivo…'}
+                  </button>
+                  <button onClick={() => cameraRef.current?.click()} disabled={extraindoIA}
+                    className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors disabled:opacity-60">
+                    <Camera className="h-3.5 w-3.5" />
+                    Tirar foto
                   </button>
                   {pendingFile && !extraindoIA && (
                     <button onClick={() => { setPendingFile(null); if (fileRef.current) fileRef.current.value = '' }}

@@ -1,7 +1,7 @@
 'use client'
 
 import { Printer } from 'lucide-react'
-import type { MonthlyAggregate } from '@/lib/historical-data'
+import type { MonthlyAggregate } from '@/lib/relatorios-utils'
 import { formatCurrency } from '@/lib/utils'
 import { ESPACOS_CONFIG } from '@/lib/espacos-config'
 

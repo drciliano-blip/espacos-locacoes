@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react'
 import {
   BarChart,
   Bar,
@@ -9,16 +10,11 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
+import { useReceitas } from '@/contexts/ReceitasContext'
 
-const data = [
-  { mes: 'Jan', receita: 52000 },
-  { mes: 'Fev', receita: 38000 },
-  { mes: 'Mar', receita: 67000 },
-  { mes: 'Abr', receita: 71000 },
-  { mes: 'Mai', receita: 94000 },
-  { mes: 'Jun', receita: 110000 },
-]
+const MONTH_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function CustomTooltip({ active, payload, label }: any) {
   if (active && payload && payload.length) {
     return (
@@ -34,9 +30,27 @@ function CustomTooltip({ active, payload, label }: any) {
 }
 
 export default function RevenueChart() {
+  const { receitas } = useReceitas()
+
+  const data = useMemo(() => {
+    const hoje = new Date()
+    const meses: { yearMonth: string; mes: string }[] = []
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1)
+      meses.push({ yearMonth: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, mes: MONTH_LABELS[d.getMonth()] })
+    }
+    const porMes: Record<string, number> = {}
+    for (const r of receitas) {
+      if (r.status !== 'pago') continue
+      const ym = r.data.substring(0, 7)
+      porMes[ym] = (porMes[ym] ?? 0) + r.valor
+    }
+    return meses.map(m => ({ mes: m.mes, receita: porMes[m.yearMonth] ?? 0 }))
+  }, [receitas])
+
   return (
     <div className="rounded-xl border border-app-border bg-app-surface p-5">
-      <h3 className="text-sm font-semibold text-app-text mb-4">Receita Mensal 2026</h3>
+      <h3 className="text-sm font-semibold text-app-text mb-4">Receita Mensal (últimos 6 meses)</h3>
       <ResponsiveContainer width="100%" height={200}>
         <BarChart data={data} barSize={32}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" vertical={false} />

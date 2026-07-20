@@ -11,7 +11,9 @@ import RevenueByCategoryChart from './RevenueByCategoryChart'
 import OccupancyAreaChart from './OccupancyAreaChart'
 import ProjectionChart from './ProjectionChart'
 import SummaryTable from './SummaryTable'
-import { getMonthlyAggregates, calcularProjecoes, getPeriodRange } from '@/lib/historical-data'
+import { aggregateMonthly, calcularProjecoes, getPeriodRange } from '@/lib/relatorios-utils'
+import { useEventos } from '@/contexts/EventosContext'
+import { useReceitas } from '@/contexts/ReceitasContext'
 import DespesasSection from './DespesasSection'
 
 function getDefaultFilters(): RelatorioFilters {
@@ -33,6 +35,8 @@ const PERIODO_LABELS: Record<string, string> = {
 }
 
 export default function RelatoriosClient() {
+  const { eventos } = useEventos()
+  const { receitas } = useReceitas()
   const [filters, setFilters] = useState<RelatorioFilters>(getDefaultFilters)
 
   function handleFiltersChange(f: RelatorioFilters) {
@@ -46,10 +50,10 @@ export default function RelatoriosClient() {
 
   const { aggregates, projecoes } = useMemo(() => {
     const espacoFilter = filters.espacos.length > 0 ? filters.espacos : undefined
-    const aggs = getMonthlyAggregates(espacoFilter, filters.dataInicio, filters.dataFim)
+    const aggs = aggregateMonthly(eventos, receitas, espacoFilter, filters.dataInicio, filters.dataFim)
     const proj = calcularProjecoes(aggs)
     return { aggregates: aggs, projecoes: proj }
-  }, [filters])
+  }, [eventos, receitas, filters])
 
   const espacosLabel = filters.espacos.length === 0
     ? 'Todos os espaços'

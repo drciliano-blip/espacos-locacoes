@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useAtividades } from '@/contexts/AtividadesContext'
 import type { Contrato, Espaco, StatusEvento } from '@/types'
 
 interface ContratoRow {
@@ -53,6 +54,7 @@ const ContratosContext = createContext<ContratosContextValue | null>(null)
 const SELECT = '*, espaco:espacos(nome)'
 
 export function ContratosProvider({ children }: { children: ReactNode }) {
+  const { logAtividade } = useAtividades()
   const [contratos, setContratos] = useState<Contrato[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -94,7 +96,13 @@ export function ContratosProvider({ children }: { children: ReactNode }) {
       .single()
 
     if (error) throw error
-    setContratos(prev => [fromRow(data as unknown as ContratoRow), ...prev])
+    const novo = fromRow(data as unknown as ContratoRow)
+    setContratos(prev => [novo, ...prev])
+    try {
+      await logAtividade({ tipo: 'contrato', acao: 'Contrato criado', detalhes: `${novo.numeroContrato} — ${novo.cliente}`, espaco: novo.espaco })
+    } catch {
+      // log é secundário, não deve impedir o cadastro do contrato
+    }
   }
 
   return (

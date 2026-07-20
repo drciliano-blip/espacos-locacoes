@@ -9,7 +9,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import type { MonthlyAggregate } from '@/lib/historical-data'
+import type { MonthlyAggregate } from '@/lib/relatorios-utils'
 
 function CustomTooltip({ active, payload, label }: any) {
   if (active && payload && payload.length) {

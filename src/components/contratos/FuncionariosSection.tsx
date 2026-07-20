@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Users, Plus, X, Save, ChevronDown, ChevronUp, Phone, Briefcase, Trash2 } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
+import { useAtividades } from '@/contexts/AtividadesContext'
 import { createClient } from '@/lib/supabase/client'
 import FileList from '@/components/shared/FileList'
 import FileAttachButton from '@/components/shared/FileAttachButton'
@@ -42,6 +43,7 @@ const EMPTY: Draft = { nomeCompleto: '', cargo: '', espacoVinculado: '', telefon
 
 export default function FuncionariosSection() {
   const { espacosNomes } = useEspacos()
+  const { logAtividade } = useAtividades()
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([])
   const [filterEspaco, setFilterEspaco] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
@@ -89,16 +91,30 @@ export default function FuncionariosSection() {
 
     if (error) return
 
-    setFuncionarios(prev => [fromRow(data as unknown as FuncionarioRow), ...prev])
+    const novo = fromRow(data as unknown as FuncionarioRow)
+    setFuncionarios(prev => [novo, ...prev])
     setDraft(EMPTY)
     setSubmitted(false)
     setModalOpen(false)
+    try {
+      await logAtividade({ tipo: 'funcionario', acao: 'Funcionário adicionado', detalhes: novo.nomeCompleto, espaco: novo.espacoVinculado || undefined })
+    } catch {
+      // log é secundário, não deve impedir o cadastro
+    }
   }
 
   async function handleRemove(id: string) {
+    const alvo = funcionarios.find(f => f.id === id)
     const supabase = createClient()
     await supabase.from('funcionarios').delete().eq('id', id)
     setFuncionarios(prev => prev.filter(f => f.id !== id))
+    if (alvo) {
+      try {
+        await logAtividade({ tipo: 'funcionario', acao: 'Funcionário removido', detalhes: alvo.nomeCompleto, espaco: alvo.espacoVinculado || undefined })
+      } catch {
+        // log é secundário, não deve impedir a remoção já concluída
+      }
+    }
   }
 
   const filtered = filterEspaco ? funcionarios.filter(f => f.espacoVinculado === filterEspaco) : funcionarios

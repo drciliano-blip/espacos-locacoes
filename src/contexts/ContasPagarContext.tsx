@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useAtividades } from '@/contexts/AtividadesContext'
 import type { ContaPagar, CategoriaContaPagar, StatusContaPagar } from '@/types'
 
 interface ContaPagarRow {
@@ -45,6 +46,7 @@ const ContasPagarContext = createContext<ContasPagarContextValue | null>(null)
 const SELECT = '*, espaco:espacos(nome)'
 
 export function ContasPagarProvider({ children }: { children: ReactNode }) {
+  const { logAtividade } = useAtividades()
   const [contas, setContas] = useState<ContaPagar[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -86,7 +88,13 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
       .single()
 
     if (error) throw error
-    setContas(prev => [fromRow(data as unknown as ContaPagarRow), ...prev])
+    const nova = fromRow(data as unknown as ContaPagarRow)
+    setContas(prev => [nova, ...prev])
+    try {
+      await logAtividade({ tipo: 'financeiro', acao: 'Conta a pagar lançada', detalhes: nova.descricao, espaco: nova.espaco !== 'Todos' ? nova.espaco : undefined })
+    } catch {
+      // log é secundário, não deve impedir o lançamento da conta
+    }
   }
 
   return (

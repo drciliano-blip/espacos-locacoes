@@ -1,5 +1,5 @@
 import { DollarSign, CalendarCheck, TrendingUp, Users } from 'lucide-react'
-import type { MonthlyAggregate } from '@/lib/historical-data'
+import type { MonthlyAggregate } from '@/lib/relatorios-utils'
 import { formatCurrency } from '@/lib/utils'
 
 interface KPISummaryProps {

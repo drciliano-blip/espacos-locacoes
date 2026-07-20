@@ -12,7 +12,7 @@ import {
   ReferenceLine,
   ResponsiveContainer,
 } from 'recharts'
-import type { MonthlyAggregate, ProjecaoMes } from '@/lib/historical-data'
+import type { MonthlyAggregate, ProjecaoMes } from '@/lib/relatorios-utils'
 
 const fmt = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)

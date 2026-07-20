@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { X, Save, Sparkles, Paperclip, FileText } from 'lucide-react'
+import { X, Save, Sparkles, Paperclip, FileText, Camera } from 'lucide-react'
 import { saveFile } from '@/lib/file-storage'
 import type { CategoriaReceita, NovaReceitaInput } from '@/contexts/ReceitasContext'
 import type { Evento } from '@/types'
@@ -50,6 +50,7 @@ export default function AnexarRelatorioModal({ evento, categorias, onClose, onSa
   const [saving, setSaving] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
 
   const tipoConfig = TIPOS.find(t => t.key === tipo)!
   const isAluguel = tipoConfig.categoriaSlug === 'aluguel'
@@ -58,6 +59,10 @@ export default function AnexarRelatorioModal({ evento, categorias, onClose, onSa
     setFile(f)
     setError(null)
     if (!f) return
+
+    if (f.type === 'image/heic' || f.type === 'image/heif') {
+      setError('Fotos em formato HEIC não são lidas pela IA — use o botão "Tirar foto" (gera JPEG) ou converta o arquivo antes de anexar. O arquivo ainda assim foi anexado.')
+    }
 
     setExtracting(true)
     try {
@@ -76,6 +81,8 @@ export default function AnexarRelatorioModal({ evento, categorias, onClose, onSa
 
       if (!res.ok || data.error) {
         setError(data.error ?? 'Não foi possível ler o documento com a IA. Preencha o valor manualmente.')
+      } else if (!data.valor && !data.descricao) {
+        setError('A IA não conseguiu identificar os dados neste documento. Preencha o valor manualmente.')
       } else {
         if (data.valor) setValor(parseValorBR(data.valor))
         if (data.descricao) setDescricao(data.descricao)
@@ -156,7 +163,8 @@ export default function AnexarRelatorioModal({ evento, categorias, onClose, onSa
           <div>
             <label className="text-xs text-app-subtle mb-1 block">Documento (PDF ou imagem)</label>
             <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden" onChange={e => handleFile(e.target.files?.[0] ?? null)} />
-            <div className="flex items-center gap-2">
+            <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => handleFile(e.target.files?.[0] ?? null)} />
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
@@ -165,6 +173,15 @@ export default function AnexarRelatorioModal({ evento, categorias, onClose, onSa
               >
                 <Paperclip className="h-3.5 w-3.5" />
                 {file ? file.name : 'Selecionar arquivo…'}
+              </button>
+              <button
+                type="button"
+                onClick={() => cameraRef.current?.click()}
+                disabled={extracting}
+                className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors disabled:opacity-60"
+              >
+                <Camera className="h-3.5 w-3.5" />
+                Tirar foto
               </button>
               {extracting && (
                 <span className="flex items-center gap-1.5 text-xs text-[#128C7E]">

@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useAtividades } from '@/contexts/AtividadesContext'
 
 export interface CategoriaReceita {
   id: string
@@ -97,6 +98,7 @@ const ReceitasContext = createContext<ReceitasContextValue | null>(null)
 const SELECT = '*, categoria:categorias_receita(slug, nome), espaco:espacos(nome)'
 
 export function ReceitasProvider({ children }: { children: ReactNode }) {
+  const { logAtividade } = useAtividades()
   const [receitas, setReceitas] = useState<Receita[]>([])
   const [categorias, setCategorias] = useState<CategoriaReceita[]>([])
   const [loading, setLoading] = useState(true)
@@ -144,7 +146,13 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
       .single()
 
     if (error) throw error
-    setReceitas(prev => [fromRow(data as unknown as ReceitaRow), ...prev])
+    const nova = fromRow(data as unknown as ReceitaRow)
+    setReceitas(prev => [nova, ...prev])
+    try {
+      await logAtividade({ tipo: 'financeiro', acao: 'Receita lançada', detalhes: `${nova.categoriaNome} — ${nova.descricao}`, espaco: nova.espaco })
+    } catch {
+      // log é secundário, não deve impedir o lançamento da receita
+    }
   }
 
   async function upsertReceitaDoEvento(evento: ReceitaDoEventoInput) {

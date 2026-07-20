@@ -52,20 +52,24 @@ export default function DashboardPage() {
 
   const eventosFiltrados = useMemo(() =>
     espacoSelecionado === 'Todos' ? eventos : eventos.filter(e => e.espaco === espacoSelecionado),
-    [espacoSelecionado]
+    [eventos, espacoSelecionado]
   )
 
   const pagamentosFiltrados = useMemo(() =>
     espacoSelecionado === 'Todos' ? pagamentos : pagamentos.filter(p => p.espaco === espacoSelecionado),
-    [espacoSelecionado]
+    [pagamentos, espacoSelecionado]
   )
 
+  const hoje = new Date()
+  const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`
+  const nomeMesAtual = hoje.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+
   const confirmedThisMonth = eventosFiltrados.filter(
-    (e) => e.status === 'confirmado' && e.data.startsWith('2026-05')
+    (e) => e.status === 'confirmado' && e.data.startsWith(mesAtual)
   ).length
 
   const receitaMes = pagamentosFiltrados
-    .filter((p) => p.status === 'pago' && p.data.startsWith('2026-05'))
+    .filter((p) => p.status === 'pago' && p.data.startsWith(mesAtual))
     .reduce((s, p) => s + p.valor, 0)
 
   const pendente = pagamentosFiltrados
@@ -267,10 +271,8 @@ export default function DashboardPage() {
             <KPICard
               title="Receita do Mês"
               value={formatCurrency(receitaMes)}
-              subtitle={espacoSelecionado === 'Todos' ? 'Maio 2026 — todos os espaços' : `Maio 2026 — ${espacoSelecionado}`}
+              subtitle={espacoSelecionado === 'Todos' ? `${nomeMesAtual} — todos os espaços` : `${nomeMesAtual} — ${espacoSelecionado}`}
               icon={DollarSign}
-              trend="+18% vs abril"
-              trendUp={true}
               color="green"
             />
             <KPICard
@@ -278,8 +280,6 @@ export default function DashboardPage() {
               value={String(confirmedThisMonth)}
               subtitle="Este mês"
               icon={CalendarCheck}
-              trend="+3 vs mês anterior"
-              trendUp={true}
               color="blue"
             />
             <KPICard

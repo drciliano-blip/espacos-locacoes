@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { ESPACOS_CONFIG } from '@/lib/espacos-config'
 import type { EspacoConfig } from '@/lib/espacos-config'
 import { createClient } from '@/lib/supabase/client'
+import { useAtividades } from '@/contexts/AtividadesContext'
 import type { EspacoCustomData } from '@/types'
 
 const PALETTE: Pick<EspacoConfig, 'cor' | 'colorClass' | 'bgClass' | 'borderClass' | 'dotClass' | 'gradientFrom'>[] = [
@@ -84,6 +85,7 @@ interface EspacosContextValue {
 const EspacosContext = createContext<EspacosContextValue | null>(null)
 
 export function EspacosProvider({ children }: { children: ReactNode }) {
+  const { logAtividade } = useAtividades()
   const [rows, setRows] = useState<EspacoRow[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -117,6 +119,11 @@ export function EspacosProvider({ children }: { children: ReactNode }) {
 
     const row = data as EspacoRow
     setRows(prev => [...prev, row])
+    try {
+      await logAtividade({ tipo: 'espaco', acao: 'Espaço criado', detalhes: row.nome, espaco: row.nome })
+    } catch {
+      // log é secundário, não deve impedir o cadastro do espaço
+    }
     return toCustomData(row)
   }
 
@@ -133,6 +140,11 @@ export function EspacosProvider({ children }: { children: ReactNode }) {
 
     const row = data as EspacoRow
     setRows(prev => prev.map(r => (r.id === id ? row : r)))
+    try {
+      await logAtividade({ tipo: 'espaco', acao: 'Foto atualizada', detalhes: row.nome, espaco: row.nome })
+    } catch {
+      // log é secundário, não deve impedir a troca da foto
+    }
   }
 
   const ativos = rows.filter(r => r.status === 'ativo')

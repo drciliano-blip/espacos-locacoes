@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useReceitas } from '@/contexts/ReceitasContext'
+import { useAtividades } from '@/contexts/AtividadesContext'
 import type { Evento, Espaco } from '@/types'
 
 interface EventoRow {
@@ -98,6 +99,7 @@ const SELECT = '*, espaco:espacos(nome)'
 
 export function EventosProvider({ children }: { children: ReactNode }) {
   const { upsertReceitaDoEvento } = useReceitas()
+  const { logAtividade } = useAtividades()
   const [eventos, setEventos] = useState<Evento[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -125,7 +127,12 @@ export function EventosProvider({ children }: { children: ReactNode }) {
     if (error) throw error
     const novo = fromRow(data as unknown as EventoRow)
     setEventos(prev => [novo, ...prev])
-    await upsertReceitaDoEvento({ id: novo.id, cliente: novo.cliente, espaco: novo.espaco, data: novo.data, valor: novo.valor })
+    try {
+      await upsertReceitaDoEvento({ id: novo.id, cliente: novo.cliente, espaco: novo.espaco, data: novo.data, valor: novo.valor })
+      await logAtividade({ tipo: 'evento', acao: 'Evento criado', detalhes: `${novo.cliente} — ${novo.data}`, espaco: novo.espaco })
+    } catch {
+      // efeitos colaterais (sincronizar receita, registrar atividade) não devem derrubar o cadastro do evento
+    }
   }
 
   async function updateEvento(e: Evento) {
@@ -142,14 +149,27 @@ export function EventosProvider({ children }: { children: ReactNode }) {
     if (error) throw error
     const updated = fromRow(data as unknown as EventoRow)
     setEventos(prev => prev.map(x => (x.id === updated.id ? updated : x)))
-    await upsertReceitaDoEvento({ id: updated.id, cliente: updated.cliente, espaco: updated.espaco, data: updated.data, valor: updated.valor })
+    try {
+      await upsertReceitaDoEvento({ id: updated.id, cliente: updated.cliente, espaco: updated.espaco, data: updated.data, valor: updated.valor })
+      await logAtividade({ tipo: 'evento', acao: 'Evento atualizado', detalhes: `${updated.cliente} — ${updated.data}`, espaco: updated.espaco })
+    } catch {
+      // efeitos colaterais não devem derrubar a edição do evento
+    }
   }
 
   async function deleteEvento(id: string) {
+    const alvo = eventos.find(e => e.id === id)
     const supabase = createClient()
     const { error } = await supabase.from('eventos').delete().eq('id', id)
     if (error) throw error
     setEventos(prev => prev.filter(x => x.id !== id))
+    if (alvo) {
+      try {
+        await logAtividade({ tipo: 'evento', acao: 'Evento excluído', detalhes: `${alvo.cliente} — ${alvo.data}`, espaco: alvo.espaco })
+      } catch {
+        // log é secundário, não deve impedir a exclusão já concluída
+      }
+    }
   }
 
   return (

@@ -10,7 +10,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts'
-import type { MonthlyAggregate } from '@/lib/historical-data'
+import type { MonthlyAggregate } from '@/lib/relatorios-utils'
 import { ESPACOS_CONFIG } from '@/lib/espacos-config'
 
 const ESPACO_STROKE: Record<string, string> = {

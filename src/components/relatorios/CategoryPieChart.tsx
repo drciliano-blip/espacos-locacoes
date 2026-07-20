@@ -1,7 +1,7 @@
 'use client'
 
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import type { MonthlyAggregate } from '@/lib/historical-data'
+import type { MonthlyAggregate } from '@/lib/relatorios-utils'
 
 const COLORS = [
   '#a78bfa', '#818cf8', '#60a5fa', '#34d399', '#fb923c',
