@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import type { ComponentType } from 'react'
 import {
   Users, DollarSign, CalendarCheck, TrendingUp,
@@ -17,7 +17,10 @@ import type { Evento } from '@/types'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import EventoDrawer from '@/components/eventos/EventoDrawer'
 import NovoEventoModal from '@/components/eventos/NovoEventoModal'
+import EspacoLogo from '@/components/espacos/EspacoLogo'
 import { useEventos } from '@/contexts/EventosContext'
+import { useEspacos } from '@/contexts/EspacosContext'
+import { saveFile } from '@/lib/file-storage'
 
 // ─── local types ─────────────────────────────────────────────────────────────
 
@@ -122,6 +125,7 @@ interface EspacoPageProps {
 
 export default function EspacoPage({ config }: EspacoPageProps) {
   const { eventos: todosEventos, addEvento, updateEvento, deleteEvento } = useEventos()
+  const { updateEspacoFoto } = useEspacos()
 
   const [tab, setTab]                       = useState<SpaceTab>('eventos')
   const [selectedEvento, setSelectedEvento] = useState<Evento | null>(null)
@@ -131,6 +135,20 @@ export default function EspacoPage({ config }: EspacoPageProps) {
   const [addingDoc, setAddingDoc]           = useState(false)
   const [newDoc, setNewDoc]                 = useState<{ nome: string; categoria: DocCategoria }>({ nome: '', categoria: 'contrato' })
   const [novoEventoOpen, setNovoEventoOpen] = useState(false)
+  const [uploadingFoto, setUploadingFoto]   = useState(false)
+  const fotoInputRef = useRef<HTMLInputElement>(null)
+
+  async function handleFotoChange(file: File | null) {
+    if (!file || !config.id) return
+    setUploadingFoto(true)
+    try {
+      const stored = await saveFile(file, { module: 'espacos', entityId: config.id, entityName: config.nome, categoria: 'logo' })
+      await updateEspacoFoto(config.id, stored.id)
+    } finally {
+      setUploadingFoto(false)
+      if (fotoInputRef.current) fotoInputRef.current.value = ''
+    }
+  }
 
   // Events for this specific space, derived from global context
   const eventosEspaco = useMemo(
@@ -210,8 +228,24 @@ export default function EspacoPage({ config }: EspacoPageProps) {
       {/* ── 1. Informações gerais do espaço ─────────────────────────────── */}
       <div className={`rounded-xl border ${config.borderClass} ${config.bgClass} p-5`}>
         <div className="flex items-start gap-4">
-          <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-xl ${config.bgClass} border ${config.borderClass}`}>
-            <span className={`text-2xl font-black ${config.colorClass}`}>{config.nome.charAt(0)}</span>
+          <div className="relative shrink-0 group">
+            <EspacoLogo
+              fotoFileId={config.fotoFileId}
+              fallbackLetter={config.nome.charAt(0)}
+              colorClass={config.colorClass}
+              bgClass={config.bgClass}
+              borderClass={config.borderClass}
+              size="lg"
+            />
+            <input ref={fotoInputRef} type="file" accept="image/*" className="hidden" onChange={e => handleFotoChange(e.target.files?.[0] ?? null)} />
+            <button
+              onClick={() => fotoInputRef.current?.click()}
+              disabled={uploadingFoto || !config.id}
+              title="Trocar foto"
+              className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/60 text-white text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity disabled:cursor-not-allowed"
+            >
+              {uploadingFoto ? '…' : 'Trocar'}
+            </button>
           </div>
           <div className="min-w-0 flex-1">
             <h2 className={`text-xl font-bold ${config.colorClass}`}>{config.nome}</h2>

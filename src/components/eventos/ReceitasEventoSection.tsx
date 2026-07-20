@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Search, Plus, Calendar } from 'lucide-react'
+import { Search, Plus, Calendar, Paperclip, FileText } from 'lucide-react'
 import { useEventos } from '@/contexts/EventosContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import NovaReceitaModal from '@/components/pagamentos/NovaReceitaModal'
+import AnexarRelatorioModal from '@/components/eventos/AnexarRelatorioModal'
+import FileList from '@/components/shared/FileList'
 import type { Evento } from '@/types'
 
 const statusStyles: Record<string, string> = {
@@ -17,10 +19,12 @@ const statusLabels: Record<string, string> = { pago: 'Pago', pendente: 'Pendente
 
 export default function ReceitasEventoSection() {
   const { eventos } = useEventos()
-  const { receitas, categorias, addReceita } = useReceitas()
+  const { receitas, categorias, addReceita, upsertReceitaDoEvento } = useReceitas()
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Evento | null>(null)
   const [novaOpen, setNovaOpen] = useState(false)
+  const [anexarOpen, setAnexarOpen] = useState(false)
+  const [filesVersion, setFilesVersion] = useState(0)
 
   const filtrados = useMemo(() => {
     const q = search.toLowerCase()
@@ -85,16 +89,25 @@ export default function ReceitasEventoSection() {
           <p className="text-sm font-semibold text-app-text">{selected.cliente}</p>
           <p className="text-xs text-app-subtle mt-0.5">{selected.espaco} · {formatDate(selected.data)}</p>
         </div>
-        <button
-          onClick={() => setNovaOpen(true)}
-          className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-white transition-colors shrink-0"
-          style={{ backgroundColor: '#25D366' }}
-          onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#128C7E' }}
-          onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#25D366' }}
-        >
-          <Plus className="h-4 w-4" />
-          Nova Receita
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setAnexarOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg border border-app-border2 bg-app-surface px-3 py-2 text-sm font-medium text-app-text hover:bg-app-surface2 transition-colors"
+          >
+            <Paperclip className="h-4 w-4 text-[#25D366]" />
+            Anexar relatório
+          </button>
+          <button
+            onClick={() => setNovaOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-white transition-colors"
+            style={{ backgroundColor: '#25D366' }}
+            onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#128C7E' }}
+            onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#25D366' }}
+          >
+            <Plus className="h-4 w-4" />
+            Nova Receita
+          </button>
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -126,6 +139,21 @@ export default function ReceitasEventoSection() {
         ))}
       </div>
 
+      <div className="rounded-xl border border-app-border bg-app-surface p-4">
+        <p className="text-xs font-medium text-app-muted flex items-center gap-1.5 mb-3">
+          <FileText className="h-3.5 w-3.5 text-[#25D366]" />
+          Relatórios anexados
+        </p>
+        <FileList
+          key={filesVersion}
+          module="receitas"
+          entityId={selected.id}
+          entityName={selected.cliente}
+          espaco={selected.espaco}
+          showAttach={false}
+        />
+      </div>
+
       {novaOpen && (
         <NovaReceitaModal
           categorias={categorias}
@@ -135,6 +163,16 @@ export default function ReceitasEventoSection() {
           espacoPadrao={selected.espaco}
           clientePadrao={selected.cliente}
           excludeSlugs={['aluguel']}
+        />
+      )}
+
+      {anexarOpen && (
+        <AnexarRelatorioModal
+          evento={selected}
+          categorias={categorias}
+          onClose={() => { setAnexarOpen(false); setFilesVersion(v => v + 1) }}
+          onSaveReceita={addReceita}
+          onSyncAluguel={upsertReceitaDoEvento}
         />
       )}
     </div>

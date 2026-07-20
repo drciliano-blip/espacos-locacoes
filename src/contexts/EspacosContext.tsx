@@ -33,18 +33,10 @@ function isBuiltin(slug: string): boolean {
 
 function toConfig(row: EspacoRow, paletteIndex: number): EspacoConfig {
   const builtin = ESPACOS_CONFIG.find(e => e.slug === row.slug)
-  if (builtin) {
-    return { ...builtin, nome: row.nome, descricao: row.descricao || builtin.descricao, capacidade: row.capacidade }
-  }
-  const palette = PALETTE[paletteIndex % PALETTE.length]
-  return {
-    slug: row.slug,
-    nome: row.nome,
-    descricao: row.descricao ?? '',
-    capacidade: row.capacidade,
-    categorias: [],
-    ...palette,
-  }
+  const base = builtin
+    ? { ...builtin, nome: row.nome, descricao: row.descricao || builtin.descricao, capacidade: row.capacidade }
+    : { slug: row.slug, nome: row.nome, descricao: row.descricao ?? '', capacidade: row.capacidade, categorias: [], ...PALETTE[paletteIndex % PALETTE.length] }
+  return { ...base, id: row.id, fotoFileId: row.foto_file_id ?? undefined }
 }
 
 function toCustomData(row: EspacoRow): EspacoCustomData {
@@ -86,6 +78,7 @@ interface EspacosContextValue {
   customEspacos: EspacoCustomData[]
   loading: boolean
   addEspaco: (draft: NovoEspacoDraft) => Promise<EspacoCustomData>
+  updateEspacoFoto: (id: string, fotoFileId: string) => Promise<void>
 }
 
 const EspacosContext = createContext<EspacosContextValue | null>(null)
@@ -127,6 +120,21 @@ export function EspacosProvider({ children }: { children: ReactNode }) {
     return toCustomData(row)
   }
 
+  async function updateEspacoFoto(id: string, fotoFileId: string): Promise<void> {
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from('espacos')
+      .update({ foto_file_id: fotoFileId })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw error
+
+    const row = data as EspacoRow
+    setRows(prev => prev.map(r => (r.id === id ? row : r)))
+  }
+
   const ativos = rows.filter(r => r.status === 'ativo')
   let paletteIndex = 0
   const espacosConfig: EspacoConfig[] = ativos.map(r => toConfig(r, isBuiltin(r.slug) ? 0 : paletteIndex++))
@@ -134,7 +142,7 @@ export function EspacosProvider({ children }: { children: ReactNode }) {
   const customEspacos = rows.filter(r => !isBuiltin(r.slug)).map(toCustomData)
 
   return (
-    <EspacosContext.Provider value={{ espacosConfig, espacosNomes, customEspacos, loading, addEspaco }}>
+    <EspacosContext.Provider value={{ espacosConfig, espacosNomes, customEspacos, loading, addEspaco, updateEspacoFoto }}>
       {children}
     </EspacosContext.Provider>
   )

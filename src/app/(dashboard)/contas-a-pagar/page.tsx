@@ -394,9 +394,9 @@ export default function ContasPagarPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-app-muted mb-1">Fornecedor</label>
+                  <label className="block text-xs text-app-muted mb-1">Beneficiário</label>
                   <input value={form.fornecedor} onChange={e => setForm(f => ({ ...f, fornecedor: e.target.value }))}
-                    placeholder="Nome do fornecedor"
+                    placeholder="Nome do beneficiário"
                     className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-3 py-1.5 text-sm text-app-text focus:outline-none"
                     onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
                     onBlur={e => { e.currentTarget.style.borderColor = '' }}

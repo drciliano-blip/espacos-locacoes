@@ -7,7 +7,7 @@ export interface StoredFile {
   name: string
   mimeType: string
   size: number
-  module: 'contas' | 'contratos' | 'agenda' | 'pagamentos' | 'espacos' | 'funcionarios' | 'fichas'
+  module: 'contas' | 'contratos' | 'agenda' | 'pagamentos' | 'espacos' | 'funcionarios' | 'fichas' | 'receitas'
   entityId: string
   entityName: string
   espaco?: string
@@ -126,6 +126,14 @@ export async function downloadFile(id: string): Promise<void> {
   const { data } = await supabase.storage.from(BUCKET).createSignedUrl(row.storage_path, 60, { download: row.name })
   if (!data) return
   window.location.href = data.signedUrl
+}
+
+export async function getFileUrl(id: string): Promise<string | null> {
+  const supabase = createClient()
+  const { data: row } = await supabase.from('files').select('storage_path').eq('id', id).single()
+  if (!row) return null
+  const { data } = await supabase.storage.from(BUCKET).createSignedUrl(row.storage_path, 3600)
+  return data?.signedUrl ?? null
 }
 
 export async function viewFile(id: string): Promise<void> {

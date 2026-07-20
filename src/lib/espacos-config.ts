@@ -17,6 +17,8 @@ export interface EspacoConfig {
   dotClass: string
   gradientFrom: string
   categorias: CategoriaEvento[]
+  id?: string
+  fotoFileId?: string
 }
 
 export const ESPACOS_CONFIG: EspacoConfig[] = [

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Plus, Users, Building2 } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
 import NovoEspacoModal from '@/components/espacos/NovoEspacoModal'
+import EspacoLogo from '@/components/espacos/EspacoLogo'
 
 export default function EspacosIndexPage() {
   const { espacosConfig, customEspacos } = useEspacos()
@@ -39,9 +40,13 @@ export default function EspacosIndexPage() {
             className={`rounded-xl border ${config.borderClass} ${config.bgClass} p-5 hover:opacity-90 transition-opacity`}
           >
             <div className="flex items-start gap-3">
-              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${config.bgClass} border ${config.borderClass}`}>
-                <span className={`text-lg font-black ${config.colorClass}`}>{config.nome.charAt(0)}</span>
-              </div>
+              <EspacoLogo
+                fotoFileId={config.fotoFileId}
+                fallbackLetter={config.nome.charAt(0)}
+                colorClass={config.colorClass}
+                bgClass={config.bgClass}
+                borderClass={config.borderClass}
+              />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <h3 className={`text-sm font-bold ${config.colorClass} truncate`}>{config.nome}</h3>
