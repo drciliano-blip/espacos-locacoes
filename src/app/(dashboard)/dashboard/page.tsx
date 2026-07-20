@@ -110,7 +110,7 @@ export default function DashboardPage() {
       {/* Seletor de espaço */}
       <div className="space-y-2">
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5 bg-app-surface border border-app-border rounded-xl p-1 shadow-sm">
+          <div className="flex flex-wrap items-center gap-1.5 bg-app-surface border border-app-border rounded-xl p-1 shadow-sm">
             <button
               onClick={() => { setEspacoSelecionado('Todos'); setComparativo(false) }}
               className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
