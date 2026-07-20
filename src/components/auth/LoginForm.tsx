@@ -3,8 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Building2, Eye, EyeOff, Lock, Mail } from 'lucide-react'
-import { checkDemoLogin } from '@/lib/auth'
-
+import { createClient } from '@/lib/supabase/client'
 
 export default function LoginForm() {
   const router = useRouter()
@@ -19,17 +18,17 @@ export default function LoginForm() {
     setError('')
     setLoading(true)
 
-    await new Promise((r) => setTimeout(r, 600))
+    const supabase = createClient()
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
 
-    const user = checkDemoLogin(email, password)
-    if (user) {
-      const value = encodeURIComponent(JSON.stringify(user))
-      document.cookie = `auth=${value}; path=/; max-age=86400`
-      router.push('/dashboard')
-    } else {
+    if (signInError) {
       setError('E-mail ou senha incorretos.')
+      setLoading(false)
+      return
     }
-    setLoading(false)
+
+    router.push('/dashboard')
+    router.refresh()
   }
 
   return (
@@ -100,10 +99,6 @@ export default function LoginForm() {
               {loading ? 'Entrando...' : 'Entrar'}
             </button>
           </form>
-
-          <p className="mt-4 text-center text-xs text-app-subtle">
-            Admin: admin@espacoslocacoes.com.br / admin123
-          </p>
         </div>
       </div>
     </div>

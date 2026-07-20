@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Save, Edit3, Users, DollarSign, Phone, User, Calendar, ClipboardCheck, Paperclip, Upload, Trash2, FileText, FileCheck, FileWarning, FileBadge, File, HardDrive } from 'lucide-react'
-import type { Evento, FormaPagamento, Decoracao, StatusVistoria, TipoEvento, Documento } from '@/types'
+import { X, Save, Edit3, Users, DollarSign, User, Calendar, ClipboardCheck, Paperclip, Trash2 } from 'lucide-react'
+import type { Evento, StatusVistoria, TipoEvento } from '@/types'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { useCurrentUser } from '@/contexts/UserContext'
 import FileList from '@/components/shared/FileList'
 
 const statusBadge: Record<string, string> = {
@@ -32,36 +33,22 @@ const tipoEventoBadge: Record<TipoEvento, string> = {
   'Audiovisual': 'bg-orange-500/15 text-orange-400 border-orange-500/20',
 }
 
-const docTypeIcon: Record<string, React.ElementType> = {
-  contrato: FileText,
-  comprovante: FileCheck,
-  autorização: FileWarning,
-  observação: FileBadge,
-  outro: File,
-}
-
-const docTypeColor: Record<string, string> = {
-  contrato: 'text-[#128C7E] bg-[#25D366]/10',
-  comprovante: 'text-emerald-400 bg-emerald-500/10',
-  autorização: 'text-amber-400 bg-amber-500/10',
-  observação: 'text-sky-400 bg-sky-500/10',
-  outro: 'text-zinc-400 bg-zinc-500/10',
-}
-
 type DrawerTab = 'detalhes' | 'documentos'
 
 interface EventoDrawerProps {
   evento: Evento
   onClose: () => void
   onUpdate: (updated: Evento) => void
+  onDelete: (id: string) => Promise<void>
 }
 
-export default function EventoDrawer({ evento, onClose, onUpdate }: EventoDrawerProps) {
+export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: EventoDrawerProps) {
+  const { role } = useCurrentUser()
   const [tab, setTab] = useState<DrawerTab>('detalhes')
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<Evento>({ ...evento })
-  const [newDoc, setNewDoc] = useState<{ nome: string; tipo: Documento['tipo'] }>({ nome: '', tipo: 'contrato' })
-  const [addingDoc, setAddingDoc] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   function handleSave() {
     onUpdate(draft)
@@ -73,31 +60,10 @@ export default function EventoDrawer({ evento, onClose, onUpdate }: EventoDrawer
     setEditing(false)
   }
 
-  function addDocument() {
-    if (!newDoc.nome.trim()) return
-    const doc: Documento = {
-      id: `d${Date.now()}`,
-      nome: newDoc.nome.trim(),
-      tipo: newDoc.tipo,
-      dataUpload: new Date().toISOString().split('T')[0],
-    }
-    const updated: Evento = {
-      ...draft,
-      documentos: [...(draft.documentos ?? []), doc],
-    }
-    setDraft(updated)
-    onUpdate(updated)
-    setNewDoc({ nome: '', tipo: 'contrato' })
-    setAddingDoc(false)
-  }
-
-  function removeDocument(id: string) {
-    const updated: Evento = {
-      ...draft,
-      documentos: (draft.documentos ?? []).filter((d) => d.id !== id),
-    }
-    setDraft(updated)
-    onUpdate(updated)
+  async function handleDelete() {
+    setDeleting(true)
+    await onDelete(evento.id)
+    setDeleting(false)
   }
 
   const field = <T extends string | number | undefined>(
@@ -171,7 +137,6 @@ export default function EventoDrawer({ evento, onClose, onUpdate }: EventoDrawer
   }
 
   const current = editing ? draft : evento
-  const documentos = draft.documentos ?? []
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-end" onClick={onClose}>
@@ -195,13 +160,24 @@ export default function EventoDrawer({ evento, onClose, onUpdate }: EventoDrawer
             </div>
             <div className="flex items-center gap-2">
               {tab === 'detalhes' && !editing && (
-                <button
-                  onClick={() => setEditing(true)}
-                  className="flex items-center gap-1.5 rounded-lg border border-[#25D366]/30 bg-[#25D366]/10 px-3 py-1.5 text-xs font-medium text-[#128C7E] hover:bg-[#25D366]/20 transition-colors"
-                >
-                  <Edit3 className="h-3.5 w-3.5" />
-                  Editar
-                </button>
+                <>
+                  {role === 'admin' && (
+                    <button
+                      onClick={() => setDeleteConfirm(true)}
+                      title="Excluir evento"
+                      className="flex h-7 w-7 items-center justify-center rounded-lg text-app-subtle hover:bg-red-500/10 hover:text-red-400 transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setEditing(true)}
+                    className="flex items-center gap-1.5 rounded-lg border border-[#25D366]/30 bg-[#25D366]/10 px-3 py-1.5 text-xs font-medium text-[#128C7E] hover:bg-[#25D366]/20 transition-colors"
+                  >
+                    <Edit3 className="h-3.5 w-3.5" />
+                    Editar
+                  </button>
+                </>
               )}
               {editing && (
                 <>
@@ -239,11 +215,6 @@ export default function EventoDrawer({ evento, onClose, onUpdate }: EventoDrawer
             >
               <Paperclip className="h-3.5 w-3.5" />
               Documentos
-              {documentos.length > 0 && (
-                <span className="ml-1 rounded-full bg-[#25D366]/20 text-[#128C7E] text-xs px-1.5 py-0.5 leading-none">
-                  {documentos.length}
-                </span>
-              )}
             </button>
           </div>
         </div>
@@ -389,123 +360,43 @@ export default function EventoDrawer({ evento, onClose, onUpdate }: EventoDrawer
         {/* Conteúdo da aba Documentos */}
         {tab === 'documentos' && (
           <div className="p-5">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-sm font-medium text-app-text">
-                {documentos.length} {documentos.length === 1 ? 'documento' : 'documentos'} anexado{documentos.length !== 1 ? 's' : ''}
-              </p>
-              {!addingDoc && (
-                <button
-                  onClick={() => setAddingDoc(true)}
-                  className="flex items-center gap-1.5 rounded-lg border border-[#25D366]/30 bg-[#25D366]/10 px-3 py-1.5 text-xs font-medium text-[#128C7E] hover:bg-[#25D366]/20 transition-colors"
-                >
-                  <Upload className="h-3.5 w-3.5" />
-                  Anexar arquivo
-                </button>
-              )}
-            </div>
-
-            {/* Formulário de upload */}
-            {addingDoc && (
-              <div className="mb-4 rounded-lg border border-[#25D366]/20 bg-[#25D366]/5 p-4 space-y-3">
-                <p className="text-xs font-semibold text-[#128C7E]">Novo documento</p>
-                <div>
-                  <label className="text-xs text-app-subtle mb-1 block">Nome do arquivo</label>
-                  <input
-                    value={newDoc.nome}
-                    onChange={(e) => setNewDoc((d) => ({ ...d, nome: e.target.value }))}
-                    placeholder="Ex: Contrato assinado.pdf"
-                    className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:border-[#25D366] focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-app-subtle mb-1 block">Tipo</label>
-                  <select
-                    value={newDoc.tipo}
-                    onChange={(e) => setNewDoc((d) => ({ ...d, tipo: e.target.value as Documento['tipo'] }))}
-                    className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:border-[#25D366] focus:outline-none cursor-pointer"
-                  >
-                    <option value="contrato">Contrato</option>
-                    <option value="comprovante">Comprovante de Pagamento</option>
-                    <option value="autorização">Autorização</option>
-                    <option value="observação">Observação</option>
-                    <option value="outro">Outro</option>
-                  </select>
-                </div>
-                <div className="flex gap-2 justify-end">
-                  <button onClick={() => setAddingDoc(false)} className="rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors">
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={addDocument}
-                    disabled={!newDoc.nome.trim()}
-                    className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors" style={{ backgroundColor: '#25D366' }} onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.backgroundColor='#128C7E'}} onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.backgroundColor='#25D366'}}
-                  >
-                    <Upload className="h-3 w-3" />
-                    Anexar
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {documentos.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <Paperclip className="h-8 w-8 text-app-border2 mb-3" />
-                <p className="text-sm text-app-muted">Nenhum documento anexado</p>
-                <p className="text-xs text-app-subtle mt-1">Clique em "Anexar arquivo" para adicionar contratos, comprovantes e autorizações.</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {documentos.map((doc) => {
-                  const DocIcon = docTypeIcon[doc.tipo] ?? File
-                  const colorClass = docTypeColor[doc.tipo] ?? docTypeColor['outro']
-                  return (
-                    <div key={doc.id} className="flex items-center gap-3 rounded-lg border border-app-border2/50 bg-app-surface2/40 px-3.5 py-3">
-                      <div className={`flex h-9 w-9 items-center justify-center rounded-lg shrink-0 ${colorClass}`}>
-                        <DocIcon className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-app-text truncate">{doc.nome}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-xs text-app-subtle capitalize">{doc.tipo}</span>
-                          <span className="text-app-border2">·</span>
-                          <span className="text-xs text-app-subtle">{doc.dataUpload.split('-').reverse().join('/')}</span>
-                          {doc.tamanho && (
-                            <>
-                              <span className="text-app-border2">·</span>
-                              <span className="text-xs text-app-subtle">{doc.tamanho}</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => removeDocument(doc.id)}
-                        className="flex h-7 w-7 items-center justify-center rounded-md text-app-subtle hover:bg-red-500/10 hover:text-red-400 transition-colors shrink-0"
-                        title="Remover"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-
-            {/* Arquivos reais via IndexedDB */}
-            <div className="mt-4 border-t border-app-border/50 pt-4">
-              <p className="text-xs font-medium text-app-muted flex items-center gap-1.5 mb-3">
-                <HardDrive className="h-3 w-3 text-[#25D366]" />
-                Arquivos anexados (PDF, imagem, XLSX…)
-              </p>
-              <FileList
-                module="agenda"
-                entityId={evento.id}
-                entityName={`${evento.cliente} — ${evento.espaco}`}
-                espaco={evento.espaco}
-              />
-            </div>
+            <FileList
+              module="agenda"
+              entityId={evento.id}
+              entityName={`${evento.cliente} — ${evento.espaco}`}
+              espaco={evento.espaco}
+            />
           </div>
         )}
       </div>
+
+      {/* Confirmação de exclusão */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-sm rounded-2xl border border-app-border bg-app-surface p-6 shadow-2xl">
+            <h3 className="text-base font-bold text-app-text mb-2">Excluir evento?</h3>
+            <p className="text-sm text-app-muted mb-5">
+              Esta ação não pode ser desfeita. Receitas já lançadas para este evento não serão apagadas.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setDeleteConfirm(false)}
+                disabled={deleting}
+                className="rounded-lg border border-app-border2 px-4 py-2 text-sm text-app-muted hover:bg-app-surface2 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 transition-colors disabled:opacity-50"
+              >
+                {deleting ? 'Excluindo…' : 'Excluir'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

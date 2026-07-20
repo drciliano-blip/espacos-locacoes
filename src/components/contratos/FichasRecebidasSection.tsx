@@ -2,11 +2,67 @@
 
 import { useEffect, useState } from 'react'
 import { Inbox, ChevronDown, ChevronUp, Mail, Phone, Calendar, FileSignature } from 'lucide-react'
-import { getFichas } from '@/lib/fichas-store'
+import { createClient } from '@/lib/supabase/client'
 import { formatCurrency } from '@/lib/utils'
 import FileList from '@/components/shared/FileList'
 import GerarContratoModal from '@/components/contratos/GerarContratoModal'
 import type { FichaCliente } from '@/types'
+
+interface FichaRow {
+  id: string
+  criado_em: string
+  nome_completo: string
+  cpf: string
+  rg: string | null
+  data_nascimento: string | null
+  email: string
+  telefone_celular: string
+  endereco: FichaCliente['endereco'] | null
+  pessoa_juridica: boolean
+  razao_social: string | null
+  nome_fantasia: string | null
+  cnpj: string | null
+  endereco_empresa: FichaCliente['enderecoEmpresa'] | null
+  nome_evento: string
+  espaco_desejado: string
+  tipo_evento: string
+  data_evento: string
+  hora_inicio_montagem: string | null
+  hora_inicio_evento: string | null
+  hora_termino_evento: string | null
+  valor_locacao: string | null
+  forma_pagamento: string | null
+  documento_file_id: string | null
+}
+
+function fromRow(row: FichaRow): FichaCliente {
+  return {
+    id: row.id,
+    criadoEm: row.criado_em,
+    nomeCompleto: row.nome_completo,
+    cpf: row.cpf,
+    rg: row.rg ?? undefined,
+    dataNascimento: row.data_nascimento ?? undefined,
+    email: row.email,
+    telefoneCelular: row.telefone_celular,
+    endereco: row.endereco ?? { rua: '', numero: '', complemento: '', bairro: '', cidade: '', estado: '', cep: '' },
+    pessoaJuridica: row.pessoa_juridica,
+    razaoSocial: row.razao_social ?? undefined,
+    nomeFantasia: row.nome_fantasia ?? undefined,
+    cnpj: row.cnpj ?? undefined,
+    enderecoEmpresa: row.endereco_empresa ?? undefined,
+    nomeEvento: row.nome_evento,
+    espacoDesejado: row.espaco_desejado,
+    tipoEvento: row.tipo_evento,
+    dataEvento: row.data_evento,
+    horaInicioMontagem: row.hora_inicio_montagem?.slice(0, 5) ?? undefined,
+    horaInicioEvento: row.hora_inicio_evento?.slice(0, 5) ?? undefined,
+    horaTerminoEvento: row.hora_termino_evento?.slice(0, 5) ?? undefined,
+    valorLocacao: row.valor_locacao ?? undefined,
+    formaPagamento: row.forma_pagamento ?? undefined,
+    documentoFileId: row.documento_file_id ?? undefined,
+  }
+}
 
 export default function FichasRecebidasSection() {
   const [fichas, setFichas] = useState<FichaCliente[]>([])
@@ -14,7 +70,12 @@ export default function FichasRecebidasSection() {
   const [gerarContratoFicha, setGerarContratoFicha] = useState<FichaCliente | null>(null)
 
   useEffect(() => {
-    setFichas(getFichas())
+    const supabase = createClient()
+    supabase
+      .from('fichas_clientes')
+      .select('*')
+      .order('criado_em', { ascending: false })
+      .then(({ data }) => setFichas(((data as unknown as FichaRow[]) ?? []).map(fromRow)))
   }, [])
 
   return (

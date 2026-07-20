@@ -1,9 +1,19 @@
 'use client'
 
-import { useState } from 'react'
-import { Users, Plus, Edit2, Trash2, X, Save, ShieldCheck, Eye, Briefcase, DollarSign, CheckCircle2, XCircle } from 'lucide-react'
-import { usuarios as initialUsuarios } from '@/lib/mock-data'
-import type { Usuario, NivelAcesso } from '@/types'
+import { useState, useEffect, useCallback } from 'react'
+import { Users, Plus, Edit2, ShieldCheck, Eye, Briefcase, DollarSign, CheckCircle2, XCircle, X, Save, Info, RefreshCw } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import type { NivelAcesso } from '@/types'
+
+interface Profile {
+  id: string
+  nome: string
+  email: string
+  role: NivelAcesso
+  ativo: boolean
+  ultimo_acesso: string | null
+  created_at: string
+}
 
 const roleConfig: Record<NivelAcesso, { label: string; color: string; icon: React.ElementType; desc: string }> = {
   admin: {
@@ -12,11 +22,11 @@ const roleConfig: Record<NivelAcesso, { label: string; color: string; icon: Reac
   },
   financeiro: {
     label: 'Financeiro', color: 'bg-sky-500/15 text-sky-400 border-sky-500/20',
-    icon: DollarSign, desc: 'Dashboard, Pagamentos, Contratos, Relatórios, Contas a Pagar',
+    icon: DollarSign, desc: 'Dashboard, Pagamentos, Eventos, Relatórios, Contas a Pagar',
   },
   operacional: {
     label: 'Operacional', color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20',
-    icon: Briefcase, desc: 'Dashboard, Agenda, Contratos, Espaços',
+    icon: Briefcase, desc: 'Dashboard, Agenda, Eventos, Espaços',
   },
   visualizador: {
     label: 'Visualizador', color: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/20',
@@ -25,60 +35,56 @@ const roleConfig: Record<NivelAcesso, { label: string; color: string; icon: Reac
 }
 
 const permissionsMatrix: Record<NivelAcesso, string[]> = {
-  admin: ['Dashboard', 'Agenda', 'Pagamentos', 'Contratos', 'Relatórios', 'Contas a Pagar', 'Usuários', 'Espaços'],
-  financeiro: ['Dashboard', 'Pagamentos', 'Contratos', 'Relatórios', 'Contas a Pagar'],
-  operacional: ['Dashboard', 'Agenda', 'Contratos', 'Espaços'],
+  admin: ['Dashboard', 'Agenda', 'Pagamentos', 'Eventos', 'Relatórios', 'Contas a Pagar', 'Usuários', 'Espaços'],
+  financeiro: ['Dashboard', 'Pagamentos', 'Eventos', 'Relatórios', 'Contas a Pagar'],
+  operacional: ['Dashboard', 'Agenda', 'Eventos', 'Espaços'],
   visualizador: ['Dashboard'],
 }
 
-const allPages = ['Dashboard', 'Agenda', 'Pagamentos', 'Contratos', 'Relatórios', 'Contas a Pagar', 'Usuários', 'Espaços']
-
-const emptyUser: Omit<Usuario, 'id' | 'createdAt'> = {
-  nome: '', email: '', senha: '', role: 'operacional', ativo: true, ultimoAcesso: undefined,
-}
+const allPages = ['Dashboard', 'Agenda', 'Pagamentos', 'Eventos', 'Relatórios', 'Contas a Pagar', 'Usuários', 'Espaços']
 
 export default function UsuariosPage() {
-  const [lista, setLista] = useState<Usuario[]>(initialUsuarios)
+  const [lista, setLista] = useState<Profile[]>([])
+  const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
-  const [editingUser, setEditingUser] = useState<Usuario | null>(null)
-  const [draft, setDraft] = useState<typeof emptyUser>(emptyUser)
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [editingUser, setEditingUser] = useState<Profile | null>(null)
+  const [draft, setDraft] = useState<{ nome: string; role: NivelAcesso; ativo: boolean }>({
+    nome: '', role: 'operacional', ativo: true,
+  })
+  const [novoUsuarioOpen, setNovoUsuarioOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'usuarios' | 'permissoes'>('usuarios')
 
-  function openNew() {
-    setEditingUser(null)
-    setDraft({ ...emptyUser })
-    setModalOpen(true)
-  }
+  const loadUsuarios = useCallback(async () => {
+    setLoading(true)
+    const supabase = createClient()
+    const { data } = await supabase.from('profiles').select('*').order('nome')
+    setLista((data as Profile[]) ?? [])
+    setLoading(false)
+  }, [])
 
-  function openEdit(user: Usuario) {
+  useEffect(() => { loadUsuarios() }, [loadUsuarios])
+
+  function openEdit(user: Profile) {
     setEditingUser(user)
-    setDraft({ nome: user.nome, email: user.email, senha: user.senha, role: user.role, ativo: user.ativo })
+    setDraft({ nome: user.nome, role: user.role, ativo: user.ativo })
     setModalOpen(true)
   }
 
-  function handleSave() {
-    if (!draft.nome || !draft.email || !draft.senha) return
-    if (editingUser) {
-      setLista((prev) => prev.map((u) => u.id === editingUser.id ? { ...u, ...draft } : u))
-    } else {
-      const newUser: Usuario = {
-        id: `u${Date.now()}`,
-        createdAt: new Date().toISOString().split('T')[0],
-        ...draft,
-      }
-      setLista((prev) => [...prev, newUser])
-    }
+  async function handleSave() {
+    if (!editingUser || !draft.nome) return
+    const supabase = createClient()
+    await supabase
+      .from('profiles')
+      .update({ nome: draft.nome, role: draft.role, ativo: draft.ativo })
+      .eq('id', editingUser.id)
     setModalOpen(false)
+    loadUsuarios()
   }
 
-  function handleDelete(id: string) {
-    setLista((prev) => prev.filter((u) => u.id !== id))
-    setDeleteConfirm(null)
-  }
-
-  function toggleAtivo(id: string) {
-    setLista((prev) => prev.map((u) => u.id === id ? { ...u, ativo: !u.ativo } : u))
+  async function toggleAtivo(user: Profile) {
+    const supabase = createClient()
+    await supabase.from('profiles').update({ ativo: !user.ativo }).eq('id', user.id)
+    loadUsuarios()
   }
 
   const ativos = lista.filter((u) => u.ativo).length
@@ -96,13 +102,22 @@ export default function UsuariosPage() {
             <p className="text-xs text-app-muted">{ativos} ativos · {lista.length - ativos} inativos</p>
           </div>
         </div>
-        <button
-          onClick={openNew}
-          className="flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          Novo Usuário
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={loadUsuarios}
+            title="Atualizar lista"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-app-border2 text-app-muted hover:bg-app-surface2 hover:text-app-text transition-colors"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <button
+            onClick={() => setNovoUsuarioOpen(true)}
+            className="flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Novo Usuário
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -125,6 +140,12 @@ export default function UsuariosPage() {
 
         {activeTab === 'usuarios' && (
           <div className="divide-y divide-app-border/40">
+            {loading && lista.length === 0 && (
+              <p className="px-5 py-6 text-sm text-app-muted">Carregando usuários...</p>
+            )}
+            {!loading && lista.length === 0 && (
+              <p className="px-5 py-6 text-sm text-app-muted">Nenhum usuário cadastrado ainda.</p>
+            )}
             {lista.map((user) => {
               const RoleIcon = roleConfig[user.role].icon
               return (
@@ -151,7 +172,7 @@ export default function UsuariosPage() {
                   <div className="flex items-center gap-4">
                     <div className="hidden md:block text-right">
                       <p className="text-xs text-app-subtle">Último acesso</p>
-                      <p className="text-xs text-app-text2">{user.ultimoAcesso ? user.ultimoAcesso.split('-').reverse().join('/') : '—'}</p>
+                      <p className="text-xs text-app-text2">{user.ultimo_acesso ? user.ultimo_acesso.split('-').reverse().join('/') : '—'}</p>
                     </div>
 
                     <span className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${roleConfig[user.role].color}`}>
@@ -161,7 +182,7 @@ export default function UsuariosPage() {
 
                     <div className="flex items-center gap-1">
                       <button
-                        onClick={() => toggleAtivo(user.id)}
+                        onClick={() => toggleAtivo(user)}
                         title={user.ativo ? 'Desativar' : 'Ativar'}
                         className="flex h-7 w-7 items-center justify-center rounded-md text-app-subtle hover:bg-app-surface2 hover:text-app-text transition-colors"
                       >
@@ -173,14 +194,6 @@ export default function UsuariosPage() {
                       >
                         <Edit2 className="h-3.5 w-3.5" />
                       </button>
-                      {user.role !== 'admin' && (
-                        <button
-                          onClick={() => setDeleteConfirm(user.id)}
-                          className="flex h-7 w-7 items-center justify-center rounded-md text-app-subtle hover:bg-red-500/10 hover:text-red-400 transition-colors"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -244,14 +257,40 @@ export default function UsuariosPage() {
         )}
       </div>
 
-      {/* Modal criar/editar */}
-      {modalOpen && (
+      {/* Modal: como adicionar um novo usuário (criação real acontece no Supabase Dashboard) */}
+      {novoUsuarioOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setNovoUsuarioOpen(false)}>
+          <div className="w-full max-w-md rounded-2xl border border-app-border bg-app-surface p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-bold text-app-text flex items-center gap-2">
+                <Info className="h-4 w-4 text-violet-400" />
+                Como adicionar um usuário
+              </h3>
+              <button onClick={() => setNovoUsuarioOpen(false)} className="text-app-subtle hover:text-app-text">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <ol className="space-y-2 text-sm text-app-text2 list-decimal list-inside">
+              <li>No painel do Supabase, vá em <strong>Authentication → Users → Add user</strong> e cadastre e-mail e senha.</li>
+              <li>Volte aqui e clique em atualizar (<RefreshCw className="inline h-3 w-3" />) — o novo usuário aparece automaticamente com o papel &quot;Visualizador&quot;.</li>
+              <li>Clique no ícone de editar para ajustar nome e nível de acesso.</li>
+            </ol>
+            <button
+              onClick={() => setNovoUsuarioOpen(false)}
+              className="mt-5 w-full rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 transition-colors"
+            >
+              Entendi
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal editar */}
+      {modalOpen && editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setModalOpen(false)}>
           <div className="w-full max-w-md rounded-2xl border border-app-border bg-app-surface p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-base font-bold text-app-text">
-                {editingUser ? 'Editar Usuário' : 'Novo Usuário'}
-              </h3>
+              <h3 className="text-base font-bold text-app-text">Editar Usuário</h3>
               <button onClick={() => setModalOpen(false)} className="text-app-subtle hover:text-app-text">
                 <X className="h-5 w-5" />
               </button>
@@ -270,22 +309,11 @@ export default function UsuariosPage() {
               <div>
                 <label className="block text-xs font-medium text-app-text2 mb-1">E-mail</label>
                 <input
-                  type="email"
-                  value={draft.email}
-                  onChange={(e) => setDraft((d) => ({ ...d, email: e.target.value }))}
-                  placeholder="usuario@espacoslocacoes.com.br"
-                  className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-3 py-2 text-sm text-app-text focus:border-violet-500 focus:outline-none"
+                  value={editingUser.email}
+                  disabled
+                  className="w-full rounded-lg border border-app-border2 bg-app-surface3 px-3 py-2 text-sm text-app-subtle cursor-not-allowed"
                 />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-app-text2 mb-1">Senha</label>
-                <input
-                  type="password"
-                  value={draft.senha}
-                  onChange={(e) => setDraft((d) => ({ ...d, senha: e.target.value }))}
-                  placeholder="••••••••"
-                  className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-3 py-2 text-sm text-app-text focus:border-violet-500 focus:outline-none"
-                />
+                <p className="mt-1 text-xs text-app-subtle">E-mail é gerenciado no Supabase Auth, não pode ser editado aqui.</p>
               </div>
               <div>
                 <label className="block text-xs font-medium text-app-text2 mb-2">Nível de acesso</label>
@@ -338,29 +366,11 @@ export default function UsuariosPage() {
               </button>
               <button
                 onClick={handleSave}
-                disabled={!draft.nome || !draft.email || !draft.senha}
+                disabled={!draft.nome}
                 className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 <Save className="h-3.5 w-3.5" />
-                {editingUser ? 'Salvar alterações' : 'Criar usuário'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Confirm delete */}
-      {deleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="w-full max-w-sm rounded-2xl border border-app-border bg-app-surface p-6 shadow-2xl">
-            <h3 className="text-base font-bold text-app-text mb-2">Excluir usuário?</h3>
-            <p className="text-sm text-app-muted mb-5">Esta ação não pode ser desfeita.</p>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setDeleteConfirm(null)} className="rounded-lg border border-app-border2 px-4 py-2 text-sm text-app-muted hover:bg-app-surface2 transition-colors">
-                Cancelar
-              </button>
-              <button onClick={() => handleDelete(deleteConfirm)} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 transition-colors">
-                Excluir
+                Salvar alterações
               </button>
             </div>
           </div>

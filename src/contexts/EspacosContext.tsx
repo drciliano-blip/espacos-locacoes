@@ -1,10 +1,10 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import type { ReactNode } from 'react'
 import { ESPACOS_CONFIG } from '@/lib/espacos-config'
 import type { EspacoConfig } from '@/lib/espacos-config'
-import { getEspacosCustom, saveEspacoCustom, slugify } from '@/lib/espacos-store'
+import { createClient } from '@/lib/supabase/client'
 import type { EspacoCustomData } from '@/types'
 
 const PALETTE: Pick<EspacoConfig, 'cor' | 'colorClass' | 'bgClass' | 'borderClass' | 'dotClass' | 'gradientFrom'>[] = [
@@ -15,16 +15,59 @@ const PALETTE: Pick<EspacoConfig, 'cor' | 'colorClass' | 'bgClass' | 'borderClas
   { cor: 'orange', colorClass: 'text-orange-400', bgClass: 'bg-orange-500/10', borderClass: 'border-orange-500/20', dotClass: 'bg-orange-500', gradientFrom: 'from-orange-500/20' },
 ]
 
-function customToConfig(c: EspacoCustomData, index: number): EspacoConfig {
-  const palette = PALETTE[index % PALETTE.length]
+interface EspacoRow {
+  id: string
+  slug: string
+  nome: string
+  endereco: string | null
+  capacidade: number
+  descricao: string | null
+  status: 'ativo' | 'inativo'
+  foto_file_id: string | null
+  created_at: string
+}
+
+function isBuiltin(slug: string): boolean {
+  return ESPACOS_CONFIG.some(e => e.slug === slug)
+}
+
+function toConfig(row: EspacoRow, paletteIndex: number): EspacoConfig {
+  const builtin = ESPACOS_CONFIG.find(e => e.slug === row.slug)
+  if (builtin) {
+    return { ...builtin, nome: row.nome, descricao: row.descricao || builtin.descricao, capacidade: row.capacidade }
+  }
+  const palette = PALETTE[paletteIndex % PALETTE.length]
   return {
-    slug: c.slug,
-    nome: c.nome,
-    descricao: c.descricao,
-    capacidade: c.capacidade,
+    slug: row.slug,
+    nome: row.nome,
+    descricao: row.descricao ?? '',
+    capacidade: row.capacidade,
     categorias: [],
     ...palette,
   }
+}
+
+function toCustomData(row: EspacoRow): EspacoCustomData {
+  return {
+    id: row.id,
+    slug: row.slug,
+    nome: row.nome,
+    endereco: row.endereco ?? '',
+    capacidade: row.capacidade,
+    descricao: row.descricao ?? '',
+    status: row.status,
+    fotoFileId: row.foto_file_id ?? undefined,
+    criadoEm: row.created_at,
+  }
+}
+
+function slugify(nome: string): string {
+  return nome
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
 }
 
 interface NovoEspacoDraft {
@@ -41,43 +84,57 @@ interface EspacosContextValue {
   espacosConfig: EspacoConfig[]
   espacosNomes: string[]
   customEspacos: EspacoCustomData[]
-  addEspaco: (draft: NovoEspacoDraft) => EspacoCustomData
+  loading: boolean
+  addEspaco: (draft: NovoEspacoDraft) => Promise<EspacoCustomData>
 }
 
 const EspacosContext = createContext<EspacosContextValue | null>(null)
 
 export function EspacosProvider({ children }: { children: ReactNode }) {
-  const [customEspacos, setCustomEspacos] = useState<EspacoCustomData[]>([])
+  const [rows, setRows] = useState<EspacoRow[]>([])
+  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    setCustomEspacos(getEspacosCustom())
+  const load = useCallback(async () => {
+    const supabase = createClient()
+    const { data } = await supabase.from('espacos').select('*').order('created_at')
+    setRows((data as EspacoRow[]) ?? [])
+    setLoading(false)
   }, [])
 
-  function addEspaco(draft: NovoEspacoDraft): EspacoCustomData {
-    const novo: EspacoCustomData = {
-      id: draft.id,
-      slug: slugify(draft.nome) || `espaco-${draft.id}`,
-      nome: draft.nome,
-      endereco: draft.endereco,
-      capacidade: draft.capacidade,
-      descricao: draft.descricao,
-      status: draft.status,
-      fotoFileId: draft.fotoFileId,
-      criadoEm: new Date().toISOString(),
-    }
-    saveEspacoCustom(novo)
-    setCustomEspacos(prev => [novo, ...prev])
-    return novo
+  useEffect(() => { load() }, [load])
+
+  async function addEspaco(draft: NovoEspacoDraft): Promise<EspacoCustomData> {
+    const supabase = createClient()
+    const slug = slugify(draft.nome) || `espaco-${Date.now()}`
+    const { data, error } = await supabase
+      .from('espacos')
+      .insert({
+        slug,
+        nome: draft.nome,
+        endereco: draft.endereco,
+        capacidade: draft.capacidade,
+        descricao: draft.descricao,
+        status: draft.status,
+        foto_file_id: draft.fotoFileId ?? null,
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+
+    const row = data as EspacoRow
+    setRows(prev => [...prev, row])
+    return toCustomData(row)
   }
 
-  const espacosConfig: EspacoConfig[] = [
-    ...ESPACOS_CONFIG,
-    ...customEspacos.filter(c => c.status === 'ativo').map((c, i) => customToConfig(c, i)),
-  ]
+  const ativos = rows.filter(r => r.status === 'ativo')
+  let paletteIndex = 0
+  const espacosConfig: EspacoConfig[] = ativos.map(r => toConfig(r, isBuiltin(r.slug) ? 0 : paletteIndex++))
   const espacosNomes = espacosConfig.map(e => e.nome)
+  const customEspacos = rows.filter(r => !isBuiltin(r.slug)).map(toCustomData)
 
   return (
-    <EspacosContext.Provider value={{ espacosConfig, espacosNomes, customEspacos, addEspaco }}>
+    <EspacosContext.Provider value={{ espacosConfig, espacosNomes, customEspacos, loading, addEspaco }}>
       {children}
     </EspacosContext.Provider>
   )

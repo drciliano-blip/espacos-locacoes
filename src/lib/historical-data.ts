@@ -1,6 +1,10 @@
 import type { Evento } from '@/types'
 import { ESPACOS_CONFIG } from '@/lib/espacos-config'
-import { eventos as eventosAtuais } from '@/lib/mock-data'
+
+// Gerador de dados sintéticos para os gráficos de tendência ficarem populados
+// mesmo sem histórico real ainda no banco — não lê mais dados reais (mock-data
+// foi removido), então não há mais meses "reais" a pular.
+const eventosAtuais: Evento[] = []
 
 // Simple LCG (Linear Congruential Generator) — deterministic, no Math.random()
 function makeLCG(seed: number) {

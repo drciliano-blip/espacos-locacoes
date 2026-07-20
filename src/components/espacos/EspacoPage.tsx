@@ -121,7 +121,7 @@ interface EspacoPageProps {
 }
 
 export default function EspacoPage({ config }: EspacoPageProps) {
-  const { eventos: todosEventos, addEvento, updateEvento } = useEventos()
+  const { eventos: todosEventos, addEvento, updateEvento, deleteEvento } = useEventos()
 
   const [tab, setTab]                       = useState<SpaceTab>('eventos')
   const [selectedEvento, setSelectedEvento] = useState<Evento | null>(null)
@@ -173,6 +173,11 @@ export default function EspacoPage({ config }: EspacoPageProps) {
   function handleUpdate(updated: Evento) {
     updateEvento(updated)
     setSelectedEvento(updated)
+  }
+
+  async function handleDeleteEvento(id: string) {
+    await deleteEvento(id)
+    setSelectedEvento(null)
   }
 
   function addDocumento() {
@@ -585,6 +590,7 @@ export default function EspacoPage({ config }: EspacoPageProps) {
           evento={todosEventos.find(e => e.id === selectedEvento.id) ?? selectedEvento}
           onClose={() => setSelectedEvento(null)}
           onUpdate={handleUpdate}
+          onDelete={handleDeleteEvento}
         />
       )}
 

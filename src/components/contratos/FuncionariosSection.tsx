@@ -3,10 +3,30 @@
 import { useEffect, useState } from 'react'
 import { Users, Plus, X, Save, ChevronDown, ChevronUp, Phone, Briefcase, Trash2 } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
-import { getFuncionarios, saveFuncionario, removeFuncionario } from '@/lib/funcionarios-store'
+import { createClient } from '@/lib/supabase/client'
 import FileList from '@/components/shared/FileList'
 import FileAttachButton from '@/components/shared/FileAttachButton'
 import type { Funcionario } from '@/types'
+
+interface FuncionarioRow {
+  id: string
+  nome_completo: string
+  cargo: string
+  espaco: { nome: string } | null
+  telefone: string | null
+  created_at: string
+}
+
+function fromRow(row: FuncionarioRow): Funcionario {
+  return {
+    id: row.id,
+    nomeCompleto: row.nome_completo,
+    cargo: row.cargo,
+    espacoVinculado: row.espaco?.nome ?? '',
+    telefone: row.telefone ?? '',
+    criadoEm: row.created_at,
+  }
+}
 
 const GREEN = '#25D366'
 const DARK_GREEN = '#128C7E'
@@ -30,7 +50,12 @@ export default function FuncionariosSection() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   useEffect(() => {
-    setFuncionarios(getFuncionarios())
+    const supabase = createClient()
+    supabase
+      .from('funcionarios')
+      .select('*, espaco:espacos(nome)')
+      .order('created_at', { ascending: false })
+      .then(({ data }) => setFuncionarios(((data as unknown as FuncionarioRow[]) ?? []).map(fromRow)))
   }, [])
 
   const errors = { nomeCompleto: !draft.nomeCompleto.trim() }
@@ -40,26 +65,39 @@ export default function FuncionariosSection() {
     setDraft(d => ({ ...d, [k]: v }))
   }
 
-  function handleSave() {
+  async function handleSave() {
     setSubmitted(true)
     if (hasErrors) return
-    const novo: Funcionario = {
-      id: `func-${Date.now()}`,
-      nomeCompleto: draft.nomeCompleto.trim(),
-      cargo: draft.cargo.trim(),
-      espacoVinculado: draft.espacoVinculado,
-      telefone: draft.telefone.trim(),
-      criadoEm: new Date().toISOString(),
+
+    const supabase = createClient()
+    let espacoId: string | null = null
+    if (draft.espacoVinculado) {
+      const { data: espacoRow } = await supabase.from('espacos').select('id').eq('nome', draft.espacoVinculado).single()
+      espacoId = espacoRow?.id ?? null
     }
-    saveFuncionario(novo)
-    setFuncionarios(prev => [novo, ...prev])
+
+    const { data, error } = await supabase
+      .from('funcionarios')
+      .insert({
+        nome_completo: draft.nomeCompleto.trim(),
+        cargo: draft.cargo.trim(),
+        espaco_id: espacoId,
+        telefone: draft.telefone.trim(),
+      })
+      .select('*, espaco:espacos(nome)')
+      .single()
+
+    if (error) return
+
+    setFuncionarios(prev => [fromRow(data as unknown as FuncionarioRow), ...prev])
     setDraft(EMPTY)
     setSubmitted(false)
     setModalOpen(false)
   }
 
-  function handleRemove(id: string) {
-    removeFuncionario(id)
+  async function handleRemove(id: string) {
+    const supabase = createClient()
+    await supabase.from('funcionarios').delete().eq('id', id)
     setFuncionarios(prev => prev.filter(f => f.id !== id))
   }
 

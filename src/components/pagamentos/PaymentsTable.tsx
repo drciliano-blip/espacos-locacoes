@@ -2,49 +2,55 @@
 
 import { useState, useMemo } from 'react'
 import { Search, ChevronDown, ChevronUp, FolderOpen, Paperclip } from 'lucide-react'
-import type { Pagamento, StatusPagamento, Espaco } from '@/types'
+import type { Receita, CategoriaReceita } from '@/contexts/ReceitasContext'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { ESPACOS } from '@/lib/mock-data'
+import { useEspacos } from '@/contexts/EspacosContext'
 import FileList from '@/components/shared/FileList'
 import FileSearchModal from '@/components/shared/FileSearchModal'
 
-const statusStyles: Record<StatusPagamento, string> = {
+type StatusReceita = Receita['status']
+
+const statusStyles: Record<StatusReceita, string> = {
   pago: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
   pendente: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
   atrasado: 'bg-red-500/10 text-red-400 border-red-500/20',
 }
 
-const statusLabels: Record<StatusPagamento, string> = {
+const statusLabels: Record<StatusReceita, string> = {
   pago: 'Pago',
   pendente: 'Pendente',
   atrasado: 'Atrasado',
 }
 
 interface PaymentsTableProps {
-  pagamentos: Pagamento[]
+  receitas: Receita[]
+  categorias: CategoriaReceita[]
 }
 
-export default function PaymentsTable({ pagamentos }: PaymentsTableProps) {
+export default function PaymentsTable({ receitas, categorias }: PaymentsTableProps) {
+  const { espacosNomes } = useEspacos()
   const [search, setSearch]           = useState('')
-  const [statusFilter, setStatus]     = useState<StatusPagamento | 'todos'>('todos')
-  const [espacoFilter, setEspaco]     = useState<Espaco | 'todos'>('todos')
+  const [statusFilter, setStatus]     = useState<StatusReceita | 'todos'>('todos')
+  const [espacoFilter, setEspaco]     = useState<string>('todos')
+  const [categoriaFilter, setCategoriaFilter] = useState<string>('todos')
   const [dataInicio, setDataInicio]   = useState('')
   const [dataFim, setDataFim]         = useState('')
   const [expandedId, setExpandedId]   = useState<string | null>(null)
   const [docModalOpen, setDocModal]   = useState(false)
 
   const filtered = useMemo(() => {
-    return pagamentos.filter((p) => {
-      const matchSearch  = p.cliente.toLowerCase().includes(search.toLowerCase()) ||
+    return receitas.filter((p) => {
+      const matchSearch  = (p.cliente ?? '').toLowerCase().includes(search.toLowerCase()) ||
         p.descricao.toLowerCase().includes(search.toLowerCase())
-      const matchStatus  = statusFilter === 'todos' || p.status === statusFilter
-      const matchEspaco  = espacoFilter === 'todos' || p.espaco === espacoFilter
-      const ref          = p.dataPagamento ?? p.dataEvento
+      const matchStatus    = statusFilter === 'todos' || p.status === statusFilter
+      const matchEspaco    = espacoFilter === 'todos' || p.espaco === espacoFilter
+      const matchCategoria = categoriaFilter === 'todos' || p.categoriaId === categoriaFilter
+      const ref          = p.dataRecebimento ?? p.data
       const matchInicio  = !dataInicio || ref >= dataInicio
       const matchFim     = !dataFim    || ref <= dataFim
-      return matchSearch && matchStatus && matchEspaco && matchInicio && matchFim
+      return matchSearch && matchStatus && matchEspaco && matchCategoria && matchInicio && matchFim
     })
-  }, [pagamentos, search, statusFilter, espacoFilter, dataInicio, dataFim])
+  }, [receitas, search, statusFilter, espacoFilter, categoriaFilter, dataInicio, dataFim])
 
   const totals = useMemo(() => ({
     total:    filtered.reduce((s, p) => s + p.valor, 0),
@@ -100,8 +106,16 @@ export default function PaymentsTable({ pagamentos }: PaymentsTableProps) {
           </div>
           <div className="flex flex-wrap gap-2">
             <select
+              value={categoriaFilter}
+              onChange={(e) => setCategoriaFilter(e.target.value)}
+              className="rounded-lg border border-app-border2 bg-app-surface2 px-3 py-2 text-sm text-app-text2 focus:outline-none cursor-pointer"
+            >
+              <option value="todos">Todas categorias</option>
+              {categorias.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+            <select
               value={statusFilter}
-              onChange={(e) => setStatus(e.target.value as StatusPagamento | 'todos')}
+              onChange={(e) => setStatus(e.target.value as StatusReceita | 'todos')}
               className="rounded-lg border border-app-border2 bg-app-surface2 px-3 py-2 text-sm text-app-text2 focus:outline-none cursor-pointer"
             >
               <option value="todos">Todos status</option>
@@ -111,11 +125,11 @@ export default function PaymentsTable({ pagamentos }: PaymentsTableProps) {
             </select>
             <select
               value={espacoFilter}
-              onChange={(e) => setEspaco(e.target.value as Espaco | 'todos')}
+              onChange={(e) => setEspaco(e.target.value)}
               className="rounded-lg border border-app-border2 bg-app-surface2 px-3 py-2 text-sm text-app-text2 focus:outline-none cursor-pointer"
             >
               <option value="todos">Todos espaços</option>
-              {ESPACOS.map((e) => <option key={e} value={e}>{e}</option>)}
+              {espacosNomes.map((e) => <option key={e} value={e}>{e}</option>)}
             </select>
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-app-subtle">De</span>
@@ -155,7 +169,7 @@ export default function PaymentsTable({ pagamentos }: PaymentsTableProps) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-app-border">
-                {['Cliente', 'Espaço', 'Data Evento', 'Descrição', 'Dt. Pagamento', 'Método', 'Valor', 'Status', ''].map((h) => (
+                {['Cliente', 'Categoria', 'Espaço', 'Data', 'Descrição', 'Dt. Recebimento', 'Método', 'Valor', 'Status', ''].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-medium text-app-subtle uppercase tracking-wider whitespace-nowrap">
                     {h}
                   </th>
@@ -165,8 +179,8 @@ export default function PaymentsTable({ pagamentos }: PaymentsTableProps) {
             <tbody className="divide-y divide-app-border/50">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-sm text-app-subtle">
-                    Nenhum pagamento encontrado.
+                  <td colSpan={10} className="px-4 py-8 text-center text-sm text-app-subtle">
+                    Nenhuma receita encontrada.
                   </td>
                 </tr>
               ) : (
@@ -177,12 +191,17 @@ export default function PaymentsTable({ pagamentos }: PaymentsTableProps) {
                       className="hover:bg-app-surface2/30 transition-colors cursor-pointer"
                       onClick={() => toggleRow(p.id)}
                     >
-                      <td className="px-4 py-3 text-app-text font-medium whitespace-nowrap">{p.cliente}</td>
-                      <td className="px-4 py-3 text-app-muted whitespace-nowrap">{p.espaco}</td>
-                      <td className="px-4 py-3 text-app-muted whitespace-nowrap">{formatDate(p.dataEvento)}</td>
+                      <td className="px-4 py-3 text-app-text font-medium whitespace-nowrap">{p.cliente ?? '—'}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="rounded-full border border-violet-500/20 bg-violet-500/10 text-violet-400 px-2.5 py-0.5 text-xs font-medium">
+                          {p.categoriaNome}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-app-muted whitespace-nowrap">{p.espaco ?? '—'}</td>
+                      <td className="px-4 py-3 text-app-muted whitespace-nowrap">{formatDate(p.data)}</td>
                       <td className="px-4 py-3 text-app-muted max-w-xs truncate">{p.descricao}</td>
                       <td className="px-4 py-3 text-app-muted whitespace-nowrap">
-                        {p.dataPagamento ? formatDate(p.dataPagamento) : '—'}
+                        {p.dataRecebimento ? formatDate(p.dataRecebimento) : '—'}
                       </td>
                       <td className="px-4 py-3 text-app-muted whitespace-nowrap">{p.metodoPagamento ?? '—'}</td>
                       <td className="px-4 py-3 font-semibold text-app-text whitespace-nowrap">{formatCurrency(p.valor)}</td>
@@ -201,7 +220,7 @@ export default function PaymentsTable({ pagamentos }: PaymentsTableProps) {
                     </tr>
                     {expandedId === p.id && (
                       <tr key={`${p.id}-expand`}>
-                        <td colSpan={9} className="px-6 py-4 bg-app-bg/50 border-b border-app-border/40">
+                        <td colSpan={10} className="px-6 py-4 bg-app-bg/50 border-b border-app-border/40">
                           <div className="max-w-lg">
                             <p className="text-xs font-medium text-app-muted flex items-center gap-1.5 mb-3">
                               <Paperclip className="h-3 w-3 text-[#25D366]" />
@@ -210,7 +229,7 @@ export default function PaymentsTable({ pagamentos }: PaymentsTableProps) {
                             <FileList
                               module="pagamentos"
                               entityId={p.id}
-                              entityName={`${p.cliente} — ${p.espaco}`}
+                              entityName={`${p.cliente ?? p.categoriaNome} — ${p.espaco ?? ''}`}
                               espaco={p.espaco}
                             />
                           </div>

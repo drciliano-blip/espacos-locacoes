@@ -21,7 +21,7 @@ const espacoDotColors: Record<Espaco, string> = {
 }
 
 export default function AgendaPage() {
-  const { eventos, addEvento, updateEvento } = useEventos()
+  const { eventos, addEvento, updateEvento, deleteEvento } = useEventos()
 
   const [selectedDate, setSelectedDate]     = useState<Date | null>(null)
   const [selectedEvento, setSelectedEvento] = useState<Evento | null>(null)
@@ -45,6 +45,11 @@ export default function AgendaPage() {
   function handleUpdate(updated: Evento) {
     updateEvento(updated)
     setSelectedEvento(updated)
+  }
+
+  async function handleDelete(id: string) {
+    await deleteEvento(id)
+    setSelectedEvento(null)
   }
 
   return (
@@ -122,6 +127,7 @@ export default function AgendaPage() {
           evento={eventos.find(e => e.id === selectedEvento.id) ?? selectedEvento}
           onClose={() => setSelectedEvento(null)}
           onUpdate={handleUpdate}
+          onDelete={handleDelete}
         />
       )}
 

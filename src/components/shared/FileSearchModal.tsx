@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { X, Search, Download, Eye, Trash2, FileText, File, Image as Img, FolderOpen } from 'lucide-react'
 import { getFiles, deleteFile, downloadFile, viewFile, formatFileSize, type StoredFile } from '@/lib/file-storage'
-import { ESPACOS } from '@/lib/mock-data'
+import { useEspacos } from '@/contexts/EspacosContext'
 
 const MODULE_LABELS: Record<StoredFile['module'], string> = {
   contas:       'Contas a Pagar',
@@ -28,6 +28,7 @@ interface Props {
 }
 
 export default function FileSearchModal({ onClose, defaultModule, defaultEspaco }: Props) {
+  const { espacosNomes } = useEspacos()
   const [all,    setAll]    = useState<StoredFile[]>([])
   const [busy,   setBusy]   = useState(true)
   const [query,  setQuery]  = useState('')
@@ -90,7 +91,7 @@ export default function FileSearchModal({ onClose, defaultModule, defaultEspaco 
           <select value={espaco} onChange={e => setEspaco(e.target.value)}
             className="cursor-pointer rounded-lg border border-app-border2 bg-app-surface px-2.5 py-1.5 text-sm text-app-text2 focus:outline-none">
             <option value="">Todos os espaços</option>
-            {ESPACOS.map(s => <option key={s} value={s}>{s}</option>)}
+            {espacosNomes.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
 

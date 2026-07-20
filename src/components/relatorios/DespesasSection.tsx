@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
-import { contasPagar } from '@/lib/mock-data'
+import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { formatCurrency } from '@/lib/utils'
 
 const SUB_LABELS: Record<string, string> = {
@@ -25,6 +25,7 @@ interface Props {
 }
 
 export default function DespesasSection({ selectedSpaces, dataInicio, dataFim }: Props) {
+  const { contas: contasPagar } = useContasPagar()
   const contas = useMemo(() => {
     return contasPagar.filter(c => {
       const matchEspaco = !selectedSpaces?.length || selectedSpaces.includes(c.espaco)
@@ -32,7 +33,7 @@ export default function DespesasSection({ selectedSpaces, dataInicio, dataFim }:
       const matchFim    = !dataFim    || c.dataVencimento <= dataFim
       return matchEspaco && matchInicio && matchFim
     })
-  }, [selectedSpaces, dataInicio, dataFim])
+  }, [contasPagar, selectedSpaces, dataInicio, dataFim])
 
   const totais = useMemo(() => {
     const fixas    = contas.filter(c => c.categoria === 'fixa')

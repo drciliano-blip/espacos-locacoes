@@ -1,37 +1,56 @@
-import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import Sidebar from '@/components/layout/Sidebar'
 import Header from '@/components/layout/Header'
-import { getAuthUserFromCookie } from '@/lib/auth'
+import { createClient } from '@/lib/supabase/server'
 import { EventosProvider } from '@/contexts/EventosContext'
 import { EspacosProvider } from '@/contexts/EspacosContext'
+import { ReceitasProvider } from '@/contexts/ReceitasContext'
+import { ContratosProvider } from '@/contexts/ContratosContext'
+import { ContasPagarProvider } from '@/contexts/ContasPagarContext'
+import { UserProvider } from '@/contexts/UserContext'
+import type { NivelAcesso } from '@/types'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const cookieStore = await cookies()
-  const authCookie = cookieStore.get('auth')
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  if (!authCookie?.value) {
-    redirect('/login')
-  }
-
-  const user = getAuthUserFromCookie(authCookie.value)
   if (!user) {
     redirect('/login')
   }
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('nome, role, ativo')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile || !profile.ativo) {
+    redirect('/login')
+  }
+
+  const role = profile.role as NivelAcesso
+
   return (
-    <EspacosProvider>
-      <EventosProvider>
-        <div className="flex h-screen bg-app-bg overflow-hidden">
-          <Sidebar userRole={user.role} />
-          <div className="flex flex-1 flex-col overflow-hidden">
-            <Header userName={user.nome} userRole={user.role} />
-            <main className="flex-1 overflow-y-auto p-6">
-              {children}
-            </main>
-          </div>
-        </div>
-      </EventosProvider>
-    </EspacosProvider>
+    <UserProvider role={role}>
+      <EspacosProvider>
+        <ReceitasProvider>
+          <EventosProvider>
+            <ContratosProvider>
+              <ContasPagarProvider>
+                <div className="flex h-screen bg-app-bg overflow-hidden">
+                  <Sidebar userRole={role} />
+                  <div className="flex flex-1 flex-col overflow-hidden">
+                    <Header userName={profile.nome} userRole={role} />
+                    <main className="flex-1 overflow-y-auto p-6">
+                      {children}
+                    </main>
+                  </div>
+                </div>
+              </ContasPagarProvider>
+            </ContratosProvider>
+          </EventosProvider>
+        </ReceitasProvider>
+      </EspacosProvider>
+    </UserProvider>
   )
 }

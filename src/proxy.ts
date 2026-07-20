@@ -1,48 +1,51 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { createClient } from '@/lib/supabase/proxy'
+import { ROLE_PERMISSIONS } from '@/lib/auth'
+import type { NivelAcesso } from '@/types'
 
-const ROLE_PERMISSIONS: Record<string, string[]> = {
-  admin:        ['dashboard', 'agenda', 'pagamentos', 'contratos', 'relatorios', 'espacos', 'contas-a-pagar', 'usuarios'],
-  financeiro:   ['dashboard', 'pagamentos', 'contratos', 'relatorios', 'contas-a-pagar'],
-  operacional:  ['dashboard', 'agenda', 'contratos', 'espacos'],
-  visualizador: ['dashboard'],
-}
+const publicPaths = ['/login', '/ficha-cliente']
 
-export function proxy(request: NextRequest) {
-  const auth = request.cookies.get('auth')
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
-
-  const publicPaths = ['/login', '/ficha-cliente']
   const isPublic = publicPaths.some((p) => pathname.startsWith(p))
 
+  const { supabase, response } = createClient(request)
+  const { data: { user } } = await supabase.auth.getUser()
+
   // Unauthenticated → login
-  if (!auth && !isPublic) {
+  if (!user && !isPublic) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
   // Already logged in → skip login page
-  if (auth && pathname === '/login') {
+  if (user && pathname === '/login') {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
   // Role-based access control (API routes are exempt from per-page permissions —
   // they just require an authenticated session, checked above)
-  if (auth && !isPublic && !pathname.startsWith('/api/')) {
-    try {
-      const user = JSON.parse(decodeURIComponent(auth.value))
-      const role: string = user.role ?? 'visualizador'
-      const permissions = ROLE_PERMISSIONS[role] ?? []
-      const segment = pathname.split('/')[1] // e.g. "agenda", "usuarios"
+  if (user && !isPublic && !pathname.startsWith('/api/')) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role, ativo')
+      .eq('id', user.id)
+      .single()
 
-      if (segment && !permissions.includes(segment)) {
-        return NextResponse.redirect(new URL('/dashboard', request.url))
-      }
-    } catch {
+    if (!profile || !profile.ativo) {
       return NextResponse.redirect(new URL('/login', request.url))
+    }
+
+    const role = profile.role as NivelAcesso
+    const permissions = ROLE_PERMISSIONS[role] ?? []
+    const segment = pathname.split('/')[1] // e.g. "agenda", "usuarios"
+
+    if (segment && !permissions.includes(segment)) {
+      return NextResponse.redirect(new URL('/dashboard', request.url))
     }
   }
 
-  return NextResponse.next()
+  return response
 }
 
 export const config = {

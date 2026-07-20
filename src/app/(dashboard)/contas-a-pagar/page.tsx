@@ -5,8 +5,8 @@ import {
   Receipt, TrendingDown, CheckCircle2, AlertCircle, Clock,
   Filter, X, Plus, FolderOpen, Paperclip, ChevronDown, ChevronUp, Sparkles,
 } from 'lucide-react'
-import { contasPagar } from '@/lib/mock-data'
 import { useEspacos } from '@/contexts/EspacosContext'
+import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { formatCurrency } from '@/lib/utils'
 import { saveFile } from '@/lib/file-storage'
 import FileList from '@/components/shared/FileList'
@@ -74,12 +74,12 @@ const FORM_EMPTY: FormState = {
 
 export default function ContasPagarPage() {
   const { espacosNomes } = useEspacos()
+  const { contas, addConta } = useContasPagar()
   const [tab,               setTab]               = useState<'apagar' | 'pagas'>('apagar')
   const [filterEspaco,      setFilterEspaco]      = useState('')
   const [filterCategoria,   setFilterCategoria]   = useState<CategoriaContaPagar | ''>('')
   const [filterSubcategoria,setFilterSubcategoria]= useState('')
   const [filterMes,         setFilterMes]         = useState('')
-  const [localContas,       setLocalContas]       = useState<ContaPagar[]>([])
   const [novaContaOpen,     setNovaContaOpen]     = useState(false)
   const [docModalOpen,      setDocModalOpen]      = useState(false)
   const [form,              setForm]              = useState<FormState>({ ...FORM_EMPTY, espaco: espacosNomes[0] ?? '' })
@@ -128,7 +128,7 @@ export default function ContasPagarPage() {
   }
 
   const meses = [{ value: '2026-05', label: 'Maio 2026' }, { value: '2026-06', label: 'Junho 2026' }]
-  const todasContas = [...contasPagar, ...localContas]
+  const todasContas = contas
 
   const filtered = useMemo(() => todasContas.filter(c => {
     if (tab === 'apagar' && c.status === 'pago') return false
@@ -138,7 +138,7 @@ export default function ContasPagarPage() {
     if (filterSubcategoria && c.subcategoria !== filterSubcategoria) return false
     if (filterMes          && !c.dataVencimento.startsWith(filterMes)) return false
     return true
-  }), [tab, filterEspaco, filterCategoria, filterSubcategoria, filterMes, localContas])
+  }), [todasContas, tab, filterEspaco, filterCategoria, filterSubcategoria, filterMes])
 
   const fixas    = filtered.filter(c => c.categoria === 'fixa')
   const variaveis= filtered.filter(c => c.categoria === 'variavel')
@@ -157,7 +157,7 @@ export default function ContasPagarPage() {
   async function salvarNovaConta() {
     if (!form.descricao || !form.valor || !form.dataVencimento || !form.categoria || !form.subcategoria) return
     setSaving(true)
-    const id = `lc-${Date.now()}`
+    const id = crypto.randomUUID()
     const nova: ContaPagar = {
       id,
       descricao:       form.descricao,
@@ -178,7 +178,7 @@ export default function ContasPagarPage() {
         espaco:     form.espaco,
       })
     }
-    setLocalContas(prev => [nova, ...prev])
+    await addConta(nova)
     setForm({ ...FORM_EMPTY, espaco: espacosNomes[0] ?? '' })
     setPendingFile(null)
     setSaving(false)

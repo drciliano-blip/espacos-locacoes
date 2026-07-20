@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { ROLE_PERMISSIONS } from '@/lib/auth'
+import { createClient } from '@/lib/supabase/client'
 import type { NivelAcesso } from '@/types'
 
 const navItemsBefore = [
@@ -27,8 +28,8 @@ const navItemsBefore = [
 ]
 
 const navItemsAfter = [
-  { href: '/contratos', label: 'Contratos/Documentos', icon: FileText, page: 'contratos' },
-  { href: '/usuarios',  label: 'Usuários',              icon: Users,    page: 'usuarios' },
+  { href: '/eventos',  label: 'Eventos',  icon: FileText, page: 'eventos' },
+  { href: '/usuarios', label: 'Usuários', icon: Users,    page: 'usuarios' },
 ]
 
 const roleLabels: Record<NivelAcesso, string> = {
@@ -71,8 +72,9 @@ export default function Sidebar({ userRole }: SidebarProps) {
   const permissions = ROLE_PERMISSIONS[userRole] ?? []
   const { espacosConfig } = useEspacos()
 
-  function handleLogout() {
-    document.cookie = 'auth=; path=/; max-age=0'
+  async function handleLogout() {
+    const supabase = createClient()
+    await supabase.auth.signOut()
     window.location.href = '/login'
   }
 

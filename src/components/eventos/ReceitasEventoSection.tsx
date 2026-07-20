@@ -1,0 +1,142 @@
+'use client'
+
+import { useState, useMemo } from 'react'
+import { Search, Plus, Calendar } from 'lucide-react'
+import { useEventos } from '@/contexts/EventosContext'
+import { useReceitas } from '@/contexts/ReceitasContext'
+import { formatCurrency, formatDate } from '@/lib/utils'
+import NovaReceitaModal from '@/components/pagamentos/NovaReceitaModal'
+import type { Evento } from '@/types'
+
+const statusStyles: Record<string, string> = {
+  pago: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  pendente: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  atrasado: 'bg-red-500/10 text-red-400 border-red-500/20',
+}
+const statusLabels: Record<string, string> = { pago: 'Pago', pendente: 'Pendente', atrasado: 'Atrasado' }
+
+export default function ReceitasEventoSection() {
+  const { eventos } = useEventos()
+  const { receitas, categorias, addReceita } = useReceitas()
+  const [search, setSearch] = useState('')
+  const [selected, setSelected] = useState<Evento | null>(null)
+  const [novaOpen, setNovaOpen] = useState(false)
+
+  const filtrados = useMemo(() => {
+    const q = search.toLowerCase()
+    return eventos
+      .filter(e => !q || e.cliente.toLowerCase().includes(q) || e.espaco.toLowerCase().includes(q))
+      .slice()
+      .sort((a, b) => b.data.localeCompare(a.data))
+  }, [eventos, search])
+
+  const receitasDoEvento = selected ? receitas.filter(r => r.eventoId === selected.id) : []
+
+  if (!selected) {
+    return (
+      <div className="space-y-4">
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-app-subtle" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar evento por cliente ou espaço..."
+            className="w-full rounded-lg border border-app-border2 bg-app-surface py-2 pl-9 pr-3 text-sm text-app-text placeholder-app-subtle focus:outline-none"
+          />
+        </div>
+
+        <div className="space-y-2">
+          {filtrados.length === 0 ? (
+            <div className="rounded-xl border border-app-border bg-app-surface p-8 text-center">
+              <p className="text-sm text-app-subtle">Nenhum evento encontrado.</p>
+            </div>
+          ) : filtrados.map(e => (
+            <button
+              key={e.id}
+              onClick={() => setSelected(e)}
+              className="w-full flex items-center justify-between gap-4 rounded-lg border border-app-border2/50 bg-app-surface2/40 px-4 py-3 text-left hover:bg-app-surface2/70 transition-colors"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-app-text truncate">{e.cliente}</p>
+                <div className="flex items-center gap-3 mt-0.5">
+                  <span className="text-xs text-app-subtle">{e.espaco}</span>
+                  <span className="flex items-center gap-1 text-xs text-app-subtle">
+                    <Calendar className="h-3 w-3" />
+                    {formatDate(e.data)}
+                  </span>
+                </div>
+              </div>
+              <span className="text-sm font-semibold text-app-text2 shrink-0">{formatCurrency(e.valor)}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <button onClick={() => setSelected(null)} className="text-xs text-app-muted hover:text-app-text transition-colors">
+        ← Voltar para lista de eventos
+      </button>
+
+      <div className="rounded-xl border border-app-border bg-app-surface p-4 flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold text-app-text">{selected.cliente}</p>
+          <p className="text-xs text-app-subtle mt-0.5">{selected.espaco} · {formatDate(selected.data)}</p>
+        </div>
+        <button
+          onClick={() => setNovaOpen(true)}
+          className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-white transition-colors shrink-0"
+          style={{ backgroundColor: '#25D366' }}
+          onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#128C7E' }}
+          onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#25D366' }}
+        >
+          <Plus className="h-4 w-4" />
+          Nova Receita
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        {receitasDoEvento.length === 0 ? (
+          <div className="rounded-xl border border-app-border bg-app-surface p-8 text-center">
+            <p className="text-sm text-app-subtle">Nenhuma receita lançada para este evento ainda.</p>
+          </div>
+        ) : receitasDoEvento.map(r => (
+          <div key={r.id} className="flex items-center justify-between gap-4 rounded-lg border border-app-border2/50 bg-app-surface2/40 px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-sm font-medium text-app-text truncate">{r.descricao}</p>
+                <span className="rounded-full border border-violet-500/20 bg-violet-500/10 text-violet-400 px-2 py-0.5 text-xs font-medium shrink-0">
+                  {r.categoriaNome}
+                </span>
+                {r.categoriaSlug === 'aluguel' && (
+                  <span className="text-xs text-app-subtle italic shrink-0">sincronizado do evento</span>
+                )}
+              </div>
+              <p className="text-xs text-app-subtle mt-0.5">{formatDate(r.data)}</p>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusStyles[r.status]}`}>
+                {statusLabels[r.status]}
+              </span>
+              <span className="text-sm font-semibold text-app-text">{formatCurrency(r.valor)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {novaOpen && (
+        <NovaReceitaModal
+          categorias={categorias}
+          onClose={() => setNovaOpen(false)}
+          onSave={addReceita}
+          eventoId={selected.id}
+          espacoPadrao={selected.espaco}
+          clientePadrao={selected.cliente}
+          excludeSlugs={['aluguel']}
+        />
+      )}
+    </div>
+  )
+}

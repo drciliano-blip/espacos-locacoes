@@ -7,6 +7,7 @@ import KPISummary from './KPISummary'
 import RevenueLineChart from './RevenueLineChart'
 import SpaceBarChart from './SpaceBarChart'
 import CategoryPieChart from './CategoryPieChart'
+import RevenueByCategoryChart from './RevenueByCategoryChart'
 import OccupancyAreaChart from './OccupancyAreaChart'
 import ProjectionChart from './ProjectionChart'
 import SummaryTable from './SummaryTable'
@@ -92,6 +93,14 @@ export default function RelatoriosClient() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <CategoryPieChart data={aggregates} />
         <OccupancyAreaChart data={aggregates} />
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <RevenueByCategoryChart
+          dataInicio={filters.dataInicio}
+          dataFim={filters.dataFim}
+          selectedSpaces={filters.espacos.length > 0 ? filters.espacos : undefined}
+        />
       </div>
 
       <ProjectionChart historico={aggregates} projecoes={projecoes} />

@@ -1,40 +1,36 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Search, FolderOpen, Plus, FileText, Users, Library, Inbox } from 'lucide-react'
+import { Search, FolderOpen, Plus, FileText, DollarSign } from 'lucide-react'
 import ContractCard from '@/components/contratos/ContractCard'
 import FileSearchModal from '@/components/shared/FileSearchModal'
 import NovoContratoModal from '@/components/contratos/NovoContratoModal'
-import FuncionariosSection from '@/components/contratos/FuncionariosSection'
-import BibliotecaContratos from '@/components/contratos/BibliotecaContratos'
-import FichasRecebidasSection from '@/components/contratos/FichasRecebidasSection'
-import { contratos as mockContratos } from '@/lib/mock-data'
+import DocumentosSection from '@/components/eventos/DocumentosSection'
+import ReceitasEventoSection from '@/components/eventos/ReceitasEventoSection'
 import { useEspacos } from '@/contexts/EspacosContext'
-import type { Contrato, StatusEvento } from '@/types'
+import { useContratos } from '@/contexts/ContratosContext'
+import type { StatusEvento } from '@/types'
 
-type Tab = 'contratos' | 'funcionarios' | 'biblioteca' | 'fichas'
+type Tab = 'contratos' | 'documentos' | 'receitas'
 
 const TABS: { key: Tab; label: string; Icon: typeof FileText }[] = [
-  { key: 'contratos',    label: 'Contratos',                Icon: FileText },
-  { key: 'funcionarios', label: 'Documentos de Funcionários', Icon: Users },
-  { key: 'biblioteca',   label: 'Biblioteca de Contratos',   Icon: Library },
-  { key: 'fichas',       label: 'Fichas recebidas',          Icon: Inbox },
+  { key: 'contratos',  label: 'Contratos',  Icon: FileText },
+  { key: 'documentos', label: 'Documentos', Icon: FolderOpen },
+  { key: 'receitas',   label: 'Receitas',   Icon: DollarSign },
 ]
 
-export default function ContratosPage() {
+export default function EventosPage() {
   const { espacosNomes } = useEspacos()
+  const { contratos, addContrato } = useContratos()
   const [tab, setTab] = useState<Tab>('contratos')
   const [search, setSearch]           = useState('')
   const [espacoFilter, setEspacoFilter] = useState<string>('todos')
   const [statusFilter, setStatusFilter] = useState<StatusEvento | 'todos'>('todos')
   const [docModalOpen, setDocModalOpen] = useState(false)
   const [novoOpen, setNovoOpen]         = useState(false)
-  const [localContratos, setLocalContratos] = useState<Contrato[]>([])
-
-  const todosContratos = useMemo(() => [...mockContratos, ...localContratos], [localContratos])
 
   const filtered = useMemo(() => {
-    return todosContratos.filter((c) => {
+    return contratos.filter((c) => {
       const matchSearch =
         c.cliente.toLowerCase().includes(search.toLowerCase()) ||
         c.numeroContrato.toLowerCase().includes(search.toLowerCase())
@@ -42,7 +38,7 @@ export default function ContratosPage() {
       const matchStatus = statusFilter === 'todos' || c.status === statusFilter
       return matchSearch && matchEspaco && matchStatus
     })
-  }, [todosContratos, search, espacoFilter, statusFilter])
+  }, [contratos, search, espacoFilter, statusFilter])
 
   return (
     <div className="max-w-6xl mx-auto space-y-4">
@@ -122,7 +118,7 @@ export default function ContratosPage() {
           {novoOpen && (
             <NovoContratoModal
               onClose={() => setNovoOpen(false)}
-              onSave={(c) => setLocalContratos(prev => [c, ...prev])}
+              onSave={addContrato}
             />
           )}
 
@@ -140,9 +136,8 @@ export default function ContratosPage() {
         </div>
       )}
 
-      {tab === 'funcionarios' && <FuncionariosSection />}
-      {tab === 'biblioteca' && <BibliotecaContratos />}
-      {tab === 'fichas' && <FichasRecebidasSection />}
+      {tab === 'documentos' && <DocumentosSection />}
+      {tab === 'receitas' && <ReceitasEventoSection />}
     </div>
   )
 }

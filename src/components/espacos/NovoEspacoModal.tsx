@@ -57,7 +57,7 @@ export default function NovoEspacoModal({ onClose, onSave }: Props) {
       fotoFileId = stored.id
     }
 
-    const novo = addEspaco({
+    const novo = await addEspaco({
       id: espacoId,
       nome: draft.nome.trim(),
       endereco: draft.endereco.trim(),

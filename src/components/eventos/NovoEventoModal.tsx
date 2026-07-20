@@ -66,7 +66,8 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
   const [draft, setDraft]         = useState<Draft>(() => emptyDraft(espacoPadrao))
   const [submitted, setSubmitted] = useState(false)
   // Generate stable ID upfront so file attachments are linked before save
-  const [eventId]                 = useState(() => `ev-${Date.now()}`)
+  // (precisa ser um UUID real: vira o id definitivo do evento no Postgres)
+  const [eventId]                 = useState(() => crypto.randomUUID())
   const [fileCount, setFileCount] = useState(0)
 
   const errors: Partial<Record<keyof Draft, boolean>> = {

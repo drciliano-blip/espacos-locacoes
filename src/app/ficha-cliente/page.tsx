@@ -1,16 +1,14 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Building2, CheckCircle2, Paperclip, Send } from 'lucide-react'
 import { maskCPF, maskCNPJ, maskPhone, maskCEP } from '@/lib/utils'
 import { saveFile } from '@/lib/file-storage'
-import { saveFicha } from '@/lib/fichas-store'
-import type { FichaCliente } from '@/types'
+import { createClient } from '@/lib/supabase/client'
 
 const GREEN = '#25D366'
 const DARK_GREEN = '#128C7E'
 
-const ESPACOS = ['Usine', 'Fabrique', 'House Pacaembu', 'Complexo Jussara', 'Espaço Solon']
 const TIPOS_EVENTO = ['Casamento', 'Corporativo', 'Formatura', 'Show/Festival', 'Aniversário', 'Outro']
 const FORMAS_PAGAMENTO = ['PIX', 'Transferência', 'Cartão', 'Outro']
 
@@ -109,7 +107,19 @@ export default function FichaClientePage() {
   const [submitted, setSubmitted] = useState(false)
   const [enviado, setEnviado] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+  const [espacos, setEspacos] = useState<string[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase
+      .from('espacos')
+      .select('nome')
+      .eq('status', 'ativo')
+      .order('nome')
+      .then(({ data }) => setEspacos(((data as { nome: string }[]) ?? []).map(r => r.nome)))
+  }, [])
 
   function set<K extends keyof FormState>(k: K, v: FormState[K]) {
     setForm(f => ({ ...f, [k]: v }))
@@ -131,8 +141,9 @@ export default function FichaClientePage() {
     setSubmitted(true)
     if (hasErrors) return
     setSaving(true)
+    setErro(null)
 
-    const id = `ficha-${Date.now()}`
+    const id = crypto.randomUUID()
     let documentoFileId: string | undefined
     if (documento) {
       const stored = await saveFile(documento, {
@@ -143,35 +154,38 @@ export default function FichaClientePage() {
       documentoFileId = stored.id
     }
 
-    const ficha: FichaCliente = {
+    const supabase = createClient()
+    const { error } = await supabase.from('fichas_clientes').insert({
       id,
-      criadoEm: new Date().toISOString(),
-      nomeCompleto: form.nomeCompleto.trim(),
+      nome_completo: form.nomeCompleto.trim(),
       cpf: form.cpf,
-      rg: form.rg || undefined,
-      dataNascimento: form.dataNascimento || undefined,
+      rg: form.rg || null,
+      data_nascimento: form.dataNascimento || null,
       email: form.email.trim(),
-      telefoneCelular: form.telefoneCelular,
+      telefone_celular: form.telefoneCelular,
       endereco: form.endereco,
-      pessoaJuridica: form.pessoaJuridica,
-      razaoSocial: form.pessoaJuridica ? form.razaoSocial || undefined : undefined,
-      nomeFantasia: form.pessoaJuridica ? form.nomeFantasia || undefined : undefined,
-      cnpj: form.pessoaJuridica ? form.cnpj || undefined : undefined,
-      enderecoEmpresa: form.pessoaJuridica ? form.enderecoEmpresa : undefined,
-      nomeEvento: form.nomeEvento.trim(),
-      espacoDesejado: form.espacoDesejado,
-      tipoEvento: form.tipoEvento,
-      dataEvento: form.dataEvento,
-      horaInicioMontagem: form.horaInicioMontagem || undefined,
-      horaInicioEvento: form.horaInicioEvento || undefined,
-      horaTerminoEvento: form.horaTerminoEvento || undefined,
-      valorLocacao: form.valorLocacao || undefined,
-      formaPagamento: form.formaPagamento || undefined,
-      documentoFileId,
-    }
+      pessoa_juridica: form.pessoaJuridica,
+      razao_social: form.pessoaJuridica ? form.razaoSocial || null : null,
+      nome_fantasia: form.pessoaJuridica ? form.nomeFantasia || null : null,
+      cnpj: form.pessoaJuridica ? form.cnpj || null : null,
+      endereco_empresa: form.pessoaJuridica ? form.enderecoEmpresa : null,
+      nome_evento: form.nomeEvento.trim(),
+      espaco_desejado: form.espacoDesejado,
+      tipo_evento: form.tipoEvento,
+      data_evento: form.dataEvento,
+      hora_inicio_montagem: form.horaInicioMontagem || null,
+      hora_inicio_evento: form.horaInicioEvento || null,
+      hora_termino_evento: form.horaTerminoEvento || null,
+      valor_locacao: form.valorLocacao || null,
+      forma_pagamento: form.formaPagamento || null,
+      documento_file_id: documentoFileId ?? null,
+    })
 
-    saveFicha(ficha)
     setSaving(false)
+    if (error) {
+      setErro('Não foi possível enviar a ficha. Tente novamente.')
+      return
+    }
     setEnviado(true)
   }
 
@@ -273,7 +287,7 @@ export default function FichaClientePage() {
                   className="w-full cursor-pointer rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#25D366]/40"
                 >
                   <option value="">— Selecione —</option>
-                  {ESPACOS.map(e => <option key={e} value={e}>{e}</option>)}
+                  {espacos.map(e => <option key={e} value={e}>{e}</option>)}
                 </select>
                 {submitted && errors.espacoDesejado && <p className="text-xs text-red-500 mt-0.5">Campo obrigatório</p>}
               </div>
@@ -337,6 +351,12 @@ export default function FichaClientePage() {
           {submitted && hasErrors && (
             <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2.5">
               <p className="text-xs text-red-600">Preencha todos os campos obrigatórios antes de enviar.</p>
+            </div>
+          )}
+
+          {erro && (
+            <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2.5">
+              <p className="text-xs text-red-600">{erro}</p>
             </div>
           )}
 

@@ -5,9 +5,10 @@ import { DollarSign, CalendarCheck, TrendingUp, AlertCircle, BarChart3, ChevronD
 import KPICard from '@/components/dashboard/KPICard'
 import RevenueChart from '@/components/dashboard/RevenueChart'
 import OccupancyChart from '@/components/dashboard/OccupancyChart'
-import { eventos, pagamentos } from '@/lib/mock-data'
 import { formatCurrency } from '@/lib/utils'
 import { useEspacos } from '@/contexts/EspacosContext'
+import { useEventos } from '@/contexts/EventosContext'
+import { useReceitas } from '@/contexts/ReceitasContext'
 import type { TipoEvento } from '@/types'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
@@ -41,6 +42,8 @@ type EspacoFiltro = string | 'Todos'
 
 export default function DashboardPage() {
   const { espacosConfig, espacosNomes } = useEspacos()
+  const { eventos } = useEventos()
+  const { receitas: pagamentos } = useReceitas()
   const espacoColors: Record<string, string> = Object.fromEntries(
     espacosConfig.map(e => [e.nome, COR_HEX[e.cor] ?? '#8b5cf6'])
   )
@@ -62,7 +65,7 @@ export default function DashboardPage() {
   ).length
 
   const receitaMes = pagamentosFiltrados
-    .filter((p) => p.status === 'pago' && p.dataEvento.startsWith('2026-05'))
+    .filter((p) => p.status === 'pago' && p.data.startsWith('2026-05'))
     .reduce((s, p) => s + p.valor, 0)
 
   const pendente = pagamentosFiltrados
