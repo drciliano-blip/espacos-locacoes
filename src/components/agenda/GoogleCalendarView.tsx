@@ -268,7 +268,7 @@ export default function GoogleCalendarView() {
       {newEventOpen && (
         <div className="px-5 py-4 border-b border-app-border bg-app-surface2/50 space-y-3">
           <p className="text-xs font-semibold text-app-text">Novo evento no Google Calendar</p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="col-span-2">
               <label className="block text-xs text-app-muted mb-1">Título *</label>
               <input

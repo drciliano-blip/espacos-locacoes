@@ -330,7 +330,7 @@ export default function ContasPagarPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-app-muted mb-1">Valor (R$) *</label>
                   <input type="number" min="0" step="0.01" value={form.valor}
@@ -352,7 +352,7 @@ export default function ContasPagarPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-app-muted mb-1">Tipo de despesa *</label>
                   <select value={form.categoria}
@@ -381,7 +381,7 @@ export default function ContasPagarPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-app-muted mb-1">Espaço vinculado *</label>
                   <select value={form.espaco} onChange={e => setForm(f => ({ ...f, espaco: e.target.value }))}

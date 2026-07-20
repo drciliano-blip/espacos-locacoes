@@ -196,7 +196,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
               <Calendar className="h-3.5 w-3.5" />
               Informações do Evento
             </h4>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
 
               <div className="col-span-2">
                 <Field label="Nome do Cliente" draftKey="cliente" required placeholder="Ex: João Silva" />
@@ -285,7 +285,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
               <DollarSign className="h-3.5 w-3.5" />
               Capacidade e Financeiro
             </h4>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
               <Field label="Nº de Pessoas" draftKey="numeroPessoas" type="number" placeholder="0" />
               <Field label="Valor (R$)"    draftKey="valor"         type="number" required placeholder="0,00" />
               <div className="col-span-2">
@@ -310,7 +310,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
               <User className="h-3.5 w-3.5" />
               Responsável
             </h4>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
               <Field label="Nome do Responsável" draftKey="responsavel"     placeholder="Nome completo" />
               <Field label="Telefone"            draftKey="telefoneContato" placeholder="(11) 99999-9999" />
             </div>

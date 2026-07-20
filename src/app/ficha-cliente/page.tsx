@@ -225,14 +225,14 @@ export default function FichaClientePage() {
               <Field label="Nome completo" required value={form.nomeCompleto} onChange={v => set('nomeCompleto', v)} />
               {submitted && errors.nomeCompleto && <p className="text-xs text-red-500 mt-0.5">Campo obrigatório</p>}
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Field label="CPF" required value={form.cpf} onChange={v => set('cpf', maskCPF(v))} placeholder="000.000.000-00" />
                 {submitted && errors.cpf && <p className="text-xs text-red-500 mt-0.5">Campo obrigatório</p>}
               </div>
               <Field label="RG" value={form.rg} onChange={v => set('rg', v)} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Data de nascimento" type="date" value={form.dataNascimento} onChange={v => set('dataNascimento', v)} />
               <div>
                 <Field label="Telefone celular" required value={form.telefoneCelular} onChange={v => set('telefoneCelular', maskPhone(v))} placeholder="(11) 99999-9999" />
@@ -260,7 +260,7 @@ export default function FichaClientePage() {
 
             {form.pessoaJuridica && (
               <div className="space-y-3 pl-1">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field label="Razão Social" value={form.razaoSocial} onChange={v => set('razaoSocial', v)} />
                   <Field label="Nome Fantasia" value={form.nomeFantasia} onChange={v => set('nomeFantasia', v)} />
                 </div>
@@ -278,7 +278,7 @@ export default function FichaClientePage() {
               <Field label="Nome do evento" required value={form.nomeEvento} onChange={v => set('nomeEvento', v)} />
               {submitted && errors.nomeEvento && <p className="text-xs text-red-500 mt-0.5">Campo obrigatório</p>}
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-stone-600 mb-1 block">Espaço desejado<span className="text-red-500 ml-0.5">*</span></label>
                 <select
@@ -313,7 +313,7 @@ export default function FichaClientePage() {
               <Field label="Início evento" type="time" value={form.horaInicioEvento} onChange={v => set('horaInicioEvento', v)} />
               <Field label="Término evento" type="time" value={form.horaTerminoEvento} onChange={v => set('horaTerminoEvento', v)} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Valor da locação (R$)" type="number" value={form.valorLocacao} onChange={v => set('valorLocacao', v)} placeholder="0,00" />
               <div>
                 <label className="text-xs text-stone-600 mb-1 block">Forma de pagamento</label>

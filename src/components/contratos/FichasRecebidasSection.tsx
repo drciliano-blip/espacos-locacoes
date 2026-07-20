@@ -125,7 +125,7 @@ export default function FichasRecebidasSection() {
 
             {expandedId === f.id && (
               <div className="px-4 pb-4 pt-1 border-t border-app-border/50 space-y-3">
-                <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                   <p className="text-app-subtle flex items-center gap-1.5"><Mail className="h-3 w-3" />{f.email}</p>
                   <p className="text-app-subtle flex items-center gap-1.5"><Phone className="h-3 w-3" />{f.telefoneCelular}</p>
                   <p className="text-app-subtle">CPF: {f.cpf}</p>

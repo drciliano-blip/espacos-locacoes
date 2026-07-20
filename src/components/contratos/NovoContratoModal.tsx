@@ -153,7 +153,7 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
               <User className="h-3.5 w-3.5" />
               Cliente
             </h4>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
               <div className="col-span-2">
                 <Field label="Nome do Cliente" draftKey="cliente" required placeholder="Ex: João Silva" />
               </div>
@@ -169,7 +169,7 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
               <FileText className="h-3.5 w-3.5" />
               Dados do Evento
             </h4>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
               {/* Espaço */}
               <div className="col-span-2">
                 <label className="text-xs text-app-subtle mb-0.5 block">
@@ -221,7 +221,7 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
               <DollarSign className="h-3.5 w-3.5" />
               Financeiro
             </h4>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
               <Field label="Valor Total (R$)"  draftKey="valorTotal"   type="number" required placeholder="0,00" />
               <Field label="Entrada (R$)"       draftKey="valorEntrada" type="number" placeholder="0,00" />
               <div className="col-span-2">

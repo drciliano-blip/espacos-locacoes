@@ -8,6 +8,7 @@ import { ReceitasProvider } from '@/contexts/ReceitasContext'
 import { ContratosProvider } from '@/contexts/ContratosContext'
 import { ContasPagarProvider } from '@/contexts/ContasPagarContext'
 import { UserProvider } from '@/contexts/UserContext'
+import { SidebarUIProvider } from '@/contexts/SidebarUIContext'
 import type { NivelAcesso } from '@/types'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -37,15 +38,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <EventosProvider>
             <ContratosProvider>
               <ContasPagarProvider>
-                <div className="flex h-screen bg-app-bg overflow-hidden">
-                  <Sidebar userRole={role} />
-                  <div className="flex flex-1 flex-col overflow-hidden">
-                    <Header userName={profile.nome} userRole={role} />
-                    <main className="flex-1 overflow-y-auto p-6">
-                      {children}
-                    </main>
+                <SidebarUIProvider>
+                  <div className="flex h-screen bg-app-bg overflow-hidden">
+                    <Sidebar userRole={role} />
+                    <div className="flex flex-1 flex-col overflow-hidden">
+                      <Header userName={profile.nome} userRole={role} />
+                      <main className="flex-1 overflow-y-auto p-6">
+                        {children}
+                      </main>
+                    </div>
                   </div>
-                </div>
+                </SidebarUIProvider>
               </ContasPagarProvider>
             </ContratosProvider>
           </EventosProvider>

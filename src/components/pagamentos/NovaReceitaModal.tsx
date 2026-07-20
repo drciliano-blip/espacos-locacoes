@@ -136,7 +136,7 @@ export default function NovaReceitaModal({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-app-subtle mb-0.5 block">Cliente</label>
               <input
@@ -161,7 +161,7 @@ export default function NovaReceitaModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-app-subtle mb-0.5 block">
                 Data<span className="text-red-400 ml-0.5">*</span>
@@ -187,7 +187,7 @@ export default function NovaReceitaModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-app-subtle mb-0.5 block">Status</label>
               <select

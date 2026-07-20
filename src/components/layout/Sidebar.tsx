@@ -14,8 +14,10 @@ import {
   BarChart2,
   Receipt,
   Users,
+  X,
 } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
+import { useSidebarUI } from '@/contexts/SidebarUIContext'
 import { ROLE_PERMISSIONS } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/client'
 import type { NivelAcesso } from '@/types'
@@ -50,10 +52,11 @@ interface SidebarProps {
   userRole: NivelAcesso
 }
 
-function NavLink({ href, label, icon: Icon, active }: { href: string; label: string; icon: React.ElementType; active: boolean }) {
+function NavLink({ href, label, icon: Icon, active, onNavigate }: { href: string; label: string; icon: React.ElementType; active: boolean; onNavigate: () => void }) {
   return (
     <Link
       href={href}
+      onClick={onNavigate}
       className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all ${
         active
           ? 'bg-[#25D366]/15 text-[#128C7E] border border-[#25D366]/25'
@@ -71,6 +74,7 @@ export default function Sidebar({ userRole }: SidebarProps) {
   const [espacosOpen, setEspacosOpen] = useState(pathname.startsWith('/espacos'))
   const permissions = ROLE_PERMISSIONS[userRole] ?? []
   const { espacosConfig } = useEspacos()
+  const { open, close } = useSidebarUI()
 
   async function handleLogout() {
     const supabase = createClient()
@@ -79,15 +83,27 @@ export default function Sidebar({ userRole }: SidebarProps) {
   }
 
   return (
-    <aside className="flex h-screen w-64 flex-col bg-app-surface border-r border-app-border">
+    <>
+      {open && (
+        <div className="fixed inset-0 z-40 bg-black/60 lg:hidden" onClick={close} />
+      )}
+      <aside className={`fixed inset-y-0 left-0 z-50 flex h-screen w-64 flex-col bg-app-surface border-r border-app-border transition-transform duration-200 lg:static lg:translate-x-0 ${
+        open ? 'translate-x-0' : '-translate-x-full'
+      }`}>
       <div className="flex items-center gap-3 px-6 py-5 border-b border-app-border">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#25D366]/15 border border-[#25D366]/30">
           <Building2 className="h-5 w-5 text-[#25D366]" />
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-app-text leading-none">Espaços &</p>
           <p className="text-sm font-semibold text-[#25D366] leading-tight">Locações</p>
         </div>
+        <button
+          onClick={close}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-app-subtle hover:bg-app-surface2 lg:hidden"
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
@@ -101,6 +117,7 @@ export default function Sidebar({ userRole }: SidebarProps) {
               label={label}
               icon={icon}
               active={pathname === href || pathname.startsWith(href + '/')}
+              onNavigate={close}
             />
           ))}
 
@@ -114,7 +131,7 @@ export default function Sidebar({ userRole }: SidebarProps) {
                   : 'text-app-muted hover:text-app-text hover:bg-app-surface2'
               }`}
             >
-              <Link href="/espacos" className="flex flex-1 items-center gap-3 px-3 py-2.5">
+              <Link href="/espacos" onClick={close} className="flex flex-1 items-center gap-3 px-3 py-2.5">
                 <Building2 className={`h-4 w-4 ${pathname.startsWith('/espacos') ? 'text-[#25D366]' : ''}`} />
                 <span className="flex-1 text-left">Espaços</span>
               </Link>
@@ -138,6 +155,7 @@ export default function Sidebar({ userRole }: SidebarProps) {
                     <Link
                       key={espaco.slug}
                       href={href}
+                      onClick={close}
                       className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-all ${
                         active
                           ? 'text-app-text bg-app-surface2'
@@ -164,6 +182,7 @@ export default function Sidebar({ userRole }: SidebarProps) {
               label={label}
               icon={icon}
               active={pathname === href || pathname.startsWith(href + '/')}
+              onNavigate={close}
             />
           ))}
       </nav>
@@ -182,6 +201,7 @@ export default function Sidebar({ userRole }: SidebarProps) {
           Sair
         </button>
       </div>
-    </aside>
+      </aside>
+    </>
   )
 }

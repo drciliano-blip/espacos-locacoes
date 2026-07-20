@@ -183,7 +183,7 @@ export default function GerarContratoModal({ origem, onClose }: Props) {
               <p className="text-xs text-app-muted">
                 Modelo detectado: <span className="font-semibold text-app-text">{modelo.nome}</span>. Revise os campos abaixo antes de gerar.
               </p>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
                 {modelo.variaveis.map(campo => (
                   <div key={campo}>
                     <label className="text-xs text-app-subtle mb-0.5 block">{labelFor(campo)}</label>

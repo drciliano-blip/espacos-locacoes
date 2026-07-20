@@ -236,7 +236,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                 <Calendar className="h-3.5 w-3.5" />
                 Informações do Evento
               </h4>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
                 {field('Data', formatDate(current.data), 'data', 'date')}
                 {field('Horário', `${current.horaInicio} – ${current.horaFim}`, 'horaInicio')}
                 {field('Tipo de Evento', current.tipo, 'tipo')}
@@ -269,7 +269,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                 <Users className="h-3.5 w-3.5" />
                 Capacidade e Pessoas
               </h4>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
                 {field('Nº de Pessoas', current.numeroPessoas, 'numeroPessoas', 'number')}
                 {field('Capacidade do Espaço', current.capacidadeUtilizada, 'capacidadeUtilizada', 'number')}
               </div>
@@ -297,7 +297,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                 <DollarSign className="h-3.5 w-3.5" />
                 Financeiro
               </h4>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
                 {field('Faturamento Bruto', current.faturamentoBruto ? formatCurrency(current.faturamentoBruto) : undefined, 'faturamentoBruto', 'number')}
                 {field('Faturamento Líquido', current.faturamentoLiquido ? formatCurrency(current.faturamentoLiquido) : undefined, 'faturamentoLiquido', 'number')}
                 {field('Forma de Pagamento', current.formaPagamento, 'formaPagamento', 'select', ['PIX', 'Transferência', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Cheque'])}
@@ -311,7 +311,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                 <User className="h-3.5 w-3.5" />
                 Responsável pelo Evento
               </h4>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
                 {field('Nome do Responsável', current.responsavel, 'responsavel')}
                 {field('Telefone de Contato', current.telefoneContato, 'telefoneContato')}
               </div>
@@ -323,7 +323,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                 <ClipboardCheck className="h-3.5 w-3.5" />
                 Logística e Vistoria
               </h4>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
                 {field('Decoração', current.decoracao, 'decoracao', 'select', ['própria', 'terceirizada', 'não aplicável'])}
                 <div>
                   <p className="text-xs text-app-subtle">Status da Vistoria</p>
@@ -349,7 +349,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
 
             {/* Observações */}
             <section>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
                 {textArea('Observações Gerais', 'observacoes')}
                 {textArea('Observações Técnicas', 'observacoesTecnicas')}
               </div>

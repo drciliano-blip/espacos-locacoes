@@ -182,7 +182,7 @@ export default function AnexarRelatorioModal({ evento, categorias, onClose, onSa
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-app-subtle mb-0.5 block">
                 Valor (R$)<span className="text-red-400 ml-0.5">*</span>
