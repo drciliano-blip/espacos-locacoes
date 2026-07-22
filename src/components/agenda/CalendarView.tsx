@@ -21,7 +21,10 @@ interface CalendarViewProps {
 }
 
 export default function CalendarView({ eventos, onDaySelect, selectedDate }: CalendarViewProps) {
-  const [currentMonth, setCurrentMonth] = useState(new Date(2026, 4, 1))
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const hoje = new Date()
+    return new Date(hoje.getFullYear(), hoje.getMonth(), 1)
+  })
 
   const days = eachDayOfInterval({
     start: startOfMonth(currentMonth),
@@ -77,8 +80,7 @@ export default function CalendarView({ eventos, onDaySelect, selectedDate }: Cal
           const dayEvents = getEventsForDay(day)
           const isSelected = selectedDate ? isSameDay(day, selectedDate) : false
           const isCurrentMonth = isSameMonth(day, currentMonth)
-          const today = new Date(2026, 4, 23)
-          const isToday = isSameDay(day, today)
+          const isToday = isSameDay(day, new Date())
 
           return (
             <button

@@ -7,6 +7,7 @@ import {
   Building2, FileText, User, MapPin,
   CheckCircle2, AlertCircle, XCircle, BarChart3,
   Activity, ChevronRight, Layers, Plus, Clock,
+  List, CalendarDays,
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -17,6 +18,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import EventoDrawer from '@/components/eventos/EventoDrawer'
 import NovoEventoModal from '@/components/eventos/NovoEventoModal'
 import EspacoLogo from '@/components/espacos/EspacoLogo'
+import CalendarView from '@/components/agenda/CalendarView'
 import FileAttachButton from '@/components/shared/FileAttachButton'
 import FileList from '@/components/shared/FileList'
 import { useEventos } from '@/contexts/EventosContext'
@@ -84,6 +86,8 @@ export default function EspacoPage({ config }: EspacoPageProps) {
   const [selectedEvento, setSelectedEvento] = useState<Evento | null>(null)
   const [statusFiltro, setStatusFiltro]     = useState<string>('todos')
   const [novoEventoOpen, setNovoEventoOpen] = useState(false)
+  const [eventosView, setEventosView]       = useState<'lista' | 'calendario'>('lista')
+  const [calendarDate, setCalendarDate]     = useState<Date | null>(null)
   const [uploadingFoto, setUploadingFoto]   = useState(false)
   const fotoInputRef = useRef<HTMLInputElement>(null)
 
@@ -129,6 +133,14 @@ export default function EspacoPage({ config }: EspacoPageProps) {
     const base = statusFiltro === 'todos' ? eventosEspaco : eventosEspaco.filter(e => e.status === statusFiltro)
     return [...base].sort((a, b) => a.data.localeCompare(b.data))
   }, [eventosEspaco, statusFiltro])
+
+  const eventosVisiveis = useMemo(() => {
+    if (eventosView !== 'calendario' || !calendarDate) return eventosMostrados
+    return eventosMostrados.filter(e => {
+      const [y, m, d] = e.data.split('-').map(Number)
+      return y === calendarDate.getFullYear() && m - 1 === calendarDate.getMonth() && d === calendarDate.getDate()
+    })
+  }, [eventosMostrados, eventosView, calendarDate])
 
   // ── Dados para gráfico ─────────────────────────────────────────────────────
   const monthlyData = useMemo(() => {
@@ -256,7 +268,7 @@ export default function EspacoPage({ config }: EspacoPageProps) {
         {/* ── 2. Lista de eventos ────────────────────────────────────────── */}
         {tab === 'eventos' && (
           <div className="p-5">
-            <div className="flex flex-wrap gap-2 mb-5">
+            <div className="flex flex-wrap items-center gap-2 mb-5">
               {statusChips.map(({ key, label, count }) => (
                 <button
                   key={key}
@@ -271,16 +283,47 @@ export default function EspacoPage({ config }: EspacoPageProps) {
                   <span className="ml-1.5 opacity-60">{count}</span>
                 </button>
               ))}
+
+              <div className="ml-auto flex items-center gap-1 rounded-lg border border-app-border2 p-0.5">
+                <button
+                  onClick={() => setEventosView('lista')}
+                  className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                    eventosView === 'lista' ? `${config.bgClass} ${config.colorClass}` : 'text-app-muted hover:text-app-text'
+                  }`}
+                >
+                  <List className="h-3.5 w-3.5" />
+                  Lista
+                </button>
+                <button
+                  onClick={() => setEventosView('calendario')}
+                  className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                    eventosView === 'calendario' ? `${config.bgClass} ${config.colorClass}` : 'text-app-muted hover:text-app-text'
+                  }`}
+                >
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  Calendário
+                </button>
+              </div>
             </div>
 
-            {eventosMostrados.length === 0 ? (
+            {eventosView === 'calendario' && (
+              <div className="mb-5">
+                <CalendarView
+                  eventos={eventosMostrados}
+                  selectedDate={calendarDate}
+                  onDaySelect={setCalendarDate}
+                />
+              </div>
+            )}
+
+            {eventosVisiveis.length === 0 ? (
               <div className="py-12 text-center">
                 <CalendarCheck className="h-8 w-8 text-app-border2 mx-auto mb-3" />
                 <p className="text-sm text-app-muted">Nenhum evento encontrado.</p>
               </div>
             ) : (
               <div className="divide-y divide-app-border/40">
-                {eventosMostrados.map((evento) => {
+                {eventosVisiveis.map((evento) => {
                   const sc = STATUS_CFG[evento.status] ?? STATUS_CFG['em_negociacao']
                   const iconColor = sc.badge.split(' ')[1]
                   return (
