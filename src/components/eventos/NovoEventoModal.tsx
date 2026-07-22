@@ -51,6 +51,14 @@ function matchFromList(value: string | null, options: string[]): string | undefi
   return options.find(o => o.toLowerCase() === value.toLowerCase())
 }
 
+// O erro do Supabase (PostgrestError) não é uma instância de Error do JS — só tem
+// um campo .message. Sem isso, err instanceof Error falha e a mensagem real some.
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message
+  if (err && typeof err === 'object' && 'message' in err) return String((err as { message: unknown }).message)
+  return 'Erro desconhecido.'
+}
+
 interface ParcelaDraft {
   numero: number
   label: string
@@ -307,7 +315,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
     try {
       await onSave(evento)
     } catch (err) {
-      showToast(err instanceof Error ? `Não foi possível salvar o evento: ${err.message}` : 'Não foi possível salvar o evento. Tente novamente.')
+      showToast(`Não foi possível salvar o evento: ${getErrorMessage(err)}`)
       setSaving(false)
       return
     }
