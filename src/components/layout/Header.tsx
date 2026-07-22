@@ -1,10 +1,11 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { Bell, User, Sun, Moon, Menu } from 'lucide-react'
+import { User, Sun, Moon, Menu } from 'lucide-react'
 import { getEspacoBySlug } from '@/lib/espacos-config'
 import { useTheme } from '@/components/ThemeProvider'
 import { useSidebarUI } from '@/contexts/SidebarUIContext'
+import NotificationBell from '@/components/layout/NotificationBell'
 import type { NivelAcesso } from '@/types'
 
 const titles: Record<string, string> = {
@@ -62,10 +63,7 @@ export default function Header({ userName, userRole }: HeaderProps) {
           {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
 
-        <button className="relative flex h-8 w-8 items-center justify-center rounded-lg text-app-muted hover:bg-app-surface2 hover:text-app-text transition-colors">
-          <Bell className="h-4 w-4" />
-          <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-[#25D366]" />
-        </button>
+        <NotificationBell />
 
         <div className="flex items-center gap-2 pl-1 border-l border-app-border ml-1">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#25D366]/15 border border-[#25D366]/30">
