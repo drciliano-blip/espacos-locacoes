@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 
-const PROMPT = `Analise esta ficha de cadastro de cliente (pode ser um formulário preenchido à mão, digitado ou um documento de identidade/contrato social) e extraia os dados em JSON no formato abaixo. Use null para qualquer campo que não aparecer no documento. Datas sempre no formato DD/MM/AAAA. Retorne APENAS o JSON, sem texto adicional.
+const PROMPT = `Analise esta ficha de cadastro de cliente (pode ser um formulário preenchido à mão, digitado, um documento de identidade/contrato social, ou uma conversa de WhatsApp com os dados do cliente) e extraia os dados em JSON no formato abaixo. Use null para qualquer campo que não aparecer no conteúdo. Datas sempre no formato DD/MM/AAAA. Retorne APENAS o JSON, sem texto adicional.
 
 {
   "nomeCompleto": string | null,
@@ -72,35 +72,39 @@ export async function POST(request: Request) {
 
   const formData = await request.formData()
   const file = formData.get('file')
-
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: 'Nenhum arquivo enviado.' }, { status: 400 })
-  }
-
-  const mimeType = file.type || 'application/octet-stream'
-  if (mimeType === 'image/heic' || mimeType === 'image/heif') {
-    return NextResponse.json(
-      { error: 'Fotos em formato HEIC não são lidas pela IA — use o botão "Tirar foto" (gera JPEG) ou converta o arquivo antes de anexar.' },
-      { status: 400 },
-    )
-  }
-
-  const arrayBuffer = await file.arrayBuffer()
-  const base64 = Buffer.from(arrayBuffer).toString('base64')
+  const texto = formData.get('text')
 
   let contentBlock: Anthropic.Messages.ContentBlockParam
-  if (mimeType === 'application/pdf') {
-    contentBlock = {
-      type: 'document',
-      source: { type: 'base64', media_type: 'application/pdf', data: base64 },
+
+  if (typeof texto === 'string' && texto.trim()) {
+    contentBlock = { type: 'text', text: `Conteúdo colado pelo usuário (ex: conversa de WhatsApp):\n\n${texto.trim()}` }
+  } else if (file instanceof File) {
+    const mimeType = file.type || 'application/octet-stream'
+    if (mimeType === 'image/heic' || mimeType === 'image/heif') {
+      return NextResponse.json(
+        { error: 'Fotos em formato HEIC não são lidas pela IA — use o botão "Tirar foto" (gera JPEG) ou converta o arquivo antes de anexar.' },
+        { status: 400 },
+      )
     }
-  } else if (mimeType.startsWith('image/')) {
-    contentBlock = {
-      type: 'image',
-      source: { type: 'base64', media_type: mimeType as 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif', data: base64 },
+
+    const arrayBuffer = await file.arrayBuffer()
+    const base64 = Buffer.from(arrayBuffer).toString('base64')
+
+    if (mimeType === 'application/pdf') {
+      contentBlock = {
+        type: 'document',
+        source: { type: 'base64', media_type: 'application/pdf', data: base64 },
+      }
+    } else if (mimeType.startsWith('image/')) {
+      contentBlock = {
+        type: 'image',
+        source: { type: 'base64', media_type: mimeType as 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif', data: base64 },
+      }
+    } else {
+      return NextResponse.json({ error: 'Formato de arquivo não suportado para leitura por IA. Envie um PDF ou imagem.' }, { status: 400 })
     }
   } else {
-    return NextResponse.json({ error: 'Formato de arquivo não suportado para leitura por IA. Envie um PDF ou imagem.' }, { status: 400 })
+    return NextResponse.json({ error: 'Nenhum arquivo ou texto enviado.' }, { status: 400 })
   }
 
   try {

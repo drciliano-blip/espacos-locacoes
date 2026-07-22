@@ -1,12 +1,13 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { X, Save, Calendar, DollarSign, User, ClipboardCheck, Paperclip, Camera, Sparkles } from 'lucide-react'
+import { X, Save, Calendar, DollarSign, User, ClipboardCheck, Paperclip, Camera, Sparkles, Plus, Trash2, MessageSquareText } from 'lucide-react'
 import type { Evento, Espaco, TipoEvento, FormaPagamento } from '@/types'
 import FileAttachButton from '@/components/shared/FileAttachButton'
 import FileList from '@/components/shared/FileList'
 import Toast from '@/components/shared/Toast'
 import { useEspacos } from '@/contexts/EspacosContext'
+import { useReceitas } from '@/contexts/ReceitasContext'
 
 const FORMAS_PAGAMENTO: FormaPagamento[] = [
   'PIX',
@@ -48,6 +49,32 @@ function parseDataBR(data: string): string {
 function matchFromList(value: string | null, options: string[]): string | undefined {
   if (!value) return undefined
   return options.find(o => o.toLowerCase() === value.toLowerCase())
+}
+
+interface ParcelaDraft {
+  numero: number
+  label: string
+  data: string
+  valor: string
+}
+
+function gerarParcelasPadrao(dataEvento: string, valorTotal: number, valorSinal: string, dataVencimentoSaldo: string): ParcelaDraft[] {
+  const hoje = new Date().toISOString().split('T')[0]
+  const sinal = valorSinal ? Number(valorSinal) : Math.round((valorTotal / 2) * 100) / 100
+  const saldo = Math.round((valorTotal - sinal) * 100) / 100
+
+  let dataSaldo = dataVencimentoSaldo
+  if (!dataSaldo && dataEvento) {
+    const [y, m, d] = dataEvento.split('-').map(Number)
+    const dt = new Date(y, (m ?? 1) - 1, d ?? 1)
+    dt.setDate(dt.getDate() - 8)
+    dataSaldo = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+  }
+
+  return [
+    { numero: 1, label: 'Sinal', data: hoje, valor: String(sinal) },
+    { numero: 2, label: 'Saldo', data: dataSaldo, valor: String(saldo) },
+  ]
 }
 
 interface Draft {
@@ -93,7 +120,7 @@ function emptyDraft(espacoPadrao?: Espaco): Draft {
 interface NovoEventoModalProps {
   espacoPadrao?: Espaco
   onClose: () => void
-  onSave: (evento: Evento) => void
+  onSave: (evento: Evento) => void | Promise<void>
 }
 
 const GREEN = '#25D366'
@@ -134,8 +161,10 @@ function Field({
 
 export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoEventoModalProps) {
   const { espacosNomes } = useEspacos()
+  const { syncParcelasDoEvento } = useReceitas()
   const [draft, setDraft]         = useState<Draft>(() => emptyDraft(espacoPadrao))
   const [submitted, setSubmitted] = useState(false)
+  const [parcelas, setParcelas]   = useState<ParcelaDraft[] | null>(null)
   // Generate stable ID upfront so file attachments are linked before save
   // (precisa ser um UUID real: vira o id definitivo do evento no Postgres)
   const [eventId]                 = useState(() => crypto.randomUUID())
@@ -144,6 +173,9 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
   const fichaCameraRef = useRef<HTMLInputElement>(null)
   const [extraindoFicha, setExtraindoFicha] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [colarTextoAberto, setColarTextoAberto] = useState(false)
+  const [textoFicha, setTextoFicha] = useState('')
 
   const errors: Partial<Record<keyof Draft, boolean>> = {
     cliente:    !draft.cliente.trim(),
@@ -165,6 +197,52 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
     setTimeout(() => setToastMsg(null), 3500)
   }
 
+  async function processarFicha(body: FormData) {
+    setExtraindoFicha(true)
+    try {
+      const res = await fetch('/api/extract-ficha', { method: 'POST', body })
+      const data: FichaExtracao & { error?: string } = await res.json()
+
+      if (!res.ok || data.error) {
+        showToast(data.error ?? 'Não foi possível ler a ficha com a IA.')
+        return
+      }
+
+      const algumCampo = data.nomeCompleto || data.dataEvento || data.valorLocacao
+      if (!algumCampo) {
+        showToast('A IA não conseguiu identificar os dados nesta ficha. Preencha os campos manualmente.')
+        return
+      }
+
+      let novoDraft: Draft = draft
+      setDraft(d => {
+        novoDraft = {
+          ...d,
+          cliente: data.nomeCompleto ?? d.cliente,
+          telefoneContato: data.telefoneCelular ?? d.telefoneContato,
+          data: data.dataEvento ? parseDataBR(data.dataEvento) || d.data : d.data,
+          espaco: (!espacoPadrao ? matchFromList(data.espacoDesejado, espacosNomes) as Espaco : undefined) ?? d.espaco,
+          tipo: data.tipoEvento ?? d.tipo,
+          horaInicio: data.horaInicioEvento ?? d.horaInicio,
+          horaFim: data.horaTerminoEvento ?? d.horaFim,
+          valor: data.valorLocacao ? parseValorBR(data.valorLocacao) || d.valor : d.valor,
+          formaPagamento: (matchFromList(data.formaPagamento, FORMAS_PAGAMENTO) as FormaPagamento) ?? d.formaPagamento,
+          valorSinal: data.valorSinal ? parseValorBR(data.valorSinal) || d.valorSinal : d.valorSinal,
+          dataVencimentoSaldo: data.dataVencimentoSaldo ? parseDataBR(data.dataVencimentoSaldo) || d.dataVencimentoSaldo : d.dataVencimentoSaldo,
+        }
+        return novoDraft
+      })
+      if (novoDraft.formaPagamento === 'Parcelado' && parcelas === null) {
+        setParcelas(gerarParcelasPadrao(novoDraft.data, Number(novoDraft.valor) || 0, novoDraft.valorSinal, novoDraft.dataVencimentoSaldo))
+      }
+      showToast('Campos preenchidos automaticamente pela IA — confira antes de salvar.')
+    } catch {
+      showToast('Falha ao conectar com a IA. Preencha os campos manualmente.')
+    } finally {
+      setExtraindoFicha(false)
+    }
+  }
+
   async function handleFichaAnexo(file: File | null) {
     if (!file) return
 
@@ -181,49 +259,26 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
       return
     }
 
-    setExtraindoFicha(true)
+    const body = new FormData()
+    body.append('file', file)
     try {
-      const body = new FormData()
-      body.append('file', file)
-      const res = await fetch('/api/extract-ficha', { method: 'POST', body })
-      const data: FichaExtracao & { error?: string } = await res.json()
-
-      if (!res.ok || data.error) {
-        showToast(data.error ?? 'Não foi possível ler a ficha com a IA.')
-        return
-      }
-
-      const algumCampo = data.nomeCompleto || data.dataEvento || data.valorLocacao
-      if (!algumCampo) {
-        showToast('A IA não conseguiu identificar os dados nesta ficha. Preencha os campos manualmente.')
-        return
-      }
-
-      setDraft(d => ({
-        ...d,
-        cliente: data.nomeCompleto ?? d.cliente,
-        telefoneContato: data.telefoneCelular ?? d.telefoneContato,
-        data: data.dataEvento ? parseDataBR(data.dataEvento) || d.data : d.data,
-        espaco: (!espacoPadrao ? matchFromList(data.espacoDesejado, espacosNomes) as Espaco : undefined) ?? d.espaco,
-        tipo: data.tipoEvento ?? d.tipo,
-        horaInicio: data.horaInicioEvento ?? d.horaInicio,
-        horaFim: data.horaTerminoEvento ?? d.horaFim,
-        valor: data.valorLocacao ? parseValorBR(data.valorLocacao) || d.valor : d.valor,
-        formaPagamento: (matchFromList(data.formaPagamento, FORMAS_PAGAMENTO) as FormaPagamento) ?? d.formaPagamento,
-        valorSinal: data.valorSinal ? parseValorBR(data.valorSinal) || d.valorSinal : d.valorSinal,
-        dataVencimentoSaldo: data.dataVencimentoSaldo ? parseDataBR(data.dataVencimentoSaldo) || d.dataVencimentoSaldo : d.dataVencimentoSaldo,
-      }))
-      showToast('Campos preenchidos automaticamente pela IA — confira antes de salvar.')
-    } catch {
-      showToast('Falha ao conectar com a IA. Preencha os campos manualmente.')
+      await processarFicha(body)
     } finally {
-      setExtraindoFicha(false)
       if (fichaFileRef.current) fichaFileRef.current.value = ''
       if (fichaCameraRef.current) fichaCameraRef.current.value = ''
     }
   }
 
-  function handleSave() {
+  async function handleFichaTexto() {
+    if (!textoFicha.trim()) return
+    const body = new FormData()
+    body.append('text', textoFicha.trim())
+    await processarFicha(body)
+    setColarTextoAberto(false)
+    setTextoFicha('')
+  }
+
+  async function handleSave() {
     setSubmitted(true)
     if (hasErrors) return
 
@@ -248,8 +303,24 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
       documentos:      [],
     }
 
-    onSave(evento)
-    onClose()
+    setSaving(true)
+    try {
+      await onSave(evento)
+      const parcelasValidas = (parcelas ?? []).filter(p => p.label.trim() && p.data && p.valor && Number(p.valor) > 0)
+      if (evento.formaPagamento === 'Parcelado' && parcelasValidas.length > 0) {
+        await syncParcelasDoEvento({
+          eventoId: evento.id,
+          cliente: evento.cliente,
+          espaco: evento.espaco,
+          parcelas: parcelasValidas.map(p => ({ numero: p.numero, label: p.label.trim(), data: p.data, valor: Number(p.valor) })),
+        })
+      }
+      onClose()
+    } catch (err) {
+      showToast(err instanceof Error ? `Não foi possível salvar o evento: ${err.message}` : 'Não foi possível salvar o evento. Tente novamente.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   function fieldProps(draftKey: keyof Draft, required = false) {
@@ -285,13 +356,14 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
               </button>
               <button
                 onClick={handleSave}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-colors"
+                disabled={saving}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 style={{ backgroundColor: GREEN }}
-                onMouseEnter={e => { e.currentTarget.style.backgroundColor = DARK_GREEN }}
+                onMouseEnter={e => { if (!saving) e.currentTarget.style.backgroundColor = DARK_GREEN }}
                 onMouseLeave={e => { e.currentTarget.style.backgroundColor = GREEN }}
               >
                 <Save className="h-3.5 w-3.5" />
-                Salvar evento
+                {saving ? 'Salvando…' : 'Salvar evento'}
               </button>
               <button
                 onClick={onClose}
@@ -328,6 +400,14 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
                 <Camera className="h-3.5 w-3.5" />
                 Tirar foto
               </button>
+              <button
+                onClick={() => setColarTextoAberto(v => !v)}
+                disabled={extraindoFicha}
+                className="flex items-center gap-1.5 rounded-lg border border-app-border2 bg-app-surface px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors disabled:opacity-60"
+              >
+                <MessageSquareText className="h-3.5 w-3.5" />
+                Colar texto (WhatsApp)
+              </button>
               {extraindoFicha && (
                 <span className="flex items-center gap-1.5 text-xs" style={{ color: DARK_GREEN }}>
                   <Sparkles className="h-3.5 w-3.5 animate-pulse" />
@@ -335,6 +415,26 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
                 </span>
               )}
             </div>
+            {colarTextoAberto && (
+              <div className="space-y-2 pt-1">
+                <textarea
+                  value={textoFicha}
+                  onChange={e => setTextoFicha(e.target.value)}
+                  rows={5}
+                  placeholder="Cole aqui a conversa ou os dados do cliente…"
+                  className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none resize-none"
+                />
+                <button
+                  onClick={handleFichaTexto}
+                  disabled={extraindoFicha || !textoFicha.trim()}
+                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  style={{ backgroundColor: GREEN }}
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Extrair dados do texto
+                </button>
+              </div>
+            )}
           </section>
 
           {/* ── Informações do evento ──────────────────────────────────── */}
@@ -439,7 +539,13 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
                 <label className="text-xs text-app-subtle mb-0.5 block">Forma de Pagamento</label>
                 <select
                   value={draft.formaPagamento}
-                  onChange={e => set('formaPagamento', e.target.value)}
+                  onChange={e => {
+                    const valor = e.target.value
+                    set('formaPagamento', valor)
+                    if (valor === 'Parcelado' && parcelas === null) {
+                      setParcelas(gerarParcelasPadrao(draft.data, Number(draft.valor) || 0, draft.valorSinal, draft.dataVencimentoSaldo))
+                    }
+                  }}
                   className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none cursor-pointer"
                   onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
                   onBlur={e => { e.currentTarget.style.borderColor = '' }}
@@ -449,9 +555,64 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
                 </select>
               </div>
               {draft.formaPagamento === 'Parcelado' && (
-                <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-lg border border-[#25D366]/30 bg-[#25D366]/5 p-3">
-                  <Field label="Valor do sinal (R$)" {...fieldProps('valorSinal')} type="number" placeholder="0,00" />
-                  <Field label="Vencimento do saldo" {...fieldProps('dataVencimentoSaldo')} type="date" />
+                <div className="col-span-2 space-y-3 rounded-lg border border-[#25D366]/30 bg-[#25D366]/5 p-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Field label="Valor do sinal (R$)" {...fieldProps('valorSinal')} type="number" placeholder="0,00" />
+                    <Field label="Vencimento do saldo" {...fieldProps('dataVencimentoSaldo')} type="date" />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium text-app-text">Plano de pagamento (parcelas)</p>
+                    <button
+                      onClick={() => setParcelas(gerarParcelasPadrao(draft.data, Number(draft.valor) || 0, draft.valorSinal, draft.dataVencimentoSaldo))}
+                      className="text-xs text-app-muted hover:text-app-text transition-colors underline"
+                    >
+                      Recalcular padrão (Sinal + Saldo)
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {(parcelas ?? []).map(p => (
+                      <div key={p.numero} className="flex items-center gap-2">
+                        <input
+                          value={p.label}
+                          onChange={e => setParcelas(ps => (ps ?? []).map(x => x.numero === p.numero ? { ...x, label: e.target.value } : x))}
+                          placeholder="Ex: Sinal"
+                          className="w-28 shrink-0 rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-xs text-app-text focus:outline-none"
+                        />
+                        <input
+                          type="date"
+                          value={p.data}
+                          onChange={e => setParcelas(ps => (ps ?? []).map(x => x.numero === p.numero ? { ...x, data: e.target.value } : x))}
+                          className="rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-xs text-app-text focus:outline-none"
+                        />
+                        <input
+                          type="number" min="0" step="0.01"
+                          value={p.valor}
+                          onChange={e => setParcelas(ps => (ps ?? []).map(x => x.numero === p.numero ? { ...x, valor: e.target.value } : x))}
+                          placeholder="0,00"
+                          className="w-28 rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-xs text-app-text focus:outline-none"
+                        />
+                        <button
+                          onClick={() => setParcelas(ps => (ps ?? []).filter(x => x.numero !== p.numero))}
+                          className="ml-auto shrink-0 text-red-400 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => setParcelas(ps => {
+                        const base = ps ?? []
+                        const proximo = base.length > 0 ? Math.max(...base.map(x => x.numero)) + 1 : 1
+                        return [...base, { numero: proximo, label: `Parcela ${proximo}`, data: '', valor: '' }]
+                      })}
+                      className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Adicionar parcela
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
