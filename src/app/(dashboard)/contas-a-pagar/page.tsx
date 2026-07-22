@@ -45,17 +45,17 @@ const statusBadge: Record<StatusContaPagar, string> = {
 }
 const statusLabel: Record<StatusContaPagar, string> = { pago: 'Pago', pendente: 'Pendente', atrasado: 'Atrasado' }
 
-const SUB_FIXAS:    string[] = ['aluguel', 'energia', 'internet', 'funcionários']
-const SUB_VARIAVEIS:string[] = ['manutenção', 'fornecedores', 'extras']
+const SUB_FIXAS:    string[] = ['aluguel', 'energia', 'internet', 'funcionários', 'outros']
+const SUB_VARIAVEIS:string[] = ['manutenção', 'fornecedores', 'extras', 'outros']
 const subcategoriaLabel: Record<string, string> = {
   aluguel: 'Aluguel', energia: 'Energia', internet: 'Internet', funcionários: 'Funcionários',
-  manutenção: 'Manutenção', fornecedores: 'Fornecedores', extras: 'Extras',
+  manutenção: 'Manutenção', fornecedores: 'Fornecedores', extras: 'Extras', outros: 'Outros',
 }
 const subcategoriaBadge: Record<string, string> = {
   aluguel: 'bg-violet-500/10 text-violet-600', energia: 'bg-yellow-500/10 text-yellow-600',
   internet: 'bg-sky-500/10 text-sky-600', funcionários: 'bg-blue-500/10 text-blue-600',
   manutenção: 'bg-orange-500/10 text-orange-600', fornecedores: 'bg-teal-500/10 text-teal-600',
-  extras: 'bg-zinc-500/10 text-zinc-600',
+  extras: 'bg-zinc-500/10 text-zinc-600', outros: 'bg-slate-500/10 text-slate-600',
 }
 
 interface FormState {
@@ -77,7 +77,7 @@ const FORM_EMPTY: FormState = {
 export default function ContasPagarPage() {
   const { espacosNomes } = useEspacos()
   const { contas, addConta } = useContasPagar()
-  const [tab,               setTab]               = useState<'apagar' | 'pagas'>('apagar')
+  const [tab,               setTab]               = useState<'apagar' | 'pagas' | 'atraso'>('apagar')
   const [filterEspaco,      setFilterEspaco]      = useState('')
   const [filterCategoria,   setFilterCategoria]   = useState<CategoriaContaPagar | ''>('')
   const [filterSubcategoria,setFilterSubcategoria]= useState('')
@@ -161,6 +161,7 @@ export default function ContasPagarPage() {
   const filtered = useMemo(() => todasContas.filter(c => {
     if (tab === 'apagar' && c.status === 'pago') return false
     if (tab === 'pagas'  && c.status !== 'pago') return false
+    if (tab === 'atraso' && c.status !== 'atrasado') return false
     if (filterEspaco       && c.espaco       !== filterEspaco)       return false
     if (filterCategoria    && c.categoria    !== filterCategoria)    return false
     if (filterSubcategoria && c.subcategoria !== filterSubcategoria) return false
@@ -176,7 +177,7 @@ export default function ContasPagarPage() {
   const totalAtrasado = todasContas.filter(c => c.status === 'atrasado').reduce((s, c) => s + c.valor, 0)
   const totalGeral    = todasContas.reduce((s, c) => s + c.valor, 0)
 
-  const subcategorias = filterCategoria === 'fixa' ? SUB_FIXAS : filterCategoria === 'variavel' ? SUB_VARIAVEIS : [...SUB_FIXAS, ...SUB_VARIAVEIS]
+  const subcategorias = filterCategoria === 'fixa' ? SUB_FIXAS : filterCategoria === 'variavel' ? SUB_VARIAVEIS : Array.from(new Set([...SUB_FIXAS, ...SUB_VARIAVEIS]))
   const hasFilters = filterEspaco || filterCategoria || filterSubcategoria || filterMes
   function clearFilters() { setFilterEspaco(''); setFilterCategoria(''); setFilterSubcategoria(''); setFilterMes('') }
 
@@ -261,17 +262,17 @@ export default function ContasPagarPage() {
         {/* Tabs */}
         <div className="flex items-center justify-between px-5 pt-4 pb-0 border-b border-app-border">
           <div className="flex gap-1">
-            {(['apagar', 'pagas'] as const).map(t => (
+            {(['apagar', 'pagas', 'atraso'] as const).map(t => (
               <button key={t} onClick={() => setTab(t)}
                 className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
                   tab === t ? 'border-[#25D366] text-[#128C7E]' : 'border-transparent text-app-muted hover:text-app-text'
                 }`}
               >
                 <span className="flex items-center gap-2">
-                  {t === 'apagar' ? <Receipt className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                  {t === 'apagar' ? 'Contas a Pagar' : 'Contas Pagas'}
-                  <span className={`rounded-full text-xs px-1.5 py-0.5 ${t === 'apagar' ? 'bg-amber-500/15 text-amber-600' : 'bg-emerald-500/15 text-emerald-600'}`}>
-                    {t === 'apagar' ? todasContas.filter(c => c.status !== 'pago').length : todasContas.filter(c => c.status === 'pago').length}
+                  {t === 'apagar' ? <Receipt className="h-3.5 w-3.5" /> : t === 'pagas' ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+                  {t === 'apagar' ? 'Contas a Pagar' : t === 'pagas' ? 'Contas Pagas' : 'Em Atraso'}
+                  <span className={`rounded-full text-xs px-1.5 py-0.5 ${t === 'apagar' ? 'bg-amber-500/15 text-amber-600' : t === 'pagas' ? 'bg-emerald-500/15 text-emerald-600' : 'bg-red-500/15 text-red-600'}`}>
+                    {t === 'apagar' ? todasContas.filter(c => c.status !== 'pago').length : t === 'pagas' ? todasContas.filter(c => c.status === 'pago').length : todasContas.filter(c => c.status === 'atrasado').length}
                   </span>
                 </span>
               </button>

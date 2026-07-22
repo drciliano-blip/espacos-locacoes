@@ -19,8 +19,8 @@ export type NivelAcesso = 'admin' | 'financeiro' | 'operacional' | 'visualizador
 
 // Feature 1: Contas a Pagar
 export type CategoriaContaPagar = 'fixa' | 'variavel'
-export type SubcategoriaContaFixa = 'aluguel' | 'energia' | 'internet' | 'funcionários'
-export type SubcategoriaContaVariavel = 'manutenção' | 'fornecedores' | 'extras'
+export type SubcategoriaContaFixa = 'aluguel' | 'energia' | 'internet' | 'funcionários' | 'outros'
+export type SubcategoriaContaVariavel = 'manutenção' | 'fornecedores' | 'extras' | 'outros'
 export type StatusContaPagar = 'pendente' | 'pago' | 'atrasado'
 
 // Feature 6: Documentos por evento
