@@ -19,6 +19,7 @@ import EventoDrawer from '@/components/eventos/EventoDrawer'
 import NovoEventoModal from '@/components/eventos/NovoEventoModal'
 import EspacoLogo from '@/components/espacos/EspacoLogo'
 import CalendarView from '@/components/agenda/CalendarView'
+import EspacoGoogleCalendar from '@/components/espacos/EspacoGoogleCalendar'
 import FileAttachButton from '@/components/shared/FileAttachButton'
 import FileList from '@/components/shared/FileList'
 import { useEventos } from '@/contexts/EventosContext'
@@ -364,6 +365,12 @@ export default function EspacoPage({ config }: EspacoPageProps) {
                     </button>
                   )
                 })}
+              </div>
+            )}
+
+            {config.id && (
+              <div className="mt-6">
+                <EspacoGoogleCalendar espacoId={config.id} espacoNome={config.nome} />
               </div>
             )}
           </div>
