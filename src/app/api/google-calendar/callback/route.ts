@@ -30,17 +30,25 @@ export async function GET(request: Request) {
       throw new Error(tokenData.error_description ?? tokenData.error ?? 'Google não retornou um refresh_token. Tente desconectar e conectar novamente.')
     }
 
-    const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-      headers: { Authorization: `Bearer ${tokenData.access_token}` },
-    })
-    const userData = await userRes.json()
+    let email: string | null = null
+    try {
+      const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      })
+      if (userRes.ok) {
+        const userData = await userRes.json()
+        email = userData.email ?? null
+      }
+    } catch {
+      // e-mail é só para exibição — não deve impedir a conexão do calendário
+    }
 
     const supabase = createAdminClient()
     const expiresAt = new Date(Date.now() + tokenData.expires_in * 1000).toISOString()
 
     await supabase.from('espacos_google_calendar').upsert({
       espaco_id: espacoId,
-      google_email: userData.email ?? null,
+      google_email: email,
       refresh_token: tokenData.refresh_token,
       access_token: tokenData.access_token,
       access_token_expires_at: expiresAt,
