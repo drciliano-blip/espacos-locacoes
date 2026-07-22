@@ -181,6 +181,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
   const fichaCameraRef = useRef<HTMLInputElement>(null)
   const [extraindoFicha, setExtraindoFicha] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [colarTextoAberto, setColarTextoAberto] = useState(false)
   const [textoFicha, setTextoFicha] = useState('')
@@ -288,6 +289,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
 
   async function handleSave() {
     setSubmitted(true)
+    setSaveError(null)
     if (hasErrors) return
 
     const evento: Evento = {
@@ -315,7 +317,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
     try {
       await onSave(evento)
     } catch (err) {
-      showToast(`Não foi possível salvar o evento: ${getErrorMessage(err)}`)
+      setSaveError(getErrorMessage(err))
       setSaving(false)
       return
     }
@@ -713,6 +715,17 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
               <p className="text-xs text-red-400">
                 Preencha todos os campos obrigatórios antes de salvar.
               </p>
+            </div>
+          )}
+
+          {saveError && (
+            <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5 flex items-start justify-between gap-3">
+              <p className="text-xs text-red-400">
+                Não foi possível salvar o evento: {saveError}
+              </p>
+              <button onClick={() => setSaveError(null)} className="text-xs text-red-400 hover:text-red-300 shrink-0">
+                <X className="h-3.5 w-3.5" />
+              </button>
             </div>
           )}
         </div>
