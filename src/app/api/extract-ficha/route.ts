@@ -26,7 +26,9 @@ const PROMPT = `Analise esta ficha de cadastro de cliente (pode ser um formulár
   "horaInicioEvento": "HH:MM" | null,
   "horaTerminoEvento": "HH:MM" | null,
   "valorLocacao": string | null,
-  "formaPagamento": string | null
+  "formaPagamento": string | null,
+  "valorSinal": string | null,
+  "dataVencimentoSaldo": "DD/MM/AAAA" | null
 }`
 
 interface EnderecoExtraido {
@@ -55,6 +57,8 @@ interface FichaExtraida {
   horaTerminoEvento?: string | null
   valorLocacao?: string | null
   formaPagamento?: string | null
+  valorSinal?: string | null
+  dataVencimentoSaldo?: string | null
 }
 
 export async function POST(request: Request) {
@@ -153,6 +157,8 @@ export async function POST(request: Request) {
       horaTerminoEvento: parsed.horaTerminoEvento ?? null,
       valorLocacao: parsed.valorLocacao ?? null,
       formaPagamento: parsed.formaPagamento ?? null,
+      valorSinal: parsed.valorSinal ?? null,
+      dataVencimentoSaldo: parsed.dataVencimentoSaldo ?? null,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido ao consultar a IA.'

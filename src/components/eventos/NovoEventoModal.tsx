@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
-import { X, Save, Calendar, DollarSign, User, ClipboardCheck, Paperclip } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { X, Save, Calendar, DollarSign, User, ClipboardCheck, Paperclip, Camera, Sparkles } from 'lucide-react'
 import type { Evento, Espaco, TipoEvento, FormaPagamento } from '@/types'
 import FileAttachButton from '@/components/shared/FileAttachButton'
 import FileList from '@/components/shared/FileList'
+import Toast from '@/components/shared/Toast'
 import { useEspacos } from '@/contexts/EspacosContext'
 
 const FORMAS_PAGAMENTO: FormaPagamento[] = [
@@ -15,6 +16,36 @@ const FORMAS_PAGAMENTO: FormaPagamento[] = [
   'Cartão de Débito',
   'Cheque',
 ]
+
+interface FichaExtracao {
+  nomeCompleto: string | null
+  telefoneCelular: string | null
+  dataEvento: string | null
+  espacoDesejado: string | null
+  tipoEvento: string | null
+  horaInicioEvento: string | null
+  horaTerminoEvento: string | null
+  valorLocacao: string | null
+  formaPagamento: string | null
+}
+
+function parseValorBR(valor: string): string {
+  const numeric = valor.replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3},)/g, '').replace(',', '.')
+  const n = parseFloat(numeric)
+  return Number.isFinite(n) ? String(n) : ''
+}
+
+function parseDataBR(data: string): string {
+  const match = data.match(/(\d{2})\/(\d{2})\/(\d{4})/)
+  if (!match) return ''
+  const [, dd, mm, yyyy] = match
+  return `${yyyy}-${mm}-${dd}`
+}
+
+function matchFromList(value: string | null, options: string[]): string | undefined {
+  if (!value) return undefined
+  return options.find(o => o.toLowerCase() === value.toLowerCase())
+}
 
 interface Draft {
   cliente: string
@@ -102,6 +133,10 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
   // (precisa ser um UUID real: vira o id definitivo do evento no Postgres)
   const [eventId]                 = useState(() => crypto.randomUUID())
   const [fileCount, setFileCount] = useState(0)
+  const fichaFileRef = useRef<HTMLInputElement>(null)
+  const fichaCameraRef = useRef<HTMLInputElement>(null)
+  const [extraindoFicha, setExtraindoFicha] = useState(false)
+  const [toastMsg, setToastMsg] = useState<string | null>(null)
 
   const errors: Partial<Record<keyof Draft, boolean>> = {
     cliente:    !draft.cliente.trim(),
@@ -116,6 +151,67 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
 
   function set(key: keyof Draft, value: string) {
     setDraft(d => ({ ...d, [key]: value }))
+  }
+
+  function showToast(msg: string) {
+    setToastMsg(msg)
+    setTimeout(() => setToastMsg(null), 3500)
+  }
+
+  async function handleFichaAnexo(file: File | null) {
+    if (!file) return
+
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    const isPdf = file.type === 'application/pdf' || ext === 'pdf'
+    const isImage = file.type.startsWith('image/')
+
+    if (file.type === 'image/heic' || file.type === 'image/heif') {
+      showToast('Fotos em formato HEIC não são lidas pela IA — use o botão "Tirar foto" (gera JPEG) ou converta o arquivo antes de anexar.')
+      return
+    }
+    if (!isPdf && !isImage) {
+      showToast('A leitura automática funciona só com PDF ou imagem.')
+      return
+    }
+
+    setExtraindoFicha(true)
+    try {
+      const body = new FormData()
+      body.append('file', file)
+      const res = await fetch('/api/extract-ficha', { method: 'POST', body })
+      const data: FichaExtracao & { error?: string } = await res.json()
+
+      if (!res.ok || data.error) {
+        showToast(data.error ?? 'Não foi possível ler a ficha com a IA.')
+        return
+      }
+
+      const algumCampo = data.nomeCompleto || data.dataEvento || data.valorLocacao
+      if (!algumCampo) {
+        showToast('A IA não conseguiu identificar os dados nesta ficha. Preencha os campos manualmente.')
+        return
+      }
+
+      setDraft(d => ({
+        ...d,
+        cliente: data.nomeCompleto ?? d.cliente,
+        telefoneContato: data.telefoneCelular ?? d.telefoneContato,
+        data: data.dataEvento ? parseDataBR(data.dataEvento) || d.data : d.data,
+        espaco: (!espacoPadrao ? matchFromList(data.espacoDesejado, espacosNomes) as Espaco : undefined) ?? d.espaco,
+        tipo: data.tipoEvento ?? d.tipo,
+        horaInicio: data.horaInicioEvento ?? d.horaInicio,
+        horaFim: data.horaTerminoEvento ?? d.horaFim,
+        valor: data.valorLocacao ? parseValorBR(data.valorLocacao) || d.valor : d.valor,
+        formaPagamento: (matchFromList(data.formaPagamento, FORMAS_PAGAMENTO) as FormaPagamento) ?? d.formaPagamento,
+      }))
+      showToast('Campos preenchidos automaticamente pela IA — confira antes de salvar.')
+    } catch {
+      showToast('Falha ao conectar com a IA. Preencha os campos manualmente.')
+    } finally {
+      setExtraindoFicha(false)
+      if (fichaFileRef.current) fichaFileRef.current.value = ''
+      if (fichaCameraRef.current) fichaCameraRef.current.value = ''
+    }
   }
 
   function handleSave() {
@@ -197,6 +293,38 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
         </div>
 
         <div className="p-5 space-y-6">
+
+          {/* ── Preenchimento automático via ficha do cliente ───────────── */}
+          <section className="rounded-lg border border-[#25D366]/30 bg-[#25D366]/5 p-4 space-y-2">
+            <p className="text-sm font-medium text-app-text">Já tem a ficha do cliente preenchida?</p>
+            <p className="text-xs text-app-muted">Anexe o documento e a IA preenche os campos abaixo automaticamente. Confira os dados antes de salvar.</p>
+            <input ref={fichaFileRef} type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden" onChange={e => handleFichaAnexo(e.target.files?.[0] ?? null)} />
+            <input ref={fichaCameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => handleFichaAnexo(e.target.files?.[0] ?? null)} />
+            <div className="flex items-center gap-2 flex-wrap pt-1">
+              <button
+                onClick={() => fichaFileRef.current?.click()}
+                disabled={extraindoFicha}
+                className="flex items-center gap-1.5 rounded-lg border border-app-border2 bg-app-surface px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors disabled:opacity-60"
+              >
+                <Paperclip className="h-3.5 w-3.5" />
+                Selecionar arquivo…
+              </button>
+              <button
+                onClick={() => fichaCameraRef.current?.click()}
+                disabled={extraindoFicha}
+                className="flex items-center gap-1.5 rounded-lg border border-app-border2 bg-app-surface px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors disabled:opacity-60"
+              >
+                <Camera className="h-3.5 w-3.5" />
+                Tirar foto
+              </button>
+              {extraindoFicha && (
+                <span className="flex items-center gap-1.5 text-xs" style={{ color: DARK_GREEN }}>
+                  <Sparkles className="h-3.5 w-3.5 animate-pulse" />
+                  Analisando com IA…
+                </span>
+              )}
+            </div>
+          </section>
 
           {/* ── Informações do evento ──────────────────────────────────── */}
           <section>
@@ -395,6 +523,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
           )}
         </div>
       </div>
+      <Toast message={toastMsg} />
     </div>
   )
 }

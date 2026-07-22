@@ -183,5 +183,7 @@ export interface FichaCliente {
   horaTerminoEvento?: string
   valorLocacao?: string
   formaPagamento?: string
+  valorSinal?: string
+  dataVencimentoSaldo?: string
   documentoFileId?: string
 }

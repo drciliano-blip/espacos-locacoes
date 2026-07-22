@@ -32,6 +32,8 @@ interface FichaRow {
   hora_termino_evento: string | null
   valor_locacao: string | null
   forma_pagamento: string | null
+  valor_sinal: string | null
+  data_vencimento_saldo: string | null
   documento_file_id: string | null
 }
 
@@ -60,6 +62,8 @@ function fromRow(row: FichaRow): FichaCliente {
     horaTerminoEvento: row.hora_termino_evento?.slice(0, 5) ?? undefined,
     valorLocacao: row.valor_locacao ?? undefined,
     formaPagamento: row.forma_pagamento ?? undefined,
+    valorSinal: row.valor_sinal ?? undefined,
+    dataVencimentoSaldo: row.data_vencimento_saldo ?? undefined,
     documentoFileId: row.documento_file_id ?? undefined,
   }
 }
@@ -133,6 +137,12 @@ export default function FichasRecebidasSection() {
                   <p className="text-app-subtle">Tipo de evento: {f.tipoEvento}</p>
                   <p className="text-app-subtle">Forma de pagamento: {f.formaPagamento || '—'}</p>
                   <p className="text-app-subtle">Valor: {f.valorLocacao ? formatCurrency(Number(f.valorLocacao)) : '—'}</p>
+                  {f.formaPagamento === 'Parcelado' && (
+                    <>
+                      <p className="text-app-subtle">Sinal proposto: {f.valorSinal ? formatCurrency(Number(f.valorSinal)) : '—'}</p>
+                      <p className="text-app-subtle">Vencimento do saldo: {f.dataVencimentoSaldo ? f.dataVencimentoSaldo.split('-').reverse().join('/') : '—'}</p>
+                    </>
+                  )}
                   <p className="text-app-subtle">
                     Montagem {f.horaInicioMontagem || '—'} · Início {f.horaInicioEvento || '—'} · Término {f.horaTerminoEvento || '—'}
                   </p>

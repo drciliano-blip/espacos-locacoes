@@ -11,7 +11,7 @@ const GREEN = '#25D366'
 const DARK_GREEN = '#128C7E'
 
 const TIPOS_EVENTO = ['Casamento', 'Corporativo', 'Formatura', 'Show/Festival', 'Aniversário', 'Outro']
-const FORMAS_PAGAMENTO = ['PIX', 'Transferência', 'Cartão', 'Outro']
+const FORMAS_PAGAMENTO = ['PIX', 'Transferência', 'Cartão', 'Parcelado', 'Outro']
 
 interface FichaExtracao {
   nomeCompleto: string | null
@@ -34,6 +34,8 @@ interface FichaExtracao {
   horaTerminoEvento: string | null
   valorLocacao: string | null
   formaPagamento: string | null
+  valorSinal: string | null
+  dataVencimentoSaldo: string | null
 }
 
 function parseValorBR(valor: string): string {
@@ -89,6 +91,8 @@ interface FormState {
   horaTerminoEvento: string
   valorLocacao: string
   formaPagamento: string
+  valorSinal: string
+  dataVencimentoSaldo: string
 }
 
 const FORM_VAZIO: FormState = {
@@ -97,6 +101,7 @@ const FORM_VAZIO: FormState = {
   pessoaJuridica: false, razaoSocial: '', nomeFantasia: '', cnpj: '', enderecoEmpresa: ENDERECO_VAZIO,
   nomeEvento: '', espacoDesejado: '', tipoEvento: '', dataEvento: '',
   horaInicioMontagem: '', horaInicioEvento: '', horaTerminoEvento: '', valorLocacao: '', formaPagamento: '',
+  valorSinal: '', dataVencimentoSaldo: '',
 }
 
 function Field({
@@ -227,6 +232,8 @@ export default function FichaClientePage() {
         horaTerminoEvento: data.horaTerminoEvento ?? f.horaTerminoEvento,
         valorLocacao: data.valorLocacao ? parseValorBR(data.valorLocacao) || f.valorLocacao : f.valorLocacao,
         formaPagamento: matchFromList(data.formaPagamento, FORMAS_PAGAMENTO) ?? f.formaPagamento,
+        valorSinal: data.valorSinal ? parseValorBR(data.valorSinal) || f.valorSinal : f.valorSinal,
+        dataVencimentoSaldo: data.dataVencimentoSaldo ? parseDataBR(data.dataVencimentoSaldo) || f.dataVencimentoSaldo : f.dataVencimentoSaldo,
       }))
       showToast('Campos preenchidos automaticamente pela IA — confira antes de enviar.')
     } catch {
@@ -305,6 +312,8 @@ export default function FichaClientePage() {
       hora_termino_evento: form.horaTerminoEvento || null,
       valor_locacao: form.valorLocacao || null,
       forma_pagamento: form.formaPagamento || null,
+      valor_sinal: form.formaPagamento === 'Parcelado' ? form.valorSinal || null : null,
+      data_vencimento_saldo: form.formaPagamento === 'Parcelado' ? form.dataVencimentoSaldo || null : null,
       documento_file_id: documentoFileId ?? null,
     })
 
@@ -488,6 +497,12 @@ export default function FichaClientePage() {
                 </select>
               </div>
             </div>
+            {form.formaPagamento === 'Parcelado' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-lg border border-[#25D366]/30 bg-[#25D366]/5 p-3">
+                <Field label="Valor do sinal (R$)" type="number" value={form.valorSinal} onChange={v => set('valorSinal', v)} placeholder="0,00" />
+                <Field label="Vencimento do saldo" type="date" value={form.dataVencimentoSaldo} onChange={v => set('dataVencimentoSaldo', v)} />
+              </div>
+            )}
             <div>
               <label className="text-xs text-stone-600 mb-1 block">Documento (CNH ou RG frente e verso)</label>
               <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden" onChange={e => setDocumento(e.target.files?.[0] ?? null)} />

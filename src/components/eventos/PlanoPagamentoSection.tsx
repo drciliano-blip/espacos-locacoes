@@ -27,6 +27,7 @@ interface DraftParcela {
 interface Props {
   valorEvento: number
   parcelas: Receita[]
+  podeEditarPlano: boolean
   onSync: (parcelas: ParcelaPlano[]) => Promise<void>
   onBaixa: (id: string, patch: { status: 'pago'; dataRecebimento: string; metodoPagamento?: string }) => Promise<void>
 }
@@ -44,7 +45,7 @@ function toDraft(parcelas: Receita[]): DraftParcela[] {
     }))
 }
 
-export default function PlanoPagamentoSection({ valorEvento, parcelas, onSync, onBaixa }: Props) {
+export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEditarPlano, onSync, onBaixa }: Props) {
   const [editando, setEditando] = useState(false)
   const [draft, setDraft] = useState<DraftParcela[]>(() => toDraft(parcelas))
   const [saving, setSaving] = useState(false)
@@ -103,7 +104,7 @@ export default function PlanoPagamentoSection({ valorEvento, parcelas, onSync, o
     <div className="rounded-xl border border-app-border bg-app-surface p-4 space-y-3">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <p className="text-sm font-semibold text-app-text">Plano de Pagamento</p>
-        {!editando && (
+        {!editando && podeEditarPlano && (
           <button
             onClick={abrirEdicao}
             className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs font-medium text-app-muted hover:bg-app-surface2 transition-colors"

@@ -1,11 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { X, Save, Edit3, Users, DollarSign, User, Calendar, ClipboardCheck, Paperclip, Trash2 } from 'lucide-react'
 import type { Evento, StatusVistoria, TipoEvento } from '@/types'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useCurrentUser } from '@/contexts/UserContext'
+import { useReceitas } from '@/contexts/ReceitasContext'
 import FileList from '@/components/shared/FileList'
+import PlanoPagamentoSection from '@/components/eventos/PlanoPagamentoSection'
 
 const statusBadge: Record<string, string> = {
   confirmado:    'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
@@ -44,11 +46,25 @@ interface EventoDrawerProps {
 
 export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: EventoDrawerProps) {
   const { role } = useCurrentUser()
+  const { receitas, syncParcelasDoEvento, updateReceita } = useReceitas()
   const [tab, setTab] = useState<DrawerTab>('detalhes')
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<Evento>({ ...evento })
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
+
+  const parcelas = useMemo(
+    () => receitas.filter(r => r.eventoId === evento.id && r.categoriaSlug === 'aluguel' && r.parcelaNumero != null),
+    [receitas, evento.id],
+  )
+
+  async function handleSyncPlano(novasParcelas: Parameters<typeof syncParcelasDoEvento>[0]['parcelas']) {
+    await syncParcelasDoEvento({ eventoId: evento.id, cliente: evento.cliente, espaco: evento.espaco, parcelas: novasParcelas })
+  }
+
+  async function handleBaixa(id: string, patch: { status: 'pago'; dataRecebimento: string; metodoPagamento?: string }) {
+    await updateReceita(id, patch)
+  }
 
   function handleSave() {
     onUpdate(draft)
@@ -304,6 +320,17 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                 {field('Vencimento do Saldo', current.dataVencimentoSaldo ? formatDate(current.dataVencimentoSaldo) : undefined, 'dataVencimentoSaldo', 'date')}
               </div>
             </section>
+
+            {/* Plano de Pagamento (sinal + parcelas) */}
+            {!editing && (
+              <PlanoPagamentoSection
+                valorEvento={evento.valor}
+                parcelas={parcelas}
+                podeEditarPlano={role === 'admin'}
+                onSync={handleSyncPlano}
+                onBaixa={handleBaixa}
+              />
+            )}
 
             {/* Responsável */}
             <section>

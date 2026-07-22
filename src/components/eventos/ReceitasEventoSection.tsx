@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { Search, Plus, Calendar, Paperclip, FileText } from 'lucide-react'
 import { useEventos } from '@/contexts/EventosContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
+import { useCurrentUser } from '@/contexts/UserContext'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import NovaReceitaModal from '@/components/pagamentos/NovaReceitaModal'
 import AnexarRelatorioModal from '@/components/eventos/AnexarRelatorioModal'
@@ -22,6 +23,7 @@ const statusLabels: Record<string, string> = { pago: 'Pago', pendente: 'Pendente
 export default function ReceitasEventoSection() {
   const { eventos } = useEventos()
   const { receitas, categorias, addReceita, syncParcelasDoEvento, updateReceita } = useReceitas()
+  const { role } = useCurrentUser()
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Evento | null>(null)
   const [novaOpen, setNovaOpen] = useState(false)
@@ -126,6 +128,7 @@ export default function ReceitasEventoSection() {
       <PlanoPagamentoSection
         valorEvento={selected.valor}
         parcelas={parcelasAluguel}
+        podeEditarPlano={role === 'admin'}
         onSync={handleSyncPlano}
         onBaixa={handleBaixa}
       />
