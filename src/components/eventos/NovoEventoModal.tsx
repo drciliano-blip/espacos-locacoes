@@ -306,6 +306,15 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
     setSaving(true)
     try {
       await onSave(evento)
+    } catch (err) {
+      showToast(err instanceof Error ? `Não foi possível salvar o evento: ${err.message}` : 'Não foi possível salvar o evento. Tente novamente.')
+      setSaving(false)
+      return
+    }
+
+    // Evento já foi salvo com sucesso a partir daqui — uma falha ao gravar o plano
+    // de parcelas customizado não deve parecer um erro de salvamento do evento.
+    try {
       const parcelasValidas = (parcelas ?? []).filter(p => p.label.trim() && p.data && p.valor && Number(p.valor) > 0)
       if (evento.formaPagamento === 'Parcelado' && parcelasValidas.length > 0) {
         await syncParcelasDoEvento({
@@ -315,12 +324,11 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
           parcelas: parcelasValidas.map(p => ({ numero: p.numero, label: p.label.trim(), data: p.data, valor: Number(p.valor) })),
         })
       }
-      onClose()
-    } catch (err) {
-      showToast(err instanceof Error ? `Não foi possível salvar o evento: ${err.message}` : 'Não foi possível salvar o evento. Tente novamente.')
-    } finally {
-      setSaving(false)
+    } catch {
+      showToast('Evento salvo, mas não foi possível gravar o plano de parcelas customizado. Ajuste em Eventos → Receitas.')
     }
+    setSaving(false)
+    onClose()
   }
 
   function fieldProps(draftKey: keyof Draft, required = false) {
