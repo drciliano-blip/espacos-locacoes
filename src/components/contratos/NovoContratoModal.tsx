@@ -1,9 +1,43 @@
 'use client'
 
-import { useState } from 'react'
-import { X, Save, FileText, DollarSign, User } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { X, Save, FileText, DollarSign, User, Paperclip, Camera, Sparkles, MessageSquareText } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
+import { maskCPF, maskCNPJ } from '@/lib/utils'
+import Toast from '@/components/shared/Toast'
 import type { Contrato, Espaco } from '@/types'
+
+interface FichaExtracao {
+  nomeCompleto: string | null
+  cpf: string | null
+  cnpj: string | null
+  pessoaJuridica: boolean
+  espacoDesejado: string | null
+  tipoEvento: string | null
+  dataEvento: string | null
+  horaInicioEvento: string | null
+  horaTerminoEvento: string | null
+  valorLocacao: string | null
+  valorSinal: string | null
+}
+
+function parseValorBR(valor: string): string {
+  const numeric = valor.replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3},)/g, '').replace(',', '.')
+  const n = parseFloat(numeric)
+  return Number.isFinite(n) ? String(n) : ''
+}
+
+function parseDataBR(data: string): string {
+  const match = data.match(/(\d{2})\/(\d{2})\/(\d{4})/)
+  if (!match) return ''
+  const [, dd, mm, yyyy] = match
+  return `${yyyy}-${mm}-${dd}`
+}
+
+function matchFromList(value: string | null, options: string[]): string | undefined {
+  if (!value) return undefined
+  return options.find(o => o.toLowerCase() === value.toLowerCase())
+}
 
 interface Draft {
   cliente: string
@@ -31,7 +65,7 @@ function emptyDraft(): Draft {
 
 interface Props {
   onClose: () => void
-  onSave: (c: Contrato) => void
+  onSave: (c: Contrato) => void | Promise<void>
 }
 
 const GREEN = '#25D366'
@@ -71,6 +105,92 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
   const { espacosNomes } = useEspacos()
   const [draft, setDraft]       = useState<Draft>(emptyDraft)
   const [submitted, setSubmitted] = useState(false)
+  const fichaFileRef = useRef<HTMLInputElement>(null)
+  const fichaCameraRef = useRef<HTMLInputElement>(null)
+  const [extraindoFicha, setExtraindoFicha] = useState(false)
+  const [toastMsg, setToastMsg] = useState<string | null>(null)
+  const [colarTextoAberto, setColarTextoAberto] = useState(false)
+  const [textoFicha, setTextoFicha] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  function showToast(msg: string) {
+    setToastMsg(msg)
+    setTimeout(() => setToastMsg(null), 3500)
+  }
+
+  async function processarFicha(body: FormData) {
+    setExtraindoFicha(true)
+    try {
+      const res = await fetch('/api/extract-ficha', { method: 'POST', body })
+      const data: FichaExtracao & { error?: string } = await res.json()
+
+      if (!res.ok || data.error) {
+        showToast(data.error ?? 'Não foi possível ler a ficha com a IA.')
+        return
+      }
+
+      const algumCampo = data.nomeCompleto || data.dataEvento || data.valorLocacao
+      if (!algumCampo) {
+        showToast('A IA não conseguiu identificar os dados nesta ficha. Preencha os campos manualmente.')
+        return
+      }
+
+      setDraft(d => ({
+        ...d,
+        cliente: data.nomeCompleto ?? d.cliente,
+        cpfCnpj: data.pessoaJuridica
+          ? (data.cnpj ? maskCNPJ(data.cnpj) : d.cpfCnpj)
+          : (data.cpf ? maskCPF(data.cpf) : d.cpfCnpj),
+        espaco: (matchFromList(data.espacoDesejado, espacosNomes) as Espaco) ?? d.espaco,
+        dataEvento: data.dataEvento ? parseDataBR(data.dataEvento) || d.dataEvento : d.dataEvento,
+        horaInicio: data.horaInicioEvento ?? d.horaInicio,
+        horaFim: data.horaTerminoEvento ?? d.horaFim,
+        tipo: data.tipoEvento ?? d.tipo,
+        valorTotal: data.valorLocacao ? parseValorBR(data.valorLocacao) || d.valorTotal : d.valorTotal,
+        valorEntrada: data.valorSinal ? parseValorBR(data.valorSinal) || d.valorEntrada : d.valorEntrada,
+      }))
+      showToast('Campos preenchidos automaticamente pela IA — confira antes de salvar.')
+    } catch {
+      showToast('Falha ao conectar com a IA. Preencha os campos manualmente.')
+    } finally {
+      setExtraindoFicha(false)
+    }
+  }
+
+  async function handleFichaAnexo(file: File | null) {
+    if (!file) return
+
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    const isPdf = file.type === 'application/pdf' || ext === 'pdf'
+    const isImage = file.type.startsWith('image/')
+
+    if (file.type === 'image/heic' || file.type === 'image/heif') {
+      showToast('Fotos em formato HEIC não são lidas pela IA — use o botão "Tirar foto" (gera JPEG) ou converta o arquivo antes de anexar.')
+      return
+    }
+    if (!isPdf && !isImage) {
+      showToast('A leitura automática funciona só com PDF ou imagem.')
+      return
+    }
+
+    const body = new FormData()
+    body.append('file', file)
+    try {
+      await processarFicha(body)
+    } finally {
+      if (fichaFileRef.current) fichaFileRef.current.value = ''
+      if (fichaCameraRef.current) fichaCameraRef.current.value = ''
+    }
+  }
+
+  async function handleFichaTexto() {
+    if (!textoFicha.trim()) return
+    const body = new FormData()
+    body.append('text', textoFicha.trim())
+    await processarFicha(body)
+    setColarTextoAberto(false)
+    setTextoFicha('')
+  }
 
   const errors = {
     cliente:    !draft.cliente.trim(),
@@ -86,7 +206,7 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
     setDraft(d => ({ ...d, [k]: v }))
   }
 
-  function handleSave() {
+  async function handleSave() {
     setSubmitted(true)
     if (hasErrors) return
 
@@ -110,8 +230,15 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
       observacoes:     draft.observacoes.trim(),
     }
 
-    onSave(contrato)
-    onClose()
+    setSaving(true)
+    try {
+      await onSave(contrato)
+      onClose()
+    } catch (err) {
+      showToast(err instanceof Error ? `Não foi possível salvar o contrato: ${err.message}` : 'Não foi possível salvar o contrato. Tente novamente.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   function fieldProps(draftKey: keyof Draft, required = false) {
@@ -143,13 +270,14 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
             </button>
             <button
               onClick={handleSave}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-colors"
+              disabled={saving}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               style={{ backgroundColor: GREEN }}
-              onMouseEnter={e => { e.currentTarget.style.backgroundColor = DARK_GREEN }}
+              onMouseEnter={e => { if (!saving) e.currentTarget.style.backgroundColor = DARK_GREEN }}
               onMouseLeave={e => { e.currentTarget.style.backgroundColor = GREEN }}
             >
               <Save className="h-3.5 w-3.5" />
-              Salvar contrato
+              {saving ? 'Salvando…' : 'Salvar contrato'}
             </button>
             <button onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-lg text-app-subtle hover:bg-app-surface2 transition-colors">
               <X className="h-4 w-4" />
@@ -158,6 +286,66 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
         </div>
 
         <div className="p-6 space-y-6">
+
+          {/* Preenchimento automático via ficha do cliente */}
+          <section className="rounded-lg border border-[#25D366]/30 bg-[#25D366]/5 p-4 space-y-2">
+            <p className="text-sm font-medium text-app-text">Já tem a ficha do cliente preenchida?</p>
+            <p className="text-xs text-app-muted">Anexe o documento, tire uma foto ou cole o texto e a IA preenche os campos abaixo automaticamente.</p>
+            <input ref={fichaFileRef} type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden" onChange={e => handleFichaAnexo(e.target.files?.[0] ?? null)} />
+            <input ref={fichaCameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => handleFichaAnexo(e.target.files?.[0] ?? null)} />
+            <div className="flex items-center gap-2 flex-wrap pt-1">
+              <button
+                onClick={() => fichaFileRef.current?.click()}
+                disabled={extraindoFicha}
+                className="flex items-center gap-1.5 rounded-lg border border-app-border2 bg-app-surface px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors disabled:opacity-60"
+              >
+                <Paperclip className="h-3.5 w-3.5" />
+                Selecionar arquivo…
+              </button>
+              <button
+                onClick={() => fichaCameraRef.current?.click()}
+                disabled={extraindoFicha}
+                className="flex items-center gap-1.5 rounded-lg border border-app-border2 bg-app-surface px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors disabled:opacity-60"
+              >
+                <Camera className="h-3.5 w-3.5" />
+                Tirar foto
+              </button>
+              <button
+                onClick={() => setColarTextoAberto(v => !v)}
+                disabled={extraindoFicha}
+                className="flex items-center gap-1.5 rounded-lg border border-app-border2 bg-app-surface px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors disabled:opacity-60"
+              >
+                <MessageSquareText className="h-3.5 w-3.5" />
+                Colar texto (WhatsApp)
+              </button>
+              {extraindoFicha && (
+                <span className="flex items-center gap-1.5 text-xs" style={{ color: DARK_GREEN }}>
+                  <Sparkles className="h-3.5 w-3.5 animate-pulse" />
+                  Analisando com IA…
+                </span>
+              )}
+            </div>
+            {colarTextoAberto && (
+              <div className="space-y-2 pt-1">
+                <textarea
+                  value={textoFicha}
+                  onChange={e => setTextoFicha(e.target.value)}
+                  rows={5}
+                  placeholder="Cole aqui a conversa ou os dados do cliente…"
+                  className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none resize-none"
+                />
+                <button
+                  onClick={handleFichaTexto}
+                  disabled={extraindoFicha || !textoFicha.trim()}
+                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  style={{ backgroundColor: GREEN }}
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Extrair dados do texto
+                </button>
+              </div>
+            )}
+          </section>
 
           {/* Cliente */}
           <section>
@@ -263,6 +451,7 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
           )}
         </div>
       </div>
+      <Toast message={toastMsg} />
     </div>
   )
 }
