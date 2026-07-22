@@ -37,6 +37,36 @@ interface Props {
 const GREEN = '#25D366'
 const DARK_GREEN = '#128C7E'
 
+function Field({
+  label, value, onChange, type = 'text', required = false, placeholder = '', hasError = false,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  type?: 'text' | 'number' | 'date' | 'time'
+  required?: boolean
+  placeholder?: string
+  hasError?: boolean
+}) {
+  return (
+    <div>
+      <label className="text-xs text-app-subtle mb-0.5 block">
+        {label}{required && <span className="text-red-400 ml-0.5">*</span>}
+      </label>
+      <input
+        type={type}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={`w-full rounded-lg border ${hasError ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
+        onFocus={e => { e.currentTarget.style.borderColor = hasError ? '' : GREEN }}
+        onBlur={e => { e.currentTarget.style.borderColor = '' }}
+      />
+      {hasError && <p className="text-xs text-red-400 mt-0.5">Campo obrigatório</p>}
+    </div>
+  )
+}
+
 export default function NovoContratoModal({ onClose, onSave }: Props) {
   const { espacosNomes } = useEspacos()
   const [draft, setDraft]       = useState<Draft>(emptyDraft)
@@ -84,30 +114,12 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
     onClose()
   }
 
-  function Field({
-    label, draftKey, type = 'text', required = false, placeholder = '',
-  }: {
-    label: string; draftKey: keyof Draft
-    type?: 'text' | 'number' | 'date' | 'time'; required?: boolean; placeholder?: string
-  }) {
-    const err = submitted && required && !!(errors as Record<string, boolean>)[draftKey]
-    return (
-      <div>
-        <label className="text-xs text-app-subtle mb-0.5 block">
-          {label}{required && <span className="text-red-400 ml-0.5">*</span>}
-        </label>
-        <input
-          type={type}
-          value={draft[draftKey] as string}
-          onChange={e => set(draftKey, e.target.value)}
-          placeholder={placeholder}
-          className={`w-full rounded-lg border ${err ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
-          onFocus={e => { e.currentTarget.style.borderColor = err ? '' : GREEN }}
-          onBlur={e => { e.currentTarget.style.borderColor = '' }}
-        />
-        {err && <p className="text-xs text-red-400 mt-0.5">Campo obrigatório</p>}
-      </div>
-    )
+  function fieldProps(draftKey: keyof Draft, required = false) {
+    return {
+      value: draft[draftKey] as string,
+      onChange: (v: string) => set(draftKey, v),
+      hasError: submitted && required && !!(errors as Record<string, boolean>)[draftKey],
+    }
   }
 
   return (
@@ -155,10 +167,10 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
               <div className="col-span-2">
-                <Field label="Nome do Cliente" draftKey="cliente" required placeholder="Ex: João Silva" />
+                <Field label="Nome do Cliente" {...fieldProps('cliente', true)} required placeholder="Ex: João Silva" />
               </div>
               <div className="col-span-2">
-                <Field label="CPF / CNPJ" draftKey="cpfCnpj" placeholder="000.000.000-00" />
+                <Field label="CPF / CNPJ" {...fieldProps('cpfCnpj')} placeholder="000.000.000-00" />
               </div>
             </div>
           </section>
@@ -188,7 +200,7 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
                 {submitted && errors.espaco && <p className="text-xs text-red-400 mt-0.5">Campo obrigatório</p>}
               </div>
 
-              <Field label="Data do Evento" draftKey="dataEvento" type="date" required />
+              <Field label="Data do Evento" {...fieldProps('dataEvento', true)} type="date" required />
 
               {/* Status */}
               <div>
@@ -206,11 +218,11 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
                 </select>
               </div>
 
-              <Field label="Hora início" draftKey="horaInicio" type="time" required />
-              <Field label="Hora fim"    draftKey="horaFim"    type="time" required />
+              <Field label="Hora início" {...fieldProps('horaInicio', true)} type="time" required />
+              <Field label="Hora fim"    {...fieldProps('horaFim', true)}    type="time" required />
 
               <div className="col-span-2">
-                <Field label="Tipo de Evento" draftKey="tipo" placeholder="Ex: Casamento, Workshop, Show…" />
+                <Field label="Tipo de Evento" {...fieldProps('tipo')} placeholder="Ex: Casamento, Workshop, Show…" />
               </div>
             </div>
           </section>
@@ -222,10 +234,10 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
               Financeiro
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
-              <Field label="Valor Total (R$)"  draftKey="valorTotal"   type="number" required placeholder="0,00" />
-              <Field label="Entrada (R$)"       draftKey="valorEntrada" type="number" placeholder="0,00" />
+              <Field label="Valor Total (R$)"  {...fieldProps('valorTotal', true)}   type="number" required placeholder="0,00" />
+              <Field label="Entrada (R$)"       {...fieldProps('valorEntrada')} type="number" placeholder="0,00" />
               <div className="col-span-2">
-                <Field label="Responsável" draftKey="responsavel" placeholder="Nome do funcionário responsável" />
+                <Field label="Responsável" {...fieldProps('responsavel')} placeholder="Nome do funcionário responsável" />
               </div>
             </div>
           </section>

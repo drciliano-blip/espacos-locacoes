@@ -61,6 +61,39 @@ interface NovoEventoModalProps {
 const GREEN = '#25D366'
 const DARK_GREEN = '#128C7E'
 
+function Field({
+  label, value, onChange, type = 'text', required = false, placeholder = '', hasError = false,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  type?: 'text' | 'number' | 'date' | 'time'
+  required?: boolean
+  placeholder?: string
+  hasError?: boolean
+}) {
+  return (
+    <div>
+      <label className="text-xs text-app-subtle mb-0.5 block">
+        {label}
+        {required && <span className="text-red-400 ml-0.5">*</span>}
+      </label>
+      <input
+        type={type}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={`w-full rounded-lg border ${
+          hasError ? 'border-red-500/50' : 'border-app-border2'
+        } bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
+        onFocus={e => { e.currentTarget.style.borderColor = hasError ? '' : GREEN }}
+        onBlur={e => { e.currentTarget.style.borderColor = '' }}
+      />
+      {hasError && <p className="text-xs text-red-400 mt-0.5">Campo obrigatório</p>}
+    </div>
+  )
+}
+
 export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoEventoModalProps) {
   const { espacosNomes } = useEspacos()
   const [draft, setDraft]         = useState<Draft>(() => emptyDraft(espacoPadrao))
@@ -112,37 +145,12 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
     onClose()
   }
 
-  // ── field helpers ──────────────────────────────────────────────────────────
-  function Field({
-    label, draftKey, type = 'text', required = false, placeholder = '',
-  }: {
-    label: string
-    draftKey: keyof Draft
-    type?: 'text' | 'number' | 'date' | 'time'
-    required?: boolean
-    placeholder?: string
-  }) {
-    const hasError = submitted && required && !!errors[draftKey]
-    return (
-      <div>
-        <label className="text-xs text-app-subtle mb-0.5 block">
-          {label}
-          {required && <span className="text-red-400 ml-0.5">*</span>}
-        </label>
-        <input
-          type={type}
-          value={draft[draftKey] as string}
-          onChange={e => set(draftKey, e.target.value)}
-          placeholder={placeholder}
-          className={`w-full rounded-lg border ${
-            hasError ? 'border-red-500/50' : 'border-app-border2'
-          } bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
-          onFocus={e => { e.currentTarget.style.borderColor = hasError ? '' : GREEN }}
-          onBlur={e => { e.currentTarget.style.borderColor = '' }}
-        />
-        {hasError && <p className="text-xs text-red-400 mt-0.5">Campo obrigatório</p>}
-      </div>
-    )
+  function fieldProps(draftKey: keyof Draft, required = false) {
+    return {
+      value: draft[draftKey] as string,
+      onChange: (v: string) => set(draftKey, v),
+      hasError: submitted && required && !!errors[draftKey],
+    }
   }
 
   // ── render ─────────────────────────────────────────────────────────────────
@@ -199,7 +207,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
 
               <div className="col-span-2">
-                <Field label="Nome do Cliente" draftKey="cliente" required placeholder="Ex: João Silva" />
+                <Field label="Nome do Cliente" {...fieldProps('cliente', true)} required placeholder="Ex: João Silva" />
               </div>
 
               {/* Espaço */}
@@ -225,7 +233,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
                 )}
               </div>
 
-              <Field label="Data" draftKey="data" type="date" required />
+              <Field label="Data" {...fieldProps('data', true)} type="date" required />
 
               {/* Status */}
               <div>
@@ -243,8 +251,8 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
                 </select>
               </div>
 
-              <Field label="Hora início" draftKey="horaInicio" type="time" required />
-              <Field label="Hora fim"    draftKey="horaFim"    type="time" required />
+              <Field label="Hora início" {...fieldProps('horaInicio', true)} type="time" required />
+              <Field label="Hora fim"    {...fieldProps('horaFim', true)}    type="time" required />
 
               <div>
                 <label className="text-xs text-app-subtle mb-0.5 block">Tipo do Evento</label>
@@ -286,8 +294,8 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
               Capacidade e Financeiro
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
-              <Field label="Nº de Pessoas" draftKey="numeroPessoas" type="number" placeholder="0" />
-              <Field label="Valor (R$)"    draftKey="valor"         type="number" required placeholder="0,00" />
+              <Field label="Nº de Pessoas" {...fieldProps('numeroPessoas')} type="number" placeholder="0" />
+              <Field label="Valor (R$)"    {...fieldProps('valor', true)}   type="number" required placeholder="0,00" />
               <div className="col-span-2">
                 <label className="text-xs text-app-subtle mb-0.5 block">Forma de Pagamento</label>
                 <select
@@ -311,8 +319,8 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
               Responsável
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
-              <Field label="Nome do Responsável" draftKey="responsavel"     placeholder="Nome completo" />
-              <Field label="Telefone"            draftKey="telefoneContato" placeholder="(11) 99999-9999" />
+              <Field label="Nome do Responsável" {...fieldProps('responsavel')}     placeholder="Nome completo" />
+              <Field label="Telefone"            {...fieldProps('telefoneContato')} placeholder="(11) 99999-9999" />
             </div>
           </section>
 
