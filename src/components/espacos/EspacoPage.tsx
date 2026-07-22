@@ -164,8 +164,8 @@ export default function EspacoPage({ config }: EspacoPageProps) {
   }, [eventosEspaco])
 
   // ── Handlers ──────────────────────────────────────────────────────────────
-  function handleUpdate(updated: Evento) {
-    updateEvento(updated)
+  async function handleUpdate(updated: Evento) {
+    await updateEvento(updated)
     setSelectedEvento(updated)
   }
 

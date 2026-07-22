@@ -42,8 +42,8 @@ export default function AgendaPage() {
     return eventos.filter(e => espacosFiltro.has(e.espaco))
   }, [eventos, espacosFiltro])
 
-  function handleUpdate(updated: Evento) {
-    updateEvento(updated)
+  async function handleUpdate(updated: Evento) {
+    await updateEvento(updated)
     setSelectedEvento(updated)
   }
 

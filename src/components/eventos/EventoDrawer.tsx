@@ -8,6 +8,7 @@ import { useCurrentUser } from '@/contexts/UserContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
 import FileList from '@/components/shared/FileList'
 import PlanoPagamentoSection from '@/components/eventos/PlanoPagamentoSection'
+import Toast from '@/components/shared/Toast'
 
 const statusBadge: Record<string, string> = {
   confirmado:    'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
@@ -40,7 +41,7 @@ type DrawerTab = 'detalhes' | 'documentos'
 interface EventoDrawerProps {
   evento: Evento
   onClose: () => void
-  onUpdate: (updated: Evento) => void
+  onUpdate: (updated: Evento) => void | Promise<void>
   onDelete: (id: string) => Promise<void>
 }
 
@@ -52,6 +53,13 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
   const [draft, setDraft] = useState<Evento>({ ...evento })
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [toastMsg, setToastMsg] = useState<string | null>(null)
+
+  function showToast(msg: string) {
+    setToastMsg(msg)
+    setTimeout(() => setToastMsg(null), 3500)
+  }
 
   const parcelas = useMemo(
     () => receitas.filter(r => r.eventoId === evento.id && r.categoriaSlug === 'aluguel' && r.parcelaNumero != null),
@@ -66,9 +74,16 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
     await updateReceita(id, patch)
   }
 
-  function handleSave() {
-    onUpdate(draft)
-    setEditing(false)
+  async function handleSave() {
+    setSaving(true)
+    try {
+      await onUpdate(draft)
+      setEditing(false)
+    } catch (err) {
+      showToast(err instanceof Error ? `Não foi possível salvar: ${err.message}` : 'Não foi possível salvar as alterações. Tente novamente.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   function handleCancel() {
@@ -197,12 +212,12 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
               )}
               {editing && (
                 <>
-                  <button onClick={handleCancel} className="rounded-lg border border-app-border2 px-3 py-1.5 text-xs font-medium text-app-muted hover:bg-app-surface2 transition-colors">
+                  <button onClick={handleCancel} disabled={saving} className="rounded-lg border border-app-border2 px-3 py-1.5 text-xs font-medium text-app-muted hover:bg-app-surface2 transition-colors disabled:opacity-60">
                     Cancelar
                   </button>
-                  <button onClick={handleSave} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-colors" style={{ backgroundColor: '#25D366' }} onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.backgroundColor='#128C7E'}} onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.backgroundColor='#25D366'}}>
+                  <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed" style={{ backgroundColor: '#25D366' }} onMouseEnter={e=>{if(!saving)(e.currentTarget as HTMLButtonElement).style.backgroundColor='#128C7E'}} onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.backgroundColor='#25D366'}}>
                     <Save className="h-3.5 w-3.5" />
-                    Salvar
+                    {saving ? 'Salvando…' : 'Salvar'}
                   </button>
                 </>
               )}
@@ -429,6 +444,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
           </div>
         </div>
       )}
+      <Toast message={toastMsg} />
     </div>
   )
 }
