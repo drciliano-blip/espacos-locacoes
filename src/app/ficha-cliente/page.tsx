@@ -1,16 +1,59 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Building2, CheckCircle2, Paperclip, Send } from 'lucide-react'
+import { Building2, Camera, CheckCircle2, Paperclip, Send, Sparkles } from 'lucide-react'
 import { maskCPF, maskCNPJ, maskPhone, maskCEP } from '@/lib/utils'
 import { saveFile } from '@/lib/file-storage'
 import { createClient } from '@/lib/supabase/client'
+import Toast from '@/components/shared/Toast'
 
 const GREEN = '#25D366'
 const DARK_GREEN = '#128C7E'
 
 const TIPOS_EVENTO = ['Casamento', 'Corporativo', 'Formatura', 'Show/Festival', 'Aniversário', 'Outro']
 const FORMAS_PAGAMENTO = ['PIX', 'Transferência', 'Cartão', 'Outro']
+
+interface FichaExtracao {
+  nomeCompleto: string | null
+  cpf: string | null
+  rg: string | null
+  dataNascimento: string | null
+  email: string | null
+  telefoneCelular: string | null
+  endereco: { rua: string | null; numero: string | null; complemento: string | null; bairro: string | null; cidade: string | null; estado: string | null; cep: string | null }
+  pessoaJuridica: boolean
+  razaoSocial: string | null
+  nomeFantasia: string | null
+  cnpj: string | null
+  nomeEvento: string | null
+  espacoDesejado: string | null
+  tipoEvento: string | null
+  dataEvento: string | null
+  horaInicioMontagem: string | null
+  horaInicioEvento: string | null
+  horaTerminoEvento: string | null
+  valorLocacao: string | null
+  formaPagamento: string | null
+}
+
+function parseValorBR(valor: string): string {
+  const numeric = valor.replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3},)/g, '').replace(',', '.')
+  const n = parseFloat(numeric)
+  return Number.isFinite(n) ? String(n) : ''
+}
+
+function parseDataBR(data: string): string {
+  const match = data.match(/(\d{2})\/(\d{2})\/(\d{4})/)
+  if (!match) return ''
+  const [, dd, mm, yyyy] = match
+  return `${yyyy}-${mm}-${dd}`
+}
+
+function matchFromList(value: string | null, options: string[]): string | undefined {
+  if (!value) return undefined
+  const found = options.find(o => o.toLowerCase() === value.toLowerCase())
+  return found
+}
 
 interface Endereco {
   rua: string
@@ -110,6 +153,90 @@ export default function FichaClientePage() {
   const [erro, setErro] = useState<string | null>(null)
   const [espacos, setEspacos] = useState<string[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
+  const fichaFileRef = useRef<HTMLInputElement>(null)
+  const fichaCameraRef = useRef<HTMLInputElement>(null)
+  const [extraindoFicha, setExtraindoFicha] = useState(false)
+  const [toastMsg, setToastMsg] = useState<string | null>(null)
+
+  function showToast(msg: string) {
+    setToastMsg(msg)
+    setTimeout(() => setToastMsg(null), 3500)
+  }
+
+  async function handleFichaAnexo(file: File | null) {
+    if (!file) return
+
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    const isPdf = file.type === 'application/pdf' || ext === 'pdf'
+    const isImage = file.type.startsWith('image/')
+
+    if (file.type === 'image/heic' || file.type === 'image/heif') {
+      showToast('Fotos em formato HEIC não são lidas pela IA — use o botão "Tirar foto" (gera JPEG) ou converta o arquivo antes de anexar.')
+      return
+    }
+    if (!isPdf && !isImage) {
+      showToast('A leitura automática funciona só com PDF ou imagem.')
+      return
+    }
+
+    setExtraindoFicha(true)
+    try {
+      const body = new FormData()
+      body.append('file', file)
+      const res = await fetch('/api/extract-ficha', { method: 'POST', body })
+      const data: FichaExtracao & { error?: string } = await res.json()
+
+      if (!res.ok || data.error) {
+        showToast(data.error ?? 'Não foi possível ler o documento com a IA.')
+        return
+      }
+
+      const algumCampo = data.nomeCompleto || data.cpf || data.nomeEvento || data.dataEvento
+      if (!algumCampo) {
+        showToast('A IA não conseguiu identificar os dados nesta ficha. Preencha os campos manualmente.')
+        return
+      }
+
+      setForm(f => ({
+        ...f,
+        nomeCompleto: data.nomeCompleto ?? f.nomeCompleto,
+        cpf: data.cpf ? maskCPF(data.cpf) : f.cpf,
+        rg: data.rg ?? f.rg,
+        dataNascimento: data.dataNascimento ? parseDataBR(data.dataNascimento) || f.dataNascimento : f.dataNascimento,
+        email: data.email ?? f.email,
+        telefoneCelular: data.telefoneCelular ? maskPhone(data.telefoneCelular) : f.telefoneCelular,
+        endereco: {
+          rua: data.endereco?.rua ?? f.endereco.rua,
+          numero: data.endereco?.numero ?? f.endereco.numero,
+          complemento: data.endereco?.complemento ?? f.endereco.complemento,
+          bairro: data.endereco?.bairro ?? f.endereco.bairro,
+          cidade: data.endereco?.cidade ?? f.endereco.cidade,
+          estado: data.endereco?.estado ?? f.endereco.estado,
+          cep: data.endereco?.cep ? maskCEP(data.endereco.cep) : f.endereco.cep,
+        },
+        pessoaJuridica: data.pessoaJuridica || f.pessoaJuridica,
+        razaoSocial: data.razaoSocial ?? f.razaoSocial,
+        nomeFantasia: data.nomeFantasia ?? f.nomeFantasia,
+        cnpj: data.cnpj ? maskCNPJ(data.cnpj) : f.cnpj,
+        nomeEvento: data.nomeEvento ?? f.nomeEvento,
+        espacoDesejado: matchFromList(data.espacoDesejado, espacos) ?? f.espacoDesejado,
+        tipoEvento: matchFromList(data.tipoEvento, TIPOS_EVENTO) ?? f.tipoEvento,
+        dataEvento: data.dataEvento ? parseDataBR(data.dataEvento) || f.dataEvento : f.dataEvento,
+        horaInicioMontagem: data.horaInicioMontagem ?? f.horaInicioMontagem,
+        horaInicioEvento: data.horaInicioEvento ?? f.horaInicioEvento,
+        horaTerminoEvento: data.horaTerminoEvento ?? f.horaTerminoEvento,
+        valorLocacao: data.valorLocacao ? parseValorBR(data.valorLocacao) || f.valorLocacao : f.valorLocacao,
+        formaPagamento: matchFromList(data.formaPagamento, FORMAS_PAGAMENTO) ?? f.formaPagamento,
+      }))
+      showToast('Campos preenchidos automaticamente pela IA — confira antes de enviar.')
+    } catch {
+      showToast('Falha ao conectar com a IA. Preencha os campos manualmente.')
+    } finally {
+      setExtraindoFicha(false)
+      if (fichaFileRef.current) fichaFileRef.current.value = ''
+      if (fichaCameraRef.current) fichaCameraRef.current.value = ''
+    }
+  }
 
   useEffect(() => {
     const supabase = createClient()
@@ -217,6 +344,40 @@ export default function FichaClientePage() {
         </div>
 
         <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-6 space-y-6">
+
+          {/* Preenchimento automático via IA */}
+          <section className="rounded-xl border border-[#25D366]/30 bg-[#25D366]/5 p-4 space-y-2">
+            <p className="text-sm font-medium text-stone-800">Já tem uma ficha preenchida?</p>
+            <p className="text-xs text-stone-500">Anexe o documento e a IA preenche os campos abaixo automaticamente. Confira os dados antes de enviar.</p>
+            <input ref={fichaFileRef} type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden" onChange={e => handleFichaAnexo(e.target.files?.[0] ?? null)} />
+            <input ref={fichaCameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => handleFichaAnexo(e.target.files?.[0] ?? null)} />
+            <div className="flex items-center gap-2 flex-wrap pt-1">
+              <button
+                type="button"
+                onClick={() => fichaFileRef.current?.click()}
+                disabled={extraindoFicha}
+                className="flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs text-stone-600 hover:bg-stone-50 transition-colors disabled:opacity-60"
+              >
+                <Paperclip className="h-3.5 w-3.5" />
+                Selecionar arquivo…
+              </button>
+              <button
+                type="button"
+                onClick={() => fichaCameraRef.current?.click()}
+                disabled={extraindoFicha}
+                className="flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs text-stone-600 hover:bg-stone-50 transition-colors disabled:opacity-60"
+              >
+                <Camera className="h-3.5 w-3.5" />
+                Tirar foto
+              </button>
+              {extraindoFicha && (
+                <span className="flex items-center gap-1.5 text-xs" style={{ color: DARK_GREEN }}>
+                  <Sparkles className="h-3.5 w-3.5 animate-pulse" />
+                  Analisando com IA…
+                </span>
+              )}
+            </div>
+          </section>
 
           {/* Dados pessoais */}
           <section className="space-y-3">
@@ -373,6 +534,7 @@ export default function FichaClientePage() {
           </button>
         </div>
       </div>
+      <Toast message={toastMsg} />
     </div>
   )
 }
