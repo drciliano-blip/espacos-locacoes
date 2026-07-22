@@ -255,9 +255,21 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
           <div className="p-5 space-y-5">
             {/* Status e valor */}
             <div className="flex items-center gap-3">
-              <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusBadge[current.status]}`}>
-                {statusLabel[current.status] ?? current.status}
-              </span>
+              {editing ? (
+                <select
+                  value={draft.status}
+                  onChange={(e) => setDraft((d) => ({ ...d, status: e.target.value as Evento['status'] }))}
+                  className="rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-xs font-semibold text-app-text focus:border-[#25D366] focus:outline-none cursor-pointer"
+                >
+                  <option value="em_negociacao">Em negociação</option>
+                  <option value="confirmado">Confirmado</option>
+                  <option value="cancelado">Cancelado</option>
+                </select>
+              ) : (
+                <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusBadge[current.status]}`}>
+                  {statusLabel[current.status] ?? current.status}
+                </span>
+              )}
               <span className="text-xl font-bold" style={{ color: '#25D366' }}>{formatCurrency(current.valor)}</span>
             </div>
 
