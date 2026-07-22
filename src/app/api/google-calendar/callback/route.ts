@@ -7,8 +7,20 @@ export async function GET(request: Request) {
   const espacoId = url.searchParams.get('state')
   const errorParam = url.searchParams.get('error')
 
+  const supabase = createAdminClient()
+
+  // Busca o slug antes de mais nada, pra sempre voltar pra página certa do espaço
+  // (sucesso ou erro) — antes redirecionava pra /espacos genérico, onde o aviso
+  // de erro nunca aparecia porque esse componente só existe na página do espaço.
+  let slug: string | null = null
+  if (espacoId) {
+    const { data: espaco } = await supabase.from('espacos').select('slug').eq('id', espacoId).maybeSingle()
+    slug = espaco?.slug ?? null
+  }
+  const voltarPara = slug ? `/espacos/${slug}` : '/espacos'
+
   if (errorParam || !code || !espacoId) {
-    return NextResponse.redirect(`${url.origin}/espacos?google_error=${encodeURIComponent(errorParam ?? 'faltou código de autorização')}`)
+    return NextResponse.redirect(`${url.origin}${voltarPara}?google_error=${encodeURIComponent(errorParam ?? 'faltou código de autorização')}`)
   }
 
   const redirectUri = `${url.origin}/api/google-calendar/callback`
@@ -43,10 +55,9 @@ export async function GET(request: Request) {
       // e-mail é só para exibição — não deve impedir a conexão do calendário
     }
 
-    const supabase = createAdminClient()
     const expiresAt = new Date(Date.now() + tokenData.expires_in * 1000).toISOString()
 
-    await supabase.from('espacos_google_calendar').upsert({
+    const { error: upsertError } = await supabase.from('espacos_google_calendar').upsert({
       espaco_id: espacoId,
       google_email: email,
       refresh_token: tokenData.refresh_token,
@@ -54,12 +65,11 @@ export async function GET(request: Request) {
       access_token_expires_at: expiresAt,
       connected_at: new Date().toISOString(),
     })
+    if (upsertError) throw new Error(upsertError.message)
 
-    const { data: espaco } = await supabase.from('espacos').select('slug').eq('id', espacoId).single()
-    const slug = espaco?.slug
-    return NextResponse.redirect(`${url.origin}${slug ? `/espacos/${slug}` : '/espacos'}?google=connected`)
+    return NextResponse.redirect(`${url.origin}${voltarPara}?google=connected`)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido ao conectar com o Google.'
-    return NextResponse.redirect(`${url.origin}/espacos?google_error=${encodeURIComponent(message)}`)
+    return NextResponse.redirect(`${url.origin}${voltarPara}?google_error=${encodeURIComponent(message)}`)
   }
 }
