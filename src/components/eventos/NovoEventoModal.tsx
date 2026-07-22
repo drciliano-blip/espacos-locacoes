@@ -15,6 +15,7 @@ const FORMAS_PAGAMENTO: FormaPagamento[] = [
   'Cartão de Crédito',
   'Cartão de Débito',
   'Cheque',
+  'Parcelado',
 ]
 
 interface FichaExtracao {
@@ -27,6 +28,8 @@ interface FichaExtracao {
   horaTerminoEvento: string | null
   valorLocacao: string | null
   formaPagamento: string | null
+  valorSinal: string | null
+  dataVencimentoSaldo: string | null
 }
 
 function parseValorBR(valor: string): string {
@@ -61,6 +64,8 @@ interface Draft {
   responsavel: string
   telefoneContato: string
   formaPagamento: FormaPagamento | ''
+  valorSinal: string
+  dataVencimentoSaldo: string
   observacoes: string
 }
 
@@ -79,6 +84,8 @@ function emptyDraft(espacoPadrao?: Espaco): Draft {
     responsavel: '',
     telefoneContato: '',
     formaPagamento: '',
+    valorSinal: '',
+    dataVencimentoSaldo: '',
     observacoes: '',
   }
 }
@@ -203,6 +210,8 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
         horaFim: data.horaTerminoEvento ?? d.horaFim,
         valor: data.valorLocacao ? parseValorBR(data.valorLocacao) || d.valor : d.valor,
         formaPagamento: (matchFromList(data.formaPagamento, FORMAS_PAGAMENTO) as FormaPagamento) ?? d.formaPagamento,
+        valorSinal: data.valorSinal ? parseValorBR(data.valorSinal) || d.valorSinal : d.valorSinal,
+        dataVencimentoSaldo: data.dataVencimentoSaldo ? parseDataBR(data.dataVencimentoSaldo) || d.dataVencimentoSaldo : d.dataVencimentoSaldo,
       }))
       showToast('Campos preenchidos automaticamente pela IA — confira antes de salvar.')
     } catch {
@@ -233,6 +242,8 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
       responsavel:     draft.responsavel.trim() || undefined,
       telefoneContato: draft.telefoneContato.trim() || undefined,
       formaPagamento:  (draft.formaPagamento as FormaPagamento) || undefined,
+      valorSinal:      draft.formaPagamento === 'Parcelado' && draft.valorSinal ? Number(draft.valorSinal) : undefined,
+      dataVencimentoSaldo: draft.formaPagamento === 'Parcelado' && draft.dataVencimentoSaldo ? draft.dataVencimentoSaldo : undefined,
       observacoes:     draft.observacoes.trim() || undefined,
       documentos:      [],
     }
@@ -437,6 +448,12 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
                   {FORMAS_PAGAMENTO.map(f => <option key={f} value={f}>{f}</option>)}
                 </select>
               </div>
+              {draft.formaPagamento === 'Parcelado' && (
+                <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-lg border border-[#25D366]/30 bg-[#25D366]/5 p-3">
+                  <Field label="Valor do sinal (R$)" {...fieldProps('valorSinal')} type="number" placeholder="0,00" />
+                  <Field label="Vencimento do saldo" {...fieldProps('dataVencimentoSaldo')} type="date" />
+                </div>
+              )}
             </div>
           </section>
 

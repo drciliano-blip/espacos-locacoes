@@ -7,7 +7,7 @@ export type Espaco =
 
 export type StatusPagamento = 'pago' | 'pendente' | 'atrasado'
 export type StatusEvento = 'confirmado' | 'em_negociacao' | 'cancelado'
-export type FormaPagamento = 'PIX' | 'Transferência' | 'Dinheiro' | 'Cartão de Crédito' | 'Cartão de Débito' | 'Cheque'
+export type FormaPagamento = 'PIX' | 'Transferência' | 'Dinheiro' | 'Cartão de Crédito' | 'Cartão de Débito' | 'Cheque' | 'Parcelado'
 export type Decoracao = 'própria' | 'terceirizada' | 'não aplicável'
 export type StatusVistoria = 'pendente' | 'aprovada' | 'aprovada com ressalvas' | 'reprovada' | 'não realizada'
 
@@ -49,6 +49,7 @@ export interface Evento {
   faturamentoBruto?: number
   faturamentoLiquido?: number
   formaPagamento?: FormaPagamento
+  valorSinal?: number
   dataVencimentoSaldo?: string
   responsavel?: string
   telefoneContato?: string

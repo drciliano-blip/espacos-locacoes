@@ -24,6 +24,7 @@ interface EventoRow {
   faturamento_bruto: number | string | null
   faturamento_liquido: number | string | null
   forma_pagamento: string | null
+  valor_sinal: number | string | null
   data_vencimento_saldo: string | null
   responsavel: string | null
   telefone_contato: string | null
@@ -50,6 +51,7 @@ function fromRow(row: EventoRow): Evento {
     faturamentoBruto: row.faturamento_bruto != null ? Number(row.faturamento_bruto) : undefined,
     faturamentoLiquido: row.faturamento_liquido != null ? Number(row.faturamento_liquido) : undefined,
     formaPagamento: (row.forma_pagamento as Evento['formaPagamento']) ?? undefined,
+    valorSinal: row.valor_sinal != null ? Number(row.valor_sinal) : undefined,
     dataVencimentoSaldo: row.data_vencimento_saldo ?? undefined,
     responsavel: row.responsavel ?? undefined,
     telefoneContato: row.telefone_contato ?? undefined,
@@ -76,6 +78,7 @@ function toPayload(e: Evento) {
     faturamento_bruto: e.faturamentoBruto ?? null,
     faturamento_liquido: e.faturamentoLiquido ?? null,
     forma_pagamento: e.formaPagamento ?? null,
+    valor_sinal: e.valorSinal ?? null,
     data_vencimento_saldo: e.dataVencimentoSaldo ?? null,
     responsavel: e.responsavel ?? null,
     telefone_contato: e.telefoneContato ?? null,
@@ -97,17 +100,22 @@ const EventosContext = createContext<EventosContextValue | null>(null)
 
 const SELECT = '*, espaco:espacos(nome)'
 
-// Plano padrão ao criar um evento: Sinal (50%) hoje + Saldo (50%) 8 dias antes do evento.
-// Totalmente editável depois pela seção "Plano de Pagamento" em Eventos → Receitas.
-function gerarPlanoPadrao(dataEvento: string, valorTotal: number) {
+// Plano padrão ao criar um evento: Sinal hoje + Saldo 8 dias antes do evento (50/50 por padrão).
+// Se o evento já veio com valorSinal/dataVencimentoSaldo negociados (forma de pagamento
+// "Parcelado"), usa esses valores em vez do split cego. Totalmente editável depois pela
+// seção "Plano de Pagamento" em Eventos → Receitas.
+function gerarPlanoPadrao(dataEvento: string, valorTotal: number, valorSinal?: number, dataVencimentoSaldo?: string) {
   const hoje = new Date().toISOString().split('T')[0]
-  const sinal = Math.round((valorTotal / 2) * 100) / 100
+  const sinal = valorSinal != null ? Math.round(valorSinal * 100) / 100 : Math.round((valorTotal / 2) * 100) / 100
   const saldo = Math.round((valorTotal - sinal) * 100) / 100
 
-  const [y, m, d] = dataEvento.split('-').map(Number)
-  const dataSaldo = new Date(y, (m ?? 1) - 1, d ?? 1)
-  dataSaldo.setDate(dataSaldo.getDate() - 8)
-  const dataSaldoStr = `${dataSaldo.getFullYear()}-${String(dataSaldo.getMonth() + 1).padStart(2, '0')}-${String(dataSaldo.getDate()).padStart(2, '0')}`
+  let dataSaldoStr = dataVencimentoSaldo
+  if (!dataSaldoStr) {
+    const [y, m, d] = dataEvento.split('-').map(Number)
+    const dataSaldo = new Date(y, (m ?? 1) - 1, d ?? 1)
+    dataSaldo.setDate(dataSaldo.getDate() - 8)
+    dataSaldoStr = `${dataSaldo.getFullYear()}-${String(dataSaldo.getMonth() + 1).padStart(2, '0')}-${String(dataSaldo.getDate()).padStart(2, '0')}`
+  }
 
   return [
     { numero: 1, label: 'Sinal', data: hoje, valor: sinal },
@@ -150,7 +158,7 @@ export function EventosProvider({ children }: { children: ReactNode }) {
         eventoId: novo.id,
         cliente: novo.cliente,
         espaco: novo.espaco,
-        parcelas: gerarPlanoPadrao(novo.data, novo.valor),
+        parcelas: gerarPlanoPadrao(novo.data, novo.valor, novo.valorSinal, novo.dataVencimentoSaldo),
       })
       await logAtividade({ tipo: 'evento', acao: 'Evento criado', detalhes: `${novo.cliente} — ${novo.data}`, espaco: novo.espaco })
     } catch {
