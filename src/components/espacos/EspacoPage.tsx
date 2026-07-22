@@ -23,6 +23,7 @@ import FileAttachButton from '@/components/shared/FileAttachButton'
 import FileList from '@/components/shared/FileList'
 import { useEventos } from '@/contexts/EventosContext'
 import { useEspacos } from '@/contexts/EspacosContext'
+import { useReceitas } from '@/contexts/ReceitasContext'
 import { useAtividades, type TipoAtividade } from '@/contexts/AtividadesContext'
 import { saveFile } from '@/lib/file-storage'
 
@@ -81,6 +82,7 @@ export default function EspacoPage({ config }: EspacoPageProps) {
   const { eventos: todosEventos, addEvento, updateEvento, deleteEvento } = useEventos()
   const { updateEspacoFoto } = useEspacos()
   const { atividades: todasAtividades } = useAtividades()
+  const { receitas: todasReceitas } = useReceitas()
 
   const [tab, setTab]                       = useState<SpaceTab>('eventos')
   const [selectedEvento, setSelectedEvento] = useState<Evento | null>(null)
@@ -113,6 +115,14 @@ export default function EspacoPage({ config }: EspacoPageProps) {
     () => todasAtividades.filter(a => a.espaco === config.nome),
     [todasAtividades, config.nome],
   )
+
+  const parcelasEspaco = useMemo(
+    () => todasReceitas.filter(r => r.espaco === config.nome && r.categoriaSlug === 'aluguel' && r.parcelaNumero != null),
+    [todasReceitas, config.nome],
+  )
+  const totalContratado = parcelasEspaco.reduce((s, r) => s + r.valor, 0)
+  const totalRecebido = parcelasEspaco.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)
+  const totalEmAberto = totalContratado - totalRecebido
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
   const receitaConfirmada = useMemo(
@@ -391,6 +401,24 @@ export default function EspacoPage({ config }: EspacoPageProps) {
                   <p className={`text-lg font-bold ${color}`}>{value}</p>
                 </div>
               ))}
+            </div>
+
+            <div>
+              <h4 className="text-sm font-semibold text-app-text mb-3">Plano de Pagamento — Todos os Eventos</h4>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-lg border border-app-border2/50 bg-app-surface2/30 p-4">
+                  <p className="text-xs text-app-subtle mb-1">Total Contratado</p>
+                  <p className="text-lg font-bold text-app-text">{formatCurrency(totalContratado)}</p>
+                </div>
+                <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4">
+                  <p className="text-xs text-emerald-600 mb-1">Recebido</p>
+                  <p className="text-lg font-bold text-emerald-600">{formatCurrency(totalRecebido)}</p>
+                </div>
+                <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+                  <p className="text-xs text-amber-600 mb-1">Em Aberto</p>
+                  <p className="text-lg font-bold text-amber-600">{formatCurrency(totalEmAberto)}</p>
+                </div>
+              </div>
             </div>
 
             {monthlyData.length > 0 ? (

@@ -26,6 +26,8 @@ export interface Receita {
   status: 'pago' | 'pendente' | 'atrasado'
   metodoPagamento?: string
   observacoes?: string
+  parcelaNumero?: number
+  parcelaLabel?: string
 }
 
 interface ReceitaRow {
@@ -42,6 +44,8 @@ interface ReceitaRow {
   status: string
   metodo_pagamento: string | null
   observacoes: string | null
+  parcela_numero: number | null
+  parcela_label: string | null
 }
 
 function fromRow(row: ReceitaRow): Receita {
@@ -60,6 +64,8 @@ function fromRow(row: ReceitaRow): Receita {
     status: row.status as Receita['status'],
     metodoPagamento: row.metodo_pagamento ?? undefined,
     observacoes: row.observacoes ?? undefined,
+    parcelaNumero: row.parcela_numero ?? undefined,
+    parcelaLabel: row.parcela_label ?? undefined,
   }
 }
 
@@ -77,12 +83,25 @@ export interface NovaReceitaInput {
   observacoes?: string
 }
 
-interface ReceitaDoEventoInput {
-  id: string
-  cliente: string
-  espaco: string
+export interface ParcelaPlano {
+  numero: number
+  label: string
   data: string
   valor: number
+}
+
+interface SyncParcelasInput {
+  eventoId: string
+  espaco: string
+  cliente: string
+  parcelas: ParcelaPlano[]
+}
+
+interface BaixaReceitaInput {
+  status: Receita['status']
+  dataRecebimento?: string
+  metodoPagamento?: string
+  observacoes?: string
 }
 
 interface ReceitasContextValue {
@@ -90,7 +109,8 @@ interface ReceitasContextValue {
   categorias: CategoriaReceita[]
   loading: boolean
   addReceita: (input: NovaReceitaInput) => Promise<void>
-  upsertReceitaDoEvento: (evento: ReceitaDoEventoInput) => Promise<void>
+  syncParcelasDoEvento: (input: SyncParcelasInput) => Promise<void>
+  updateReceita: (id: string, patch: BaixaReceitaInput) => Promise<void>
 }
 
 const ReceitasContext = createContext<ReceitasContextValue | null>(null)
@@ -155,46 +175,78 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function upsertReceitaDoEvento(evento: ReceitaDoEventoInput) {
+  async function syncParcelasDoEvento(input: SyncParcelasInput) {
     const supabase = createClient()
 
     const { data: categoriaRow } = await supabase.from('categorias_receita').select('id').eq('slug', 'aluguel').single()
     if (!categoriaRow) return
 
     let espacoId: string | null = null
-    if (evento.espaco) {
-      const { data: espacoRow } = await supabase.from('espacos').select('id').eq('nome', evento.espaco).single()
+    if (input.espaco) {
+      const { data: espacoRow } = await supabase.from('espacos').select('id').eq('nome', input.espaco).single()
       espacoId = espacoRow?.id ?? null
     }
 
-    const payload = {
-      categoria_id: categoriaRow.id,
-      evento_id: evento.id,
-      espaco_id: espacoId,
-      cliente: evento.cliente,
-      descricao: `Aluguel — ${evento.cliente}`,
-      data: evento.data,
-      valor: evento.valor,
+    const { data: existingRows } = await supabase
+      .from('receitas')
+      .select('id, parcela_numero, status')
+      .eq('evento_id', input.eventoId)
+      .eq('categoria_id', categoriaRow.id)
+
+    const existing = (existingRows ?? []) as { id: string; parcela_numero: number | null; status: string }[]
+    const numerosNoPlano = new Set(input.parcelas.map(p => p.numero))
+
+    for (const parcela of input.parcelas) {
+      const match = existing.find(e => e.parcela_numero === parcela.numero)
+      const payload = {
+        categoria_id: categoriaRow.id,
+        evento_id: input.eventoId,
+        espaco_id: espacoId,
+        cliente: input.cliente,
+        descricao: `${parcela.label} — ${input.cliente}`,
+        data: parcela.data,
+        valor: parcela.valor,
+        parcela_numero: parcela.numero,
+        parcela_label: parcela.label,
+      }
+      if (match) {
+        await supabase.from('receitas').update(payload).eq('id', match.id)
+      } else {
+        await supabase.from('receitas').insert({ ...payload, status: 'pendente' })
+      }
     }
 
-    const { data: existing } = await supabase
-      .from('receitas')
-      .select('id')
-      .eq('evento_id', evento.id)
-      .eq('categoria_id', categoriaRow.id)
-      .maybeSingle()
-
-    if (existing) {
-      await supabase.from('receitas').update(payload).eq('id', existing.id)
-    } else {
-      await supabase.from('receitas').insert({ ...payload, status: 'pendente' })
+    // remove parcelas que saíram do plano — nunca uma que já foi paga (protege o histórico de baixa)
+    for (const row of existing) {
+      if (row.parcela_numero !== null && !numerosNoPlano.has(row.parcela_numero) && row.status !== 'pago') {
+        await supabase.from('receitas').delete().eq('id', row.id)
+      }
     }
 
     await load()
   }
 
+  async function updateReceita(id: string, patch: BaixaReceitaInput) {
+    const supabase = createClient()
+    const payload = {
+      status: patch.status,
+      data_recebimento: patch.dataRecebimento ?? null,
+      metodo_pagamento: patch.metodoPagamento ?? null,
+      observacoes: patch.observacoes ?? null,
+    }
+    const { data, error } = await supabase.from('receitas').update(payload).eq('id', id).select(SELECT).single()
+    if (error) throw error
+    const atualizada = fromRow(data as unknown as ReceitaRow)
+    setReceitas(prev => prev.map(r => (r.id === id ? atualizada : r)))
+    try {
+      await logAtividade({ tipo: 'financeiro', acao: 'Baixa registrada', detalhes: `${atualizada.descricao} — ${atualizada.status}`, espaco: atualizada.espaco })
+    } catch {
+      // log é secundário, não deve impedir a baixa
+    }
+  }
+
   return (
-    <ReceitasContext.Provider value={{ receitas, categorias, loading, addReceita, upsertReceitaDoEvento }}>
+    <ReceitasContext.Provider value={{ receitas, categorias, loading, addReceita, syncParcelasDoEvento, updateReceita }}>
       {children}
     </ReceitasContext.Provider>
   )

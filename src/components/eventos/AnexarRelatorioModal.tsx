@@ -18,7 +18,6 @@ interface TipoConfig {
 }
 
 const TIPOS: TipoConfig[] = [
-  { key: 'faturamento_evento',    label: 'Faturamento do evento',   categoriaSlug: 'aluguel' },
   { key: 'bar',                   label: 'Bar',                     categoriaSlug: 'bebidas' },
   { key: 'ingressos_antecipados', label: 'Ingressos antecipados',   categoriaSlug: 'ingressos' },
   { key: 'portaria',              label: 'Portaria',                categoriaSlug: 'ingressos' },
@@ -37,10 +36,9 @@ interface Props {
   categorias: CategoriaReceita[]
   onClose: () => void
   onSaveReceita: (input: NovaReceitaInput) => Promise<void>
-  onSyncAluguel: (evento: { id: string; cliente: string; espaco: string; data: string; valor: number }) => Promise<void>
 }
 
-export default function AnexarRelatorioModal({ evento, categorias, onClose, onSaveReceita, onSyncAluguel }: Props) {
+export default function AnexarRelatorioModal({ evento, categorias, onClose, onSaveReceita }: Props) {
   const [tipo, setTipo] = useState<TipoRelatorio>('bar')
   const [file, setFile] = useState<File | null>(null)
   const [extracting, setExtracting] = useState(false)
@@ -53,7 +51,6 @@ export default function AnexarRelatorioModal({ evento, categorias, onClose, onSa
   const cameraRef = useRef<HTMLInputElement>(null)
 
   const tipoConfig = TIPOS.find(t => t.key === tipo)!
-  const isAluguel = tipoConfig.categoriaSlug === 'aluguel'
 
   async function handleFile(f: File | null) {
     setFile(f)
@@ -94,33 +91,29 @@ export default function AnexarRelatorioModal({ evento, categorias, onClose, onSa
     }
   }
 
-  const hasErrors = !file || !valor || Number.isNaN(Number(valor)) || Number(valor) <= 0 || (!isAluguel && !descricao.trim())
+  const hasErrors = !file || !valor || Number.isNaN(Number(valor)) || Number(valor) <= 0 || !descricao.trim()
 
   async function handleSave() {
     setSubmitted(true)
     if (hasErrors) return
     setSaving(true)
     try {
-      if (isAluguel) {
-        await onSyncAluguel({ id: evento.id, cliente: evento.cliente, espaco: evento.espaco, data: evento.data, valor: Number(valor) })
-      } else {
-        const categoria = categorias.find(c => c.slug === tipoConfig.categoriaSlug)
-        if (!categoria) {
-          setError(`Categoria "${tipoConfig.categoriaSlug}" não encontrada.`)
-          setSaving(false)
-          return
-        }
-        await onSaveReceita({
-          categoriaId: categoria.id,
-          eventoId: evento.id,
-          espaco: evento.espaco,
-          cliente: evento.cliente,
-          descricao: descricao.trim(),
-          data: evento.data,
-          valor: Number(valor),
-          status: 'pendente',
-        })
+      const categoria = categorias.find(c => c.slug === tipoConfig.categoriaSlug)
+      if (!categoria) {
+        setError(`Categoria "${tipoConfig.categoriaSlug}" não encontrada.`)
+        setSaving(false)
+        return
       }
+      await onSaveReceita({
+        categoriaId: categoria.id,
+        eventoId: evento.id,
+        espaco: evento.espaco,
+        cliente: evento.cliente,
+        descricao: descricao.trim(),
+        data: evento.data,
+        valor: Number(valor),
+        status: 'pendente',
+      })
       onClose()
     } finally {
       setSaving(false)
@@ -153,11 +146,6 @@ export default function AnexarRelatorioModal({ evento, categorias, onClose, onSa
             >
               {TIPOS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
             </select>
-            {isAluguel && (
-              <p className="text-xs text-app-subtle mt-1">
-                Este tipo atualiza a receita de aluguel já sincronizada com o evento — não cria uma receita nova.
-              </p>
-            )}
           </div>
 
           <div>
@@ -212,19 +200,17 @@ export default function AnexarRelatorioModal({ evento, categorias, onClose, onSa
                 className={`w-full rounded-lg border ${submitted && (!valor || Number(valor) <= 0) ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
               />
             </div>
-            {!isAluguel && (
-              <div>
-                <label className="text-xs text-app-subtle mb-0.5 block">
-                  Descrição<span className="text-red-400 ml-0.5">*</span>
-                </label>
-                <input
-                  value={descricao}
-                  onChange={e => setDescricao(e.target.value)}
-                  placeholder="Ex: Bar — evento Família Silva"
-                  className={`w-full rounded-lg border ${submitted && !descricao.trim() ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
-                />
-              </div>
-            )}
+            <div>
+              <label className="text-xs text-app-subtle mb-0.5 block">
+                Descrição<span className="text-red-400 ml-0.5">*</span>
+              </label>
+              <input
+                value={descricao}
+                onChange={e => setDescricao(e.target.value)}
+                placeholder="Ex: Bar — evento Família Silva"
+                className={`w-full rounded-lg border ${submitted && !descricao.trim() ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
+              />
+            </div>
           </div>
         </div>
 

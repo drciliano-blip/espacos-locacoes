@@ -97,8 +97,26 @@ const EventosContext = createContext<EventosContextValue | null>(null)
 
 const SELECT = '*, espaco:espacos(nome)'
 
+// Plano padrão ao criar um evento: Sinal (50%) hoje + Saldo (50%) 8 dias antes do evento.
+// Totalmente editável depois pela seção "Plano de Pagamento" em Eventos → Receitas.
+function gerarPlanoPadrao(dataEvento: string, valorTotal: number) {
+  const hoje = new Date().toISOString().split('T')[0]
+  const sinal = Math.round((valorTotal / 2) * 100) / 100
+  const saldo = Math.round((valorTotal - sinal) * 100) / 100
+
+  const [y, m, d] = dataEvento.split('-').map(Number)
+  const dataSaldo = new Date(y, (m ?? 1) - 1, d ?? 1)
+  dataSaldo.setDate(dataSaldo.getDate() - 8)
+  const dataSaldoStr = `${dataSaldo.getFullYear()}-${String(dataSaldo.getMonth() + 1).padStart(2, '0')}-${String(dataSaldo.getDate()).padStart(2, '0')}`
+
+  return [
+    { numero: 1, label: 'Sinal', data: hoje, valor: sinal },
+    { numero: 2, label: 'Saldo', data: dataSaldoStr, valor: saldo },
+  ]
+}
+
 export function EventosProvider({ children }: { children: ReactNode }) {
-  const { upsertReceitaDoEvento } = useReceitas()
+  const { syncParcelasDoEvento } = useReceitas()
   const { logAtividade } = useAtividades()
   const [eventos, setEventos] = useState<Evento[]>([])
   const [loading, setLoading] = useState(true)
@@ -128,10 +146,15 @@ export function EventosProvider({ children }: { children: ReactNode }) {
     const novo = fromRow(data as unknown as EventoRow)
     setEventos(prev => [novo, ...prev])
     try {
-      await upsertReceitaDoEvento({ id: novo.id, cliente: novo.cliente, espaco: novo.espaco, data: novo.data, valor: novo.valor })
+      await syncParcelasDoEvento({
+        eventoId: novo.id,
+        cliente: novo.cliente,
+        espaco: novo.espaco,
+        parcelas: gerarPlanoPadrao(novo.data, novo.valor),
+      })
       await logAtividade({ tipo: 'evento', acao: 'Evento criado', detalhes: `${novo.cliente} — ${novo.data}`, espaco: novo.espaco })
     } catch {
-      // efeitos colaterais (sincronizar receita, registrar atividade) não devem derrubar o cadastro do evento
+      // efeitos colaterais (gerar plano de pagamento, registrar atividade) não devem derrubar o cadastro do evento
     }
   }
 
@@ -149,11 +172,13 @@ export function EventosProvider({ children }: { children: ReactNode }) {
     if (error) throw error
     const updated = fromRow(data as unknown as EventoRow)
     setEventos(prev => prev.map(x => (x.id === updated.id ? updated : x)))
+    // O plano de pagamento (parcelas) não é regenerado automaticamente aqui — evita apagar
+    // parcelas já customizadas ou com baixa dada. Ajustes de plano são feitos na própria
+    // seção "Plano de Pagamento" (Eventos → Receitas).
     try {
-      await upsertReceitaDoEvento({ id: updated.id, cliente: updated.cliente, espaco: updated.espaco, data: updated.data, valor: updated.valor })
       await logAtividade({ tipo: 'evento', acao: 'Evento atualizado', detalhes: `${updated.cliente} — ${updated.data}`, espaco: updated.espaco })
     } catch {
-      // efeitos colaterais não devem derrubar a edição do evento
+      // log é secundário, não deve derrubar a edição do evento
     }
   }
 

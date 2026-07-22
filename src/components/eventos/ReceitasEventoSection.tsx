@@ -7,8 +7,10 @@ import { useReceitas } from '@/contexts/ReceitasContext'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import NovaReceitaModal from '@/components/pagamentos/NovaReceitaModal'
 import AnexarRelatorioModal from '@/components/eventos/AnexarRelatorioModal'
+import PlanoPagamentoSection from '@/components/eventos/PlanoPagamentoSection'
 import FileList from '@/components/shared/FileList'
 import type { Evento } from '@/types'
+import type { ParcelaPlano } from '@/contexts/ReceitasContext'
 
 const statusStyles: Record<string, string> = {
   pago: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
@@ -19,7 +21,7 @@ const statusLabels: Record<string, string> = { pago: 'Pago', pendente: 'Pendente
 
 export default function ReceitasEventoSection() {
   const { eventos } = useEventos()
-  const { receitas, categorias, addReceita, upsertReceitaDoEvento } = useReceitas()
+  const { receitas, categorias, addReceita, syncParcelasDoEvento, updateReceita } = useReceitas()
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Evento | null>(null)
   const [novaOpen, setNovaOpen] = useState(false)
@@ -35,6 +37,17 @@ export default function ReceitasEventoSection() {
   }, [eventos, search])
 
   const receitasDoEvento = selected ? receitas.filter(r => r.eventoId === selected.id) : []
+  const parcelasAluguel = receitasDoEvento.filter(r => r.categoriaSlug === 'aluguel' && r.parcelaNumero != null)
+  const outrasReceitas = receitasDoEvento.filter(r => !(r.categoriaSlug === 'aluguel' && r.parcelaNumero != null))
+
+  async function handleSyncPlano(parcelas: ParcelaPlano[]) {
+    if (!selected) return
+    await syncParcelasDoEvento({ eventoId: selected.id, cliente: selected.cliente, espaco: selected.espaco, parcelas })
+  }
+
+  async function handleBaixa(id: string, patch: { status: 'pago'; dataRecebimento: string; metodoPagamento?: string }) {
+    await updateReceita(id, patch)
+  }
 
   if (!selected) {
     return (
@@ -110,12 +123,20 @@ export default function ReceitasEventoSection() {
         </div>
       </div>
 
+      <PlanoPagamentoSection
+        valorEvento={selected.valor}
+        parcelas={parcelasAluguel}
+        onSync={handleSyncPlano}
+        onBaixa={handleBaixa}
+      />
+
       <div className="space-y-2">
-        {receitasDoEvento.length === 0 ? (
+        <p className="text-xs font-medium text-app-muted">Outras receitas do evento</p>
+        {outrasReceitas.length === 0 ? (
           <div className="rounded-xl border border-app-border bg-app-surface p-8 text-center">
-            <p className="text-sm text-app-subtle">Nenhuma receita lançada para este evento ainda.</p>
+            <p className="text-sm text-app-subtle">Nenhuma outra receita lançada para este evento ainda.</p>
           </div>
-        ) : receitasDoEvento.map(r => (
+        ) : outrasReceitas.map(r => (
           <div key={r.id} className="flex items-center justify-between gap-4 rounded-lg border border-app-border2/50 bg-app-surface2/40 px-4 py-3">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
@@ -123,9 +144,6 @@ export default function ReceitasEventoSection() {
                 <span className="rounded-full border border-violet-500/20 bg-violet-500/10 text-violet-400 px-2 py-0.5 text-xs font-medium shrink-0">
                   {r.categoriaNome}
                 </span>
-                {r.categoriaSlug === 'aluguel' && (
-                  <span className="text-xs text-app-subtle italic shrink-0">sincronizado do evento</span>
-                )}
               </div>
               <p className="text-xs text-app-subtle mt-0.5">{formatDate(r.data)}</p>
             </div>
@@ -172,7 +190,6 @@ export default function ReceitasEventoSection() {
           categorias={categorias}
           onClose={() => { setAnexarOpen(false); setFilesVersion(v => v + 1) }}
           onSaveReceita={addReceita}
-          onSyncAluguel={upsertReceitaDoEvento}
         />
       )}
     </div>
