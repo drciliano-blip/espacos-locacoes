@@ -30,7 +30,7 @@ const navItemsBefore = [
 ]
 
 const navItemsAfter = [
-  { href: '/eventos',  label: 'Eventos',  icon: FileText, page: 'eventos' },
+  { href: '/eventos',  label: 'Eventos e Contratos',  icon: FileText, page: 'eventos' },
   { href: '/usuarios', label: 'Usuários', icon: Users,    page: 'usuarios' },
 ]
 
