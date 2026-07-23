@@ -1,8 +1,10 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { X, FileSignature, Sparkles, Download, Copy, Check, AlertTriangle } from 'lucide-react'
-import { getModeloPorEspaco } from '@/lib/contract-templates'
+import { X, FileSignature, Sparkles, Download, Copy, Check } from 'lucide-react'
+import { getModeloPorTipo } from '@/lib/contract-templates'
+import type { TipoMinuta } from '@/lib/contract-templates'
+import { useEspacos } from '@/contexts/EspacosContext'
 import { formatCurrency } from '@/lib/utils'
 import type { Contrato, FichaCliente } from '@/types'
 
@@ -37,9 +39,23 @@ function espacoDaOrigem(origem: Origem): string {
   return origem.tipo === 'contrato' ? origem.dados.espaco : origem.dados.espacoDesejado
 }
 
-function valoresIniciais(origem: Origem, campos: string[]): Record<string, string> {
+interface DadosLegaisEspaco {
+  cnpj?: string
+  responsavelNome?: string
+  responsavelRg?: string
+  responsavelCpf?: string
+}
+
+function valoresIniciais(origem: Origem, campos: string[], dadosLegais: DadosLegaisEspaco | undefined, espacoNome: string): Record<string, string> {
   const hoje = new Date().toISOString().split('T')[0]
   const base: Record<string, string> = {}
+
+  base.CEDENTE_NOME = `Sociedade vinculada ao espaço ${espacoNome}`
+  base.CEDENTE_CNPJ = dadosLegais?.cnpj ?? ''
+  base.CEDENTE_ENDERECO = ''
+  base.CEDENTE_RESPONSAVEL = dadosLegais?.responsavelNome ?? ''
+  base.CEDENTE_RESPONSAVEL_RG = dadosLegais?.responsavelRg ?? ''
+  base.CEDENTE_RESPONSAVEL_CPF = dadosLegais?.responsavelCpf ?? ''
 
   if (origem.tipo === 'contrato') {
     const c = origem.dados
@@ -51,13 +67,15 @@ function valoresIniciais(origem: Origem, campos: string[]): Record<string, strin
     base.HORA_INICIO_MONTAGEM = ''
     base.HORA_INICIO_EVENTO = c.horaInicio
     base.HORA_TERMINO_EVENTO = c.horaFim
-    base.VALOR_TOTAL = formatCurrency(c.valorTotal)
+    base.VALOR_NEGOCIADO = formatCurrency(c.valorNegociado ?? c.valorTotal)
     base.VALOR_EXTENSO = ''
     base.FORMA_PAGAMENTO = ''
     base.DATA_PAGAMENTO = ''
     base.PERCENTUAL_CESSIONARIA = ''
     base.PERCENTUAL_CEDENTE = ''
     base.VALOR_MINIMO = ''
+    base.OBSERVACAO_NEGOCIACAO = c.observacaoNegociacao ?? ''
+    base.OBSERVACAO_PARCERIA = c.observacaoParceria ?? ''
     base.DATA_ASSINATURA = formatDataBR(hoje)
   } else {
     const f = origem.dados
@@ -70,13 +88,15 @@ function valoresIniciais(origem: Origem, campos: string[]): Record<string, strin
     base.HORA_INICIO_MONTAGEM = f.horaInicioMontagem || ''
     base.HORA_INICIO_EVENTO = f.horaInicioEvento || ''
     base.HORA_TERMINO_EVENTO = f.horaTerminoEvento || ''
-    base.VALOR_TOTAL = f.valorLocacao ? formatCurrency(Number(f.valorLocacao)) : ''
+    base.VALOR_NEGOCIADO = f.valorLocacao ? formatCurrency(Number(f.valorLocacao)) : ''
     base.VALOR_EXTENSO = ''
     base.FORMA_PAGAMENTO = f.formaPagamento || ''
     base.DATA_PAGAMENTO = ''
     base.PERCENTUAL_CESSIONARIA = ''
     base.PERCENTUAL_CEDENTE = ''
     base.VALOR_MINIMO = ''
+    base.OBSERVACAO_NEGOCIACAO = ''
+    base.OBSERVACAO_PARCERIA = ''
     base.DATA_ASSINATURA = formatDataBR(hoje)
   }
 
@@ -86,20 +106,32 @@ function valoresIniciais(origem: Origem, campos: string[]): Record<string, strin
 }
 
 export default function GerarContratoModal({ origem, onClose }: Props) {
+  const { espacosConfig } = useEspacos()
   const espaco = espacoDaOrigem(origem)
-  const modelo = useMemo(() => getModeloPorEspaco(espaco), [espaco])
-  const [variaveis, setVariaveis] = useState<Record<string, string>>(() => modelo ? valoresIniciais(origem, modelo.variaveis) : {})
+  const dadosLegais = espacosConfig.find(e => e.nome.toLowerCase() === espaco.toLowerCase())?.dadosLegais
+
+  const [tipoMinuta, setTipoMinuta] = useState<TipoMinuta>(
+    (origem.tipo === 'contrato' && origem.dados.tipoMinuta) || 'locacao'
+  )
+  const modelo = useMemo(() => getModeloPorTipo(tipoMinuta), [tipoMinuta])
+  const [variaveis, setVariaveis] = useState<Record<string, string>>(
+    () => valoresIniciais(origem, modelo.variaveis, dadosLegais, espaco)
+  )
   const [gerando, setGerando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [contractText, setContractText] = useState<string | null>(null)
   const [copiado, setCopiado] = useState(false)
+
+  function trocarTipoMinuta(novoTipo: TipoMinuta) {
+    setTipoMinuta(novoTipo)
+    setVariaveis(valoresIniciais(origem, getModeloPorTipo(novoTipo).variaveis, dadosLegais, espaco))
+  }
 
   function setVar(campo: string, valor: string) {
     setVariaveis(v => ({ ...v, [campo]: valor }))
   }
 
   async function handleGerar() {
-    if (!modelo) return
     setGerando(true)
     setErro(null)
     try {
@@ -139,7 +171,7 @@ export default function GerarContratoModal({ origem, onClose }: Props) {
     win.document.write(`
       <html>
         <head>
-          <title>Contrato — ${modelo?.nome ?? ''}</title>
+          <title>Contrato — ${modelo.nome}</title>
           <style>
             body { font-family: Georgia, serif; padding: 48px; color: #111; line-height: 1.6; white-space: pre-wrap; }
           </style>
@@ -169,32 +201,59 @@ export default function GerarContratoModal({ origem, onClose }: Props) {
         </div>
 
         <div className="p-6 space-y-5">
-          {!modelo && (
-            <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-4 py-3 flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
-              <p className="text-sm text-amber-600">
-                Nenhum modelo cadastrado para o espaço &quot;{espaco}&quot;. A biblioteca possui apenas modelos para Usine e Fabrique.
-              </p>
-            </div>
-          )}
-
-          {modelo && !contractText && (
+          {!contractText && (
             <>
+              <div>
+                <label className="text-xs text-app-subtle mb-0.5 block">Tipo de minuta</label>
+                <select
+                  value={tipoMinuta}
+                  onChange={e => trocarTipoMinuta(e.target.value as TipoMinuta)}
+                  className="w-full cursor-pointer rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
+                  onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
+                  onBlur={e => { e.currentTarget.style.borderColor = '' }}
+                >
+                  <option value="locacao">Locação (valor fixo)</option>
+                  <option value="parceria">Parceria (% sobre faturamento)</option>
+                </select>
+              </div>
+
+              {!dadosLegais?.cnpj && (
+                <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2.5">
+                  <p className="text-xs text-amber-600">
+                    {espaco} ainda não tem CNPJ/responsável legal cadastrado — os campos CEDENTE ficam em branco, mas dá pra preencher manualmente abaixo. Cadastre uma vez em Espaços → {espaco} → Documentos para preencher automaticamente da próxima vez.
+                  </p>
+                </div>
+              )}
+
               <p className="text-xs text-app-muted">
-                Modelo detectado: <span className="font-semibold text-app-text">{modelo.nome}</span>. Revise os campos abaixo antes de gerar.
+                Modelo: <span className="font-semibold text-app-text">{modelo.nome}</span>. Revise os campos abaixo antes de gerar.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
                 {modelo.variaveis.map(campo => (
-                  <div key={campo}>
-                    <label className="text-xs text-app-subtle mb-0.5 block">{labelFor(campo)}</label>
-                    <input
-                      value={variaveis[campo] ?? ''}
-                      onChange={e => setVar(campo, e.target.value)}
-                      className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
-                      onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
-                      onBlur={e => { e.currentTarget.style.borderColor = '' }}
-                    />
-                  </div>
+                  campo === 'OBSERVACAO_NEGOCIACAO' || campo === 'OBSERVACAO_PARCERIA' ? (
+                    <div key={campo} className="col-span-2">
+                      <label className="text-xs text-app-subtle mb-0.5 block">{labelFor(campo)}</label>
+                      <textarea
+                        value={variaveis[campo] ?? ''}
+                        onChange={e => setVar(campo, e.target.value)}
+                        rows={2}
+                        className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none resize-none"
+                        onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
+                        onBlur={e => { e.currentTarget.style.borderColor = '' }}
+                      />
+                    </div>
+                  ) : (
+                    <div key={campo}>
+                      <label className="text-xs text-app-subtle mb-0.5 block">{labelFor(campo)}</label>
+                      <input
+                        value={variaveis[campo] ?? ''}
+                        onChange={e => setVar(campo, e.target.value)}
+                        className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
+                        onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
+                        onBlur={e => { e.currentTarget.style.borderColor = '' }}
+                      />
+                    </div>
+                  )
                 ))}
               </div>
 

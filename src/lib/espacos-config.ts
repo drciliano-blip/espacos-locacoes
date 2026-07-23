@@ -19,6 +19,12 @@ export interface EspacoConfig {
   categorias: CategoriaEvento[]
   id?: string
   fotoFileId?: string
+  dadosLegais?: {
+    cnpj?: string
+    responsavelNome?: string
+    responsavelRg?: string
+    responsavelCpf?: string
+  }
 }
 
 export const ESPACOS_CONFIG: EspacoConfig[] = [

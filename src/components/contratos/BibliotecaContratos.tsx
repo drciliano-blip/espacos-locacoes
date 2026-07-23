@@ -15,7 +15,7 @@ export default function BibliotecaContratos() {
         </div>
         <div>
           <p className="text-sm font-semibold text-app-text">{MODELOS_CONTRATO.length} modelos cadastrados</p>
-          <p className="text-xs text-app-muted">Usados automaticamente pelo gerador de contratos</p>
+          <p className="text-xs text-app-muted">Escolhidos por tipo de minuta ao gerar um contrato</p>
         </div>
       </div>
 
@@ -31,9 +31,8 @@ export default function BibliotecaContratos() {
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="flex items-center gap-1 text-xs text-app-subtle">
                     <Tag className="h-3 w-3" />
-                    {modelo.espaco}
+                    {modelo.tipoMinuta === 'locacao' ? 'Locação' : 'Parceria'}
                   </span>
-                  <span className="text-xs text-app-subtle">· {modelo.tipo}</span>
                   <span className="text-xs text-app-subtle">· {modelo.variaveis.length} campos variáveis</span>
                 </div>
               </div>

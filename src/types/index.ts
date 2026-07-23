@@ -72,6 +72,8 @@ export interface Pagamento {
   descricao: string
 }
 
+export type TipoMinuta = 'locacao' | 'parceria'
+
 export interface Contrato {
   id: string
   numeroContrato: string
@@ -88,6 +90,10 @@ export interface Contrato {
   observacoes: string
   responsavel: string
   tipo: string
+  tipoMinuta?: TipoMinuta
+  valorNegociado?: number
+  observacaoNegociacao?: string
+  observacaoParceria?: string
 }
 
 // Feature 1: Conta a Pagar
@@ -128,6 +134,14 @@ export interface EspacoCustomData {
   status: 'ativo' | 'inativo'
   fotoFileId?: string
   criadoEm: string
+}
+
+// Dados legais do espaço (CEDENTE/LOCADORA no texto do contrato gerado por IA)
+export interface DadosLegaisEspaco {
+  cnpj?: string
+  responsavelNome?: string
+  responsavelRg?: string
+  responsavelCpf?: string
 }
 
 // Documentos de funcionários

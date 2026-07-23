@@ -20,6 +20,7 @@ import NovoEventoModal from '@/components/eventos/NovoEventoModal'
 import EspacoLogo from '@/components/espacos/EspacoLogo'
 import CalendarView from '@/components/agenda/CalendarView'
 import EspacoGoogleCalendar from '@/components/espacos/EspacoGoogleCalendar'
+import DadosLegaisSection from '@/components/espacos/DadosLegaisSection'
 import FileAttachButton from '@/components/shared/FileAttachButton'
 import FileList from '@/components/shared/FileList'
 import { useEventos } from '@/contexts/EventosContext'
@@ -387,6 +388,9 @@ export default function EspacoPage({ config }: EspacoPageProps) {
                   <FileAttachButton module="espacos" entityId={config.id} entityName={config.nome} categoria="outro" label="Outros documentos" />
                 </div>
                 <FileList module="espacos" entityId={config.id} entityName={config.nome} showAttach={false} />
+                <div className="mt-6">
+                  <DadosLegaisSection espacoId={config.id} dadosLegais={config.dadosLegais} />
+                </div>
               </>
             ) : (
               <p className="text-sm text-app-muted text-center py-8">Espaço ainda não sincronizado — recarregue a página.</p>

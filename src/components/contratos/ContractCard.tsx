@@ -54,7 +54,10 @@ export default function ContractCard({ contrato: c }: ContractCardProps) {
               </span>
             </div>
             <p className="text-base font-bold text-app-text mt-1">{c.cliente}</p>
-            <p className="text-xs text-app-muted">{c.tipo} · {c.espaco}</p>
+            <p className="text-xs text-app-muted">
+              {c.tipo} · {c.espaco}
+              {c.tipoMinuta && ` · ${c.tipoMinuta === 'parceria' ? 'Parceria' : 'Locação'}`}
+            </p>
           </div>
           <div className="text-right shrink-0">
             <p className="text-lg font-bold text-app-text">{formatCurrency(c.valorTotal)}</p>

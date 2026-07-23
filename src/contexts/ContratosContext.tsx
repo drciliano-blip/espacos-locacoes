@@ -22,6 +22,10 @@ interface ContratoRow {
   observacoes: string | null
   responsavel: string | null
   tipo: string
+  tipo_minuta: string | null
+  valor_negociado: number | string | null
+  observacao_negociacao: string | null
+  observacao_parceria: string | null
 }
 
 function fromRow(row: ContratoRow): Contrato {
@@ -41,6 +45,10 @@ function fromRow(row: ContratoRow): Contrato {
     observacoes: row.observacoes ?? '',
     responsavel: row.responsavel ?? '',
     tipo: row.tipo,
+    tipoMinuta: (row.tipo_minuta as Contrato['tipoMinuta']) ?? undefined,
+    valorNegociado: row.valor_negociado != null ? Number(row.valor_negociado) : undefined,
+    observacaoNegociacao: row.observacao_negociacao ?? undefined,
+    observacaoParceria: row.observacao_parceria ?? undefined,
   }
 }
 
@@ -90,6 +98,10 @@ export function ContratosProvider({ children }: { children: ReactNode }) {
         observacoes: c.observacoes,
         responsavel: c.responsavel,
         tipo: c.tipo,
+        tipo_minuta: c.tipoMinuta ?? null,
+        valor_negociado: c.valorNegociado ?? null,
+        observacao_negociacao: c.observacaoNegociacao ?? null,
+        observacao_parceria: c.observacaoParceria ?? null,
         created_by: user?.id ?? null,
       })
       .select(SELECT)

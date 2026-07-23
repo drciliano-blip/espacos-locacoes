@@ -6,7 +6,7 @@ import { ESPACOS_CONFIG } from '@/lib/espacos-config'
 import type { EspacoConfig } from '@/lib/espacos-config'
 import { createClient } from '@/lib/supabase/client'
 import { useAtividades } from '@/contexts/AtividadesContext'
-import type { EspacoCustomData } from '@/types'
+import type { EspacoCustomData, DadosLegaisEspaco } from '@/types'
 
 const PALETTE: Pick<EspacoConfig, 'cor' | 'colorClass' | 'bgClass' | 'borderClass' | 'dotClass' | 'gradientFrom'>[] = [
   { cor: 'violet', colorClass: 'text-violet-400', bgClass: 'bg-violet-500/10', borderClass: 'border-violet-500/20', dotClass: 'bg-violet-500', gradientFrom: 'from-violet-500/20' },
@@ -26,6 +26,19 @@ interface EspacoRow {
   status: 'ativo' | 'inativo'
   foto_file_id: string | null
   created_at: string
+  cnpj: string | null
+  responsavel_nome: string | null
+  responsavel_rg: string | null
+  responsavel_cpf: string | null
+}
+
+function toDadosLegais(row: EspacoRow): DadosLegaisEspaco {
+  return {
+    cnpj: row.cnpj ?? undefined,
+    responsavelNome: row.responsavel_nome ?? undefined,
+    responsavelRg: row.responsavel_rg ?? undefined,
+    responsavelCpf: row.responsavel_cpf ?? undefined,
+  }
 }
 
 function isBuiltin(slug: string): boolean {
@@ -37,7 +50,7 @@ function toConfig(row: EspacoRow, paletteIndex: number): EspacoConfig {
   const base = builtin
     ? { ...builtin, nome: row.nome, descricao: row.descricao || builtin.descricao, capacidade: row.capacidade }
     : { slug: row.slug, nome: row.nome, descricao: row.descricao ?? '', capacidade: row.capacidade, categorias: [], ...PALETTE[paletteIndex % PALETTE.length] }
-  return { ...base, id: row.id, fotoFileId: row.foto_file_id ?? undefined }
+  return { ...base, id: row.id, fotoFileId: row.foto_file_id ?? undefined, dadosLegais: toDadosLegais(row) }
 }
 
 function toCustomData(row: EspacoRow): EspacoCustomData {
@@ -80,6 +93,7 @@ interface EspacosContextValue {
   loading: boolean
   addEspaco: (draft: NovoEspacoDraft) => Promise<EspacoCustomData>
   updateEspacoFoto: (id: string, fotoFileId: string) => Promise<void>
+  updateDadosLegais: (id: string, dados: DadosLegaisEspaco) => Promise<void>
 }
 
 const EspacosContext = createContext<EspacosContextValue | null>(null)
@@ -147,6 +161,25 @@ export function EspacosProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function updateDadosLegais(id: string, dados: DadosLegaisEspaco): Promise<void> {
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from('espacos')
+      .update({
+        cnpj: dados.cnpj || null,
+        responsavel_nome: dados.responsavelNome || null,
+        responsavel_rg: dados.responsavelRg || null,
+        responsavel_cpf: dados.responsavelCpf || null,
+      })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw error
+    const row = data as EspacoRow
+    setRows(prev => prev.map(r => (r.id === id ? row : r)))
+  }
+
   const ativos = rows.filter(r => r.status === 'ativo')
   let paletteIndex = 0
   const espacosConfig: EspacoConfig[] = ativos.map(r => toConfig(r, isBuiltin(r.slug) ? 0 : paletteIndex++))
@@ -154,7 +187,7 @@ export function EspacosProvider({ children }: { children: ReactNode }) {
   const customEspacos = rows.filter(r => !isBuiltin(r.slug)).map(toCustomData)
 
   return (
-    <EspacosContext.Provider value={{ espacosConfig, espacosNomes, customEspacos, loading, addEspaco, updateEspacoFoto }}>
+    <EspacosContext.Provider value={{ espacosConfig, espacosNomes, customEspacos, loading, addEspaco, updateEspacoFoto, updateDadosLegais }}>
       {children}
     </EspacosContext.Provider>
   )

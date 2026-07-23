@@ -1,11 +1,12 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { X, Save, FileText, DollarSign, User, Paperclip, Camera, Sparkles, MessageSquareText } from 'lucide-react'
+import { X, Save, FileText, DollarSign, User, Paperclip, Camera, Sparkles, MessageSquareText, FileSignature, Handshake } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { maskCPF, maskCNPJ } from '@/lib/utils'
 import Toast from '@/components/shared/Toast'
-import type { Contrato, Espaco } from '@/types'
+import GerarContratoModal from '@/components/contratos/GerarContratoModal'
+import type { Contrato, Espaco, TipoMinuta } from '@/types'
 
 interface FichaExtracao {
   nomeCompleto: string | null
@@ -52,6 +53,10 @@ interface Draft {
   responsavel: string
   observacoes: string
   status: 'confirmado' | 'em_negociacao' | 'cancelado'
+  tipoMinuta: TipoMinuta
+  valorNegociado: string
+  observacaoNegociacao: string
+  observacaoParceria: string
 }
 
 function emptyDraft(): Draft {
@@ -60,6 +65,7 @@ function emptyDraft(): Draft {
     horaInicio: '', horaFim: '', tipo: '', valorTotal: '',
     valorEntrada: '', responsavel: '', observacoes: '',
     status: 'em_negociacao',
+    tipoMinuta: 'locacao', valorNegociado: '', observacaoNegociacao: '', observacaoParceria: '',
   }
 }
 
@@ -112,6 +118,7 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
   const [colarTextoAberto, setColarTextoAberto] = useState(false)
   const [textoFicha, setTextoFicha] = useState('')
   const [saving, setSaving] = useState(false)
+  const [gerarContratoOpen, setGerarContratoOpen] = useState(false)
 
   function showToast(msg: string) {
     setToastMsg(msg)
@@ -206,13 +213,10 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
     setDraft(d => ({ ...d, [k]: v }))
   }
 
-  async function handleSave() {
-    setSubmitted(true)
-    if (hasErrors) return
-
-    const now   = new Date()
-    const seq   = String(now.getFullYear()).slice(2) + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0')
-    const contrato: Contrato = {
+  function buildContrato(): Contrato {
+    const now = new Date()
+    const seq = String(now.getFullYear()).slice(2) + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0')
+    return {
       id:              crypto.randomUUID(),
       numeroContrato:  `EL-${seq}-${String(Date.now()).slice(-4)}`,
       cliente:         draft.cliente.trim(),
@@ -222,13 +226,24 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
       horaInicio:      draft.horaInicio,
       horaFim:         draft.horaFim,
       tipo:            draft.tipo.trim() || 'Evento',
-      valorTotal:      Number(draft.valorTotal),
+      valorTotal:      Number(draft.valorTotal) || 0,
       valorEntrada:    Number(draft.valorEntrada) || 0,
       dataAssinatura:  now.toISOString().split('T')[0],
       status:          draft.status,
       responsavel:     draft.responsavel.trim() || '—',
       observacoes:     draft.observacoes.trim(),
+      tipoMinuta:      draft.tipoMinuta,
+      valorNegociado:  draft.valorNegociado ? Number(draft.valorNegociado) : undefined,
+      observacaoNegociacao: draft.observacaoNegociacao.trim() || undefined,
+      observacaoParceria:   draft.tipoMinuta === 'parceria' ? (draft.observacaoParceria.trim() || undefined) : undefined,
     }
+  }
+
+  async function handleSave() {
+    setSubmitted(true)
+    if (hasErrors) return
+
+    const contrato = buildContrato()
 
     setSaving(true)
     try {
@@ -430,6 +445,64 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
             </div>
           </section>
 
+          {/* Minuta / Negociação */}
+          <section>
+            <h4 className="flex items-center gap-2 text-xs font-semibold text-app-subtle uppercase tracking-wider mb-3">
+              <Handshake className="h-3.5 w-3.5" />
+              Minuta e Negociação
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+              <div>
+                <label className="text-xs text-app-subtle mb-0.5 block">Tipo de minuta</label>
+                <select
+                  value={draft.tipoMinuta}
+                  onChange={e => set('tipoMinuta', e.target.value)}
+                  className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none cursor-pointer"
+                  onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
+                  onBlur={e => { e.currentTarget.style.borderColor = '' }}
+                >
+                  <option value="locacao">Locação (valor fixo)</option>
+                  <option value="parceria">Parceria (% sobre faturamento)</option>
+                </select>
+              </div>
+              <Field label="Valor negociado (R$)" {...fieldProps('valorNegociado')} type="number" placeholder="0,00" />
+              <div className="col-span-2">
+                <label className="text-xs text-app-subtle mb-0.5 block">Observação sobre a negociação</label>
+                <textarea
+                  value={draft.observacaoNegociacao}
+                  onChange={e => set('observacaoNegociacao', e.target.value)}
+                  rows={2}
+                  placeholder="Ex: desconto combinado, condições específicas do acordo…"
+                  className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none resize-none"
+                  onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
+                  onBlur={e => { e.currentTarget.style.borderColor = '' }}
+                />
+              </div>
+              {draft.tipoMinuta === 'parceria' && (
+                <div className="col-span-2">
+                  <label className="text-xs text-app-subtle mb-0.5 block">Observação sobre a parceria</label>
+                  <textarea
+                    value={draft.observacaoParceria}
+                    onChange={e => set('observacaoParceria', e.target.value)}
+                    rows={2}
+                    placeholder="Descreva a parceria: com quem, o que cada lado cede…"
+                    className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none resize-none"
+                    onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
+                    onBlur={e => { e.currentTarget.style.borderColor = '' }}
+                  />
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => setGerarContratoOpen(true)}
+              disabled={!draft.cliente.trim() || !draft.espaco || !draft.dataEvento}
+              className="mt-3 flex items-center gap-1.5 rounded-lg border border-[#25D366]/30 bg-[#25D366]/10 px-3 py-1.5 text-xs font-medium text-[#128C7E] hover:bg-[#25D366]/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <FileSignature className="h-3.5 w-3.5" />
+              Gerar contrato com estes dados
+            </button>
+          </section>
+
           {/* Observações */}
           <section>
             <label className="text-xs text-app-subtle mb-1 block">Observações</label>
@@ -452,6 +525,12 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
         </div>
       </div>
       <Toast message={toastMsg} />
+      {gerarContratoOpen && (
+        <GerarContratoModal
+          origem={{ tipo: 'contrato', dados: buildContrato() }}
+          onClose={() => setGerarContratoOpen(false)}
+        />
+      )}
     </div>
   )
 }
