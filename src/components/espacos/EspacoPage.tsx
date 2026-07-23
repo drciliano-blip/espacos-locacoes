@@ -21,6 +21,7 @@ import EspacoLogo from '@/components/espacos/EspacoLogo'
 import CalendarView from '@/components/agenda/CalendarView'
 import EspacoGoogleCalendar from '@/components/espacos/EspacoGoogleCalendar'
 import DadosLegaisSection from '@/components/espacos/DadosLegaisSection'
+import MinutasEspacoSection from '@/components/espacos/MinutasEspacoSection'
 import FileAttachButton from '@/components/shared/FileAttachButton'
 import FileList from '@/components/shared/FileList'
 import { useEventos } from '@/contexts/EventosContext'
@@ -388,6 +389,9 @@ export default function EspacoPage({ config }: EspacoPageProps) {
                   <FileAttachButton module="espacos" entityId={config.id} entityName={config.nome} categoria="outro" label="Outros documentos" />
                 </div>
                 <FileList module="espacos" entityId={config.id} entityName={config.nome} showAttach={false} />
+                <div className="mt-6">
+                  <MinutasEspacoSection espacoId={config.id} espacoNome={config.nome} />
+                </div>
                 <div className="mt-6">
                   <DadosLegaisSection espacoId={config.id} dadosLegais={config.dadosLegais} />
                 </div>

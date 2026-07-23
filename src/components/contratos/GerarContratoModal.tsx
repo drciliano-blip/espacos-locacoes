@@ -1,12 +1,12 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { X, FileSignature, Sparkles, Download, Copy, Check, Paperclip } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { X, FileSignature, Sparkles, Download, Copy, Check, Paperclip, FileCheck2, AlertTriangle } from 'lucide-react'
 import { getModeloPorTipo } from '@/lib/contract-templates'
 import type { TipoMinuta } from '@/lib/contract-templates'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { formatCurrency } from '@/lib/utils'
-import { saveFile } from '@/lib/file-storage'
+import { saveFile, getFiles, type StoredFile } from '@/lib/file-storage'
 import type { Contrato, FichaCliente } from '@/types'
 
 async function gerarPdfFile(texto: string, nomeArquivo: string): Promise<File> {
@@ -145,7 +145,8 @@ function valoresIniciais(origem: Origem, campos: string[], dadosLegais: DadosLeg
 export default function GerarContratoModal({ origem, onClose }: Props) {
   const { espacosConfig } = useEspacos()
   const espaco = espacoDaOrigem(origem)
-  const dadosLegais = espacosConfig.find(e => e.nome.toLowerCase() === espaco.toLowerCase())?.dadosLegais
+  const espacoConfig = espacosConfig.find(e => e.nome.toLowerCase() === espaco.toLowerCase())
+  const dadosLegais = espacoConfig?.dadosLegais
 
   const [tipoMinuta, setTipoMinuta] = useState<TipoMinuta>(
     (origem.tipo === 'contrato' && origem.dados.tipoMinuta) || 'locacao'
@@ -160,6 +161,28 @@ export default function GerarContratoModal({ origem, onClose }: Props) {
   const [copiado, setCopiado] = useState(false)
   const [anexando, setAnexando] = useState(false)
   const [anexado, setAnexado] = useState(false)
+  const [minutaReal, setMinutaReal] = useState<StoredFile | null>(null)
+  const [carregandoMinuta, setCarregandoMinuta] = useState(true)
+
+  useEffect(() => {
+    let ativo = true
+    setCarregandoMinuta(true)
+    setMinutaReal(null)
+    if (!espacoConfig?.id) {
+      setCarregandoMinuta(false)
+      return
+    }
+    getFiles({ module: 'espacos', entityId: espacoConfig.id }).then(arquivos => {
+      if (!ativo) return
+      const categoria = `minuta_${tipoMinuta}`
+      const encontrada = arquivos
+        .filter(f => f.categoria === categoria)
+        .sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt))[0]
+      setMinutaReal(encontrada ?? null)
+      setCarregandoMinuta(false)
+    })
+    return () => { ativo = false }
+  }, [espacoConfig?.id, tipoMinuta])
 
   function trocarTipoMinuta(novoTipo: TipoMinuta) {
     setTipoMinuta(novoTipo)
@@ -174,10 +197,13 @@ export default function GerarContratoModal({ origem, onClose }: Props) {
     setGerando(true)
     setErro(null)
     try {
-      const res = await fetch('/api/generate-contract', {
+      const usaMinutaReal = !!minutaReal
+      const res = await fetch(usaMinutaReal ? '/api/generate-contract-from-minuta' : '/api/generate-contract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ templateText: modelo.texto, variaveis }),
+        body: JSON.stringify(
+          usaMinutaReal ? { fileId: minutaReal!.id, variaveis } : { templateText: modelo.texto, variaveis }
+        ),
       })
       const data = await res.json()
       if (!res.ok || data.error) {
@@ -272,6 +298,24 @@ export default function GerarContratoModal({ origem, onClose }: Props) {
                 </select>
               </div>
 
+              {!carregandoMinuta && (
+                minutaReal ? (
+                  <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2.5 flex items-start gap-2">
+                    <FileCheck2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-emerald-600">
+                      Usando a minuta real de {espaco} ({minutaReal.name}) como base — a IA preenche os dados mantendo o texto jurídico original.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2.5 flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-600">
+                      {espaco} ainda não tem a minuta real de {tipoMinuta === 'parceria' ? 'Parceria' : 'Locação'} anexada — usando um modelo genérico temporário. Anexe o PDF real em Espaços → {espaco} → Documentos para usar o texto oficial.
+                    </p>
+                  </div>
+                )
+              )}
+
               {!dadosLegais?.cnpj && (
                 <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2.5">
                   <p className="text-xs text-amber-600">
@@ -281,7 +325,7 @@ export default function GerarContratoModal({ origem, onClose }: Props) {
               )}
 
               <p className="text-xs text-app-muted">
-                Modelo: <span className="font-semibold text-app-text">{modelo.nome}</span>. Revise os campos abaixo antes de gerar.
+                Modelo: <span className="font-semibold text-app-text">{minutaReal ? minutaReal.name : modelo.nome}</span>. Revise os campos abaixo antes de gerar.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
                 {modelo.variaveis.map(campo => (
