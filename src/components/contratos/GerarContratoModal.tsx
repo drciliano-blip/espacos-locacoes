@@ -1,12 +1,40 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { X, FileSignature, Sparkles, Download, Copy, Check } from 'lucide-react'
+import { X, FileSignature, Sparkles, Download, Copy, Check, Paperclip } from 'lucide-react'
 import { getModeloPorTipo } from '@/lib/contract-templates'
 import type { TipoMinuta } from '@/lib/contract-templates'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { formatCurrency } from '@/lib/utils'
+import { saveFile } from '@/lib/file-storage'
 import type { Contrato, FichaCliente } from '@/types'
+
+async function gerarPdfFile(texto: string, nomeArquivo: string): Promise<File> {
+  const { jsPDF } = await import('jspdf')
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+  const margin = 48
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const pageHeight = doc.internal.pageSize.getHeight()
+  const maxWidth = pageWidth - margin * 2
+  const lineHeight = 14
+
+  doc.setFont('times', 'normal')
+  doc.setFontSize(11)
+  const lines = doc.splitTextToSize(texto, maxWidth) as string[]
+
+  let y = margin
+  for (const line of lines) {
+    if (y > pageHeight - margin) {
+      doc.addPage()
+      y = margin
+    }
+    doc.text(line, margin, y)
+    y += lineHeight
+  }
+
+  const blob = doc.output('blob')
+  return new File([blob], nomeArquivo, { type: 'application/pdf' })
+}
 
 const GREEN = '#25D366'
 const DARK_GREEN = '#128C7E'
@@ -14,6 +42,15 @@ const DARK_GREEN = '#128C7E'
 type Origem =
   | { tipo: 'contrato'; dados: Contrato }
   | { tipo: 'ficha'; dados: FichaCliente }
+
+function destinoAnexo(origem: Origem): { module: 'contratos' | 'fichas'; entityId: string; entityName: string; espaco?: string } {
+  if (origem.tipo === 'contrato') {
+    const c = origem.dados
+    return { module: 'contratos', entityId: c.id, entityName: `${c.cliente} — ${c.numeroContrato}`, espaco: c.espaco }
+  }
+  const f = origem.dados
+  return { module: 'fichas', entityId: f.id, entityName: f.nomeCompleto }
+}
 
 interface Props {
   origem: Origem
@@ -121,6 +158,8 @@ export default function GerarContratoModal({ origem, onClose }: Props) {
   const [erro, setErro] = useState<string | null>(null)
   const [contractText, setContractText] = useState<string | null>(null)
   const [copiado, setCopiado] = useState(false)
+  const [anexando, setAnexando] = useState(false)
+  const [anexado, setAnexado] = useState(false)
 
   function trocarTipoMinuta(novoTipo: TipoMinuta) {
     setTipoMinuta(novoTipo)
@@ -146,10 +185,26 @@ export default function GerarContratoModal({ origem, onClose }: Props) {
         return
       }
       setContractText(data.contractText)
+      anexarAoSistema(data.contractText)
     } catch {
       setErro('Falha ao conectar com a IA.')
     } finally {
       setGerando(false)
+    }
+  }
+
+  async function anexarAoSistema(texto: string) {
+    setAnexando(true)
+    try {
+      const destino = destinoAnexo(origem)
+      const nomeArquivo = `contrato-${modelo.tipoMinuta}-${Date.now()}.pdf`
+      const file = await gerarPdfFile(texto, nomeArquivo)
+      await saveFile(file, { ...destino, categoria: 'contrato' })
+      setAnexado(true)
+    } catch {
+      setErro('Contrato gerado, mas não foi possível anexar o PDF automaticamente. Use "Baixar como PDF" e anexe manualmente.')
+    } finally {
+      setAnexando(false)
     }
   }
 
@@ -305,6 +360,18 @@ export default function GerarContratoModal({ origem, onClose }: Props) {
                   Editar campos novamente
                 </button>
               </div>
+              {anexando && (
+                <p className="flex items-center gap-1.5 text-xs text-app-muted">
+                  <Paperclip className="h-3.5 w-3.5 animate-pulse" />
+                  Anexando PDF ao {origem.tipo === 'contrato' ? 'contrato' : 'registro'}…
+                </p>
+              )}
+              {anexado && !anexando && (
+                <p className="flex items-center gap-1.5 text-xs text-emerald-600">
+                  <Check className="h-3.5 w-3.5" />
+                  PDF anexado automaticamente — já disponível em Documentos.
+                </p>
+              )}
               {erro && (
                 <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5">
                   <p className="text-xs text-red-400">{erro}</p>

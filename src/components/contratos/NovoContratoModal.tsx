@@ -109,6 +109,9 @@ function Field({
 
 export default function NovoContratoModal({ onClose, onSave }: Props) {
   const { espacosNomes } = useEspacos()
+  // Gerado uma única vez — usado tanto no PDF gerado antes de salvar quanto no
+  // contrato salvo de fato, pra não anexar arquivo a um id que nunca vira registro real.
+  const [contratoId]            = useState(() => crypto.randomUUID())
   const [draft, setDraft]       = useState<Draft>(emptyDraft)
   const [submitted, setSubmitted] = useState(false)
   const fichaFileRef = useRef<HTMLInputElement>(null)
@@ -217,7 +220,7 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
     const now = new Date()
     const seq = String(now.getFullYear()).slice(2) + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0')
     return {
-      id:              crypto.randomUUID(),
+      id:              contratoId,
       numeroContrato:  `EL-${seq}-${String(Date.now()).slice(-4)}`,
       cliente:         draft.cliente.trim(),
       cpfCnpj:         draft.cpfCnpj.trim() || '—',
