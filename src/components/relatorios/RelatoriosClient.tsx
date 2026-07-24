@@ -15,6 +15,7 @@ import { aggregateMonthly, calcularProjecoes, getPeriodRange } from '@/lib/relat
 import { useEventos } from '@/contexts/EventosContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
 import DespesasSection from './DespesasSection'
+import RelatorioMensalSection from './RelatorioMensalSection'
 
 function getDefaultFilters(): RelatorioFilters {
   const { inicio, fim } = getPeriodRange('anual')
@@ -88,6 +89,12 @@ export default function RelatoriosClient() {
       <FilterBar filters={filters} onChange={handleFiltersChange} />
 
       <KPISummary data={aggregates} />
+
+      <RelatorioMensalSection
+        selectedSpaces={filters.espacos.length > 0 ? filters.espacos : undefined}
+        dataInicio={filters.dataInicio}
+        dataFim={filters.dataFim}
+      />
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <RevenueLineChart data={aggregates} />
