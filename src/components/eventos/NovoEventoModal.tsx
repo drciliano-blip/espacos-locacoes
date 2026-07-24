@@ -1,13 +1,16 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { X, Save, Calendar, DollarSign, User, ClipboardCheck, Paperclip, Camera, Sparkles, Plus, Trash2, MessageSquareText, IdCard, Building2 } from 'lucide-react'
-import type { Evento, Espaco, TipoEvento, FormaPagamento } from '@/types'
+import { X, Save, Calendar, DollarSign, User, ClipboardCheck, Paperclip, Camera, Sparkles, Plus, Trash2, MessageSquareText, IdCard, Building2, FileSignature } from 'lucide-react'
+import type { Evento, Espaco, TipoEvento, FormaPagamento, Contrato } from '@/types'
 import FileAttachButton from '@/components/shared/FileAttachButton'
 import FileList from '@/components/shared/FileList'
 import Toast from '@/components/shared/Toast'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
+import { useContratos } from '@/contexts/ContratosContext'
+import GerarContratoDoEventoModal from '@/components/eventos/GerarContratoDoEventoModal'
+import GerarContratoModal from '@/components/contratos/GerarContratoModal'
 import { parseCurrencyBR, maskCPF, maskCNPJ, maskPhone, maskCEP } from '@/lib/utils'
 
 const FORMAS_PAGAMENTO: FormaPagamento[] = [
@@ -234,6 +237,7 @@ function Field({
 export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoEventoModalProps) {
   const { espacosNomes } = useEspacos()
   const { syncParcelasDoEvento } = useReceitas()
+  const { addContrato } = useContratos()
   const [draft, setDraft]         = useState<Draft>(() => emptyDraft(espacoPadrao))
   const [submitted, setSubmitted] = useState(false)
   const [parcelas, setParcelas]   = useState<ParcelaDraft[] | null>(null)
@@ -249,6 +253,9 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
   const [saving, setSaving] = useState(false)
   const [colarTextoAberto, setColarTextoAberto] = useState(false)
   const [textoFicha, setTextoFicha] = useState('')
+  const [eventoSalvo, setEventoSalvo] = useState<Evento | null>(null)
+  const [gerarContratoDoEventoOpen, setGerarContratoDoEventoOpen] = useState(false)
+  const [contratoParaGerar, setContratoParaGerar] = useState<Contrato | null>(null)
 
   const errors: Partial<Record<keyof Draft, boolean>> = {
     cliente:    !draft.cliente.trim(),
@@ -440,7 +447,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
       showToast('Evento salvo, mas não foi possível gravar o plano de parcelas customizado. Ajuste em Eventos → Receitas.')
     }
     setSaving(false)
-    onClose()
+    setEventoSalvo(evento)
   }
 
   function fieldProps(draftKey: keyof Draft, required = false) {
@@ -906,6 +913,50 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
         </div>
       </div>
       <Toast message={toastMsg} />
+
+      {eventoSalvo && !gerarContratoDoEventoOpen && !contratoParaGerar && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-app-border bg-app-surface shadow-2xl p-6 space-y-4 text-center">
+            <p className="text-sm font-semibold text-app-text">Evento salvo com sucesso!</p>
+            <p className="text-xs text-app-muted">Quer gerar o contrato agora, usando os dados já cadastrados?</p>
+            <div className="flex justify-center gap-2">
+              <button
+                onClick={() => { setEventoSalvo(null); onClose() }}
+                className="rounded-lg border border-app-border2 px-4 py-2 text-sm text-app-muted hover:bg-app-surface2 transition-colors"
+              >
+                Agora não
+              </button>
+              <button
+                onClick={() => setGerarContratoDoEventoOpen(true)}
+                className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors"
+                style={{ backgroundColor: GREEN }}
+              >
+                <FileSignature className="h-3.5 w-3.5" />
+                Gerar contrato
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {eventoSalvo && gerarContratoDoEventoOpen && (
+        <GerarContratoDoEventoModal
+          evento={eventoSalvo}
+          onClose={() => { setGerarContratoDoEventoOpen(false); setEventoSalvo(null); onClose() }}
+          onSave={addContrato}
+          onCreated={(contrato) => {
+            setGerarContratoDoEventoOpen(false)
+            setContratoParaGerar(contrato)
+          }}
+        />
+      )}
+
+      {contratoParaGerar && eventoSalvo && (
+        <GerarContratoModal
+          origem={{ tipo: 'contrato', dados: contratoParaGerar, eventoOrigem: eventoSalvo }}
+          onClose={() => { setContratoParaGerar(null); setEventoSalvo(null); onClose() }}
+        />
+      )}
     </div>
   )
 }
