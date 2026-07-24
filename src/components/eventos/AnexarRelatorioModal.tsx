@@ -26,10 +26,11 @@ const TIPOS: TipoConfig[] = [
   { key: 'outros',                label: 'Outros',                  categoriaSlug: 'outros' },
 ]
 
+// Parseia valor extraído pela IA (texto livre) — usa a mesma lógica robusta de
+// parseCurrencyBR, que trata corretamente "16.000" (sem vírgula) como dezesseis mil.
 function parseValorBR(valor: string): string {
-  const numeric = valor.replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3},)/g, '').replace(',', '.')
-  const n = parseFloat(numeric)
-  return Number.isFinite(n) ? String(n) : ''
+  const n = parseCurrencyBR(valor)
+  return n > 0 ? String(n) : ''
 }
 
 interface Props {

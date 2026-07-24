@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Building2, Camera, CheckCircle2, Paperclip, Send, Sparkles } from 'lucide-react'
-import { maskCPF, maskCNPJ, maskPhone, maskCEP } from '@/lib/utils'
+import { maskCPF, maskCNPJ, maskPhone, maskCEP, parseCurrencyBR } from '@/lib/utils'
 import { saveFile } from '@/lib/file-storage'
 import { createClient } from '@/lib/supabase/client'
 import Toast from '@/components/shared/Toast'
@@ -38,10 +38,11 @@ interface FichaExtracao {
   dataVencimentoSaldo: string | null
 }
 
+// Parseia valor extraído pela IA (texto livre) — usa a mesma lógica robusta de
+// parseCurrencyBR, que trata corretamente "16.000" (sem vírgula) como dezesseis mil.
 function parseValorBR(valor: string): string {
-  const numeric = valor.replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3},)/g, '').replace(',', '.')
-  const n = parseFloat(numeric)
-  return Number.isFinite(n) ? String(n) : ''
+  const n = parseCurrencyBR(valor)
+  return n > 0 ? String(n) : ''
 }
 
 function parseDataBR(data: string): string {
