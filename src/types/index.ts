@@ -32,6 +32,16 @@ export interface Documento {
   tamanho?: string
 }
 
+export interface EnderecoCompleto {
+  rua?: string
+  numero?: string
+  complemento?: string
+  bairro?: string
+  cidade?: string
+  estado?: string
+  cep?: string
+}
+
 export interface Evento {
   id: string
   cliente: string
@@ -57,6 +67,19 @@ export interface Evento {
   observacoesTecnicas?: string
   statusVistoria?: StatusVistoria
   documentos?: Documento[]  // Feature 6
+  // Dados completos do cliente (mesmos solicitados na ficha, usados na elaboração do contrato)
+  nomeEvento?: string
+  horaInicioMontagem?: string
+  cpf?: string
+  rg?: string
+  dataNascimento?: string
+  email?: string
+  endereco?: EnderecoCompleto
+  pessoaJuridica?: boolean
+  razaoSocial?: string
+  nomeFantasia?: string
+  cnpj?: string
+  enderecoEmpresa?: EnderecoCompleto
 }
 
 export interface Pagamento {

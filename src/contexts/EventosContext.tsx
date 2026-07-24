@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useReceitas } from '@/contexts/ReceitasContext'
 import { useAtividades } from '@/contexts/AtividadesContext'
-import type { Evento, Espaco } from '@/types'
+import type { Evento, Espaco, EnderecoCompleto } from '@/types'
 
 interface EventoRow {
   id: string
@@ -31,6 +31,18 @@ interface EventoRow {
   decoracao: string | null
   observacoes_tecnicas: string | null
   status_vistoria: string | null
+  nome_evento: string | null
+  hora_inicio_montagem: string | null
+  cpf: string | null
+  rg: string | null
+  data_nascimento: string | null
+  email: string | null
+  endereco: EnderecoCompleto | null
+  pessoa_juridica: boolean
+  razao_social: string | null
+  nome_fantasia: string | null
+  cnpj: string | null
+  endereco_empresa: EnderecoCompleto | null
 }
 
 function fromRow(row: EventoRow): Evento {
@@ -59,6 +71,18 @@ function fromRow(row: EventoRow): Evento {
     observacoesTecnicas: row.observacoes_tecnicas ?? undefined,
     statusVistoria: (row.status_vistoria as Evento['statusVistoria']) ?? undefined,
     documentos: [],
+    nomeEvento: row.nome_evento ?? undefined,
+    horaInicioMontagem: row.hora_inicio_montagem?.slice(0, 5) ?? undefined,
+    cpf: row.cpf ?? undefined,
+    rg: row.rg ?? undefined,
+    dataNascimento: row.data_nascimento ?? undefined,
+    email: row.email ?? undefined,
+    endereco: row.endereco ?? undefined,
+    pessoaJuridica: row.pessoa_juridica ?? false,
+    razaoSocial: row.razao_social ?? undefined,
+    nomeFantasia: row.nome_fantasia ?? undefined,
+    cnpj: row.cnpj ?? undefined,
+    enderecoEmpresa: row.endereco_empresa ?? undefined,
   }
 }
 
@@ -85,6 +109,18 @@ function toPayload(e: Evento) {
     decoracao: e.decoracao ?? null,
     observacoes_tecnicas: e.observacoesTecnicas ?? null,
     status_vistoria: e.statusVistoria ?? null,
+    nome_evento: e.nomeEvento ?? null,
+    hora_inicio_montagem: e.horaInicioMontagem || null,
+    cpf: e.cpf ?? null,
+    rg: e.rg ?? null,
+    data_nascimento: e.dataNascimento || null,
+    email: e.email ?? null,
+    endereco: e.endereco ?? null,
+    pessoa_juridica: e.pessoaJuridica ?? false,
+    razao_social: e.razaoSocial ?? null,
+    nome_fantasia: e.nomeFantasia ?? null,
+    cnpj: e.cnpj ?? null,
+    endereco_empresa: e.enderecoEmpresa ?? null,
   }
 }
 

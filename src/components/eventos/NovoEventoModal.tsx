@@ -1,14 +1,14 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { X, Save, Calendar, DollarSign, User, ClipboardCheck, Paperclip, Camera, Sparkles, Plus, Trash2, MessageSquareText } from 'lucide-react'
+import { X, Save, Calendar, DollarSign, User, ClipboardCheck, Paperclip, Camera, Sparkles, Plus, Trash2, MessageSquareText, IdCard, Building2 } from 'lucide-react'
 import type { Evento, Espaco, TipoEvento, FormaPagamento } from '@/types'
 import FileAttachButton from '@/components/shared/FileAttachButton'
 import FileList from '@/components/shared/FileList'
 import Toast from '@/components/shared/Toast'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
-import { parseCurrencyBR } from '@/lib/utils'
+import { parseCurrencyBR, maskCPF, maskCNPJ, maskPhone, maskCEP } from '@/lib/utils'
 
 const FORMAS_PAGAMENTO: FormaPagamento[] = [
   'PIX',
@@ -22,10 +22,21 @@ const FORMAS_PAGAMENTO: FormaPagamento[] = [
 
 interface FichaExtracao {
   nomeCompleto: string | null
+  cpf: string | null
+  rg: string | null
+  dataNascimento: string | null
+  email: string | null
   telefoneCelular: string | null
-  dataEvento: string | null
+  endereco: { rua: string | null; numero: string | null; complemento: string | null; bairro: string | null; cidade: string | null; estado: string | null; cep: string | null } | null
+  pessoaJuridica: boolean
+  razaoSocial: string | null
+  nomeFantasia: string | null
+  cnpj: string | null
+  nomeEvento: string | null
   espacoDesejado: string | null
   tipoEvento: string | null
+  dataEvento: string | null
+  horaInicioMontagem: string | null
   horaInicioEvento: string | null
   horaTerminoEvento: string | null
   valorLocacao: string | null
@@ -50,6 +61,20 @@ function parseDataBR(data: string): string {
 function matchFromList(value: string | null, options: string[]): string | undefined {
   if (!value) return undefined
   return options.find(o => o.toLowerCase() === value.toLowerCase())
+}
+
+function enderecoParaSalvar(e: { rua: string; numero: string; complemento: string; bairro: string; cidade: string; estado: string; cep: string }) {
+  const preenchido = Object.values(e).some(v => v.trim())
+  if (!preenchido) return undefined
+  return {
+    rua: e.rua.trim() || undefined,
+    numero: e.numero.trim() || undefined,
+    complemento: e.complemento.trim() || undefined,
+    bairro: e.bairro.trim() || undefined,
+    cidade: e.cidade.trim() || undefined,
+    estado: e.estado.trim() || undefined,
+    cep: e.cep.trim() || undefined,
+  }
 }
 
 // O erro do Supabase (PostgrestError) não é uma instância de Error do JS — só tem
@@ -86,6 +111,18 @@ function gerarParcelasPadrao(dataEvento: string, valorTotal: number, valorSinal:
   ]
 }
 
+interface EnderecoDraft {
+  rua: string
+  numero: string
+  complemento: string
+  bairro: string
+  cidade: string
+  estado: string
+  cep: string
+}
+
+const ENDERECO_VAZIO: EnderecoDraft = { rua: '', numero: '', complemento: '', bairro: '', cidade: '', estado: '', cep: '' }
+
 interface Draft {
   cliente: string
   espaco: Espaco | ''
@@ -103,6 +140,18 @@ interface Draft {
   valorSinal: string
   dataVencimentoSaldo: string
   observacoes: string
+  nomeEvento: string
+  horaInicioMontagem: string
+  cpf: string
+  rg: string
+  dataNascimento: string
+  email: string
+  endereco: EnderecoDraft
+  pessoaJuridica: boolean
+  razaoSocial: string
+  nomeFantasia: string
+  cnpj: string
+  enderecoEmpresa: EnderecoDraft
 }
 
 function emptyDraft(espacoPadrao?: Espaco): Draft {
@@ -123,6 +172,18 @@ function emptyDraft(espacoPadrao?: Espaco): Draft {
     valorSinal: '',
     dataVencimentoSaldo: '',
     observacoes: '',
+    nomeEvento: '',
+    horaInicioMontagem: '',
+    cpf: '',
+    rg: '',
+    dataNascimento: '',
+    email: '',
+    endereco: ENDERECO_VAZIO,
+    pessoaJuridica: false,
+    razaoSocial: '',
+    nomeFantasia: '',
+    cnpj: '',
+    enderecoEmpresa: ENDERECO_VAZIO,
   }
 }
 
@@ -204,6 +265,10 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
     setDraft(d => ({ ...d, [key]: value }))
   }
 
+  function setEndereco(campo: 'endereco' | 'enderecoEmpresa', chave: keyof EnderecoDraft, valor: string) {
+    setDraft(d => ({ ...d, [campo]: { ...d[campo], [chave]: valor } }))
+  }
+
   function showToast(msg: string) {
     setToastMsg(msg)
     setTimeout(() => setToastMsg(null), 3500)
@@ -231,7 +296,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
         novoDraft = {
           ...d,
           cliente: data.nomeCompleto ?? d.cliente,
-          telefoneContato: data.telefoneCelular ?? d.telefoneContato,
+          telefoneContato: data.telefoneCelular ? maskPhone(data.telefoneCelular) : d.telefoneContato,
           data: data.dataEvento ? parseDataBR(data.dataEvento) || d.data : d.data,
           espaco: (!espacoPadrao ? matchFromList(data.espacoDesejado, espacosNomes) as Espaco : undefined) ?? d.espaco,
           tipo: data.tipoEvento ?? d.tipo,
@@ -241,6 +306,25 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
           formaPagamento: (matchFromList(data.formaPagamento, FORMAS_PAGAMENTO) as FormaPagamento) ?? d.formaPagamento,
           valorSinal: data.valorSinal ? parseValorBR(data.valorSinal) || d.valorSinal : d.valorSinal,
           dataVencimentoSaldo: data.dataVencimentoSaldo ? parseDataBR(data.dataVencimentoSaldo) || d.dataVencimentoSaldo : d.dataVencimentoSaldo,
+          nomeEvento: data.nomeEvento ?? d.nomeEvento,
+          horaInicioMontagem: data.horaInicioMontagem ?? d.horaInicioMontagem,
+          cpf: data.cpf ? maskCPF(data.cpf) : d.cpf,
+          rg: data.rg ?? d.rg,
+          dataNascimento: data.dataNascimento ? parseDataBR(data.dataNascimento) || d.dataNascimento : d.dataNascimento,
+          email: data.email ?? d.email,
+          endereco: data.endereco ? {
+            rua: data.endereco.rua ?? d.endereco.rua,
+            numero: data.endereco.numero ?? d.endereco.numero,
+            complemento: data.endereco.complemento ?? d.endereco.complemento,
+            bairro: data.endereco.bairro ?? d.endereco.bairro,
+            cidade: data.endereco.cidade ?? d.endereco.cidade,
+            estado: data.endereco.estado ?? d.endereco.estado,
+            cep: data.endereco.cep ? maskCEP(data.endereco.cep) : d.endereco.cep,
+          } : d.endereco,
+          pessoaJuridica: data.pessoaJuridica || d.pessoaJuridica,
+          razaoSocial: data.razaoSocial ?? d.razaoSocial,
+          nomeFantasia: data.nomeFantasia ?? d.nomeFantasia,
+          cnpj: data.cnpj ? maskCNPJ(data.cnpj) : d.cnpj,
         }
         return novoDraft
       })
@@ -295,6 +379,9 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
     setSaveError(null)
     if (hasErrors) return
 
+    const endereco = enderecoParaSalvar(draft.endereco)
+    const enderecoEmpresa = draft.pessoaJuridica ? enderecoParaSalvar(draft.enderecoEmpresa) : undefined
+
     const evento: Evento = {
       id:              eventId,
       cliente:         draft.cliente.trim(),
@@ -314,6 +401,18 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
       dataVencimentoSaldo: draft.formaPagamento === 'Parcelado' && draft.dataVencimentoSaldo ? draft.dataVencimentoSaldo : undefined,
       observacoes:     draft.observacoes.trim() || undefined,
       documentos:      [],
+      nomeEvento:      draft.nomeEvento.trim() || undefined,
+      horaInicioMontagem: draft.horaInicioMontagem || undefined,
+      cpf:             draft.cpf.trim() || undefined,
+      rg:              draft.rg.trim() || undefined,
+      dataNascimento:  draft.dataNascimento || undefined,
+      email:           draft.email.trim() || undefined,
+      endereco,
+      pessoaJuridica:  draft.pessoaJuridica,
+      razaoSocial:     draft.pessoaJuridica ? (draft.razaoSocial.trim() || undefined) : undefined,
+      nomeFantasia:    draft.pessoaJuridica ? (draft.nomeFantasia.trim() || undefined) : undefined,
+      cnpj:            draft.pessoaJuridica ? (draft.cnpj.trim() || undefined) : undefined,
+      enderecoEmpresa,
     }
 
     setSaving(true)
@@ -470,6 +569,10 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
                 <Field label="Nome do Cliente" {...fieldProps('cliente', true)} required placeholder="Ex: João Silva" />
               </div>
 
+              <div className="col-span-2">
+                <Field label="Nome do Evento" {...fieldProps('nomeEvento')} placeholder="Ex: Casamento João & Maria" />
+              </div>
+
               {/* Espaço */}
               <div className="col-span-2">
                 <label className="text-xs text-app-subtle mb-0.5 block">
@@ -511,6 +614,8 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
                 </select>
               </div>
 
+              <Field label="Início montagem" {...fieldProps('horaInicioMontagem')} type="time" />
+              <div />
               <Field label="Hora início" {...fieldProps('horaInicio', true)} type="time" required />
               <Field label="Hora fim"    {...fieldProps('horaFim', true)}    type="time" required />
 
@@ -545,6 +650,64 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
               </div>
 
             </div>
+          </section>
+
+          {/* ── Dados Pessoais ─────────────────────────────────────────── */}
+          <section>
+            <h4 className="flex items-center gap-2 text-xs font-semibold text-app-subtle uppercase tracking-wider mb-3">
+              <IdCard className="h-3.5 w-3.5" />
+              Dados Pessoais
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+              <Field label="CPF" {...fieldProps('cpf')} placeholder="000.000.000-00" />
+              <Field label="RG" {...fieldProps('rg')} />
+              <Field label="Data de nascimento" {...fieldProps('dataNascimento')} type="date" />
+              <Field label="E-mail" {...fieldProps('email')} placeholder="cliente@email.com" />
+              <div className="col-span-2">
+                <Field label="Rua" value={draft.endereco.rua} onChange={v => setEndereco('endereco', 'rua', v)} />
+              </div>
+              <Field label="Número" value={draft.endereco.numero} onChange={v => setEndereco('endereco', 'numero', v)} />
+              <Field label="Complemento" value={draft.endereco.complemento} onChange={v => setEndereco('endereco', 'complemento', v)} />
+              <Field label="Bairro" value={draft.endereco.bairro} onChange={v => setEndereco('endereco', 'bairro', v)} />
+              <Field label="Cidade" value={draft.endereco.cidade} onChange={v => setEndereco('endereco', 'cidade', v)} />
+              <Field label="Estado" value={draft.endereco.estado} onChange={v => setEndereco('endereco', 'estado', v.toUpperCase().slice(0, 2))} placeholder="SP" />
+              <Field label="CEP" value={draft.endereco.cep} onChange={v => setEndereco('endereco', 'cep', maskCEP(v))} placeholder="00000-000" />
+            </div>
+          </section>
+
+          {/* ── Dados da Empresa ───────────────────────────────────────── */}
+          <section>
+            <h4 className="flex items-center gap-2 text-xs font-semibold text-app-subtle uppercase tracking-wider mb-3">
+              <Building2 className="h-3.5 w-3.5" />
+              Dados da Empresa
+            </h4>
+            <label className="flex items-center gap-2 cursor-pointer select-none mb-3">
+              <input
+                type="checkbox"
+                checked={draft.pessoaJuridica}
+                onChange={e => setDraft(d => ({ ...d, pessoaJuridica: e.target.checked }))}
+                className="h-4 w-4 rounded border-app-border2 accent-[#25D366]"
+              />
+              <span className="text-sm text-app-text">É pessoa jurídica?</span>
+            </label>
+            {draft.pessoaJuridica && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+                <Field label="Razão Social" {...fieldProps('razaoSocial')} />
+                <Field label="Nome Fantasia" {...fieldProps('nomeFantasia')} />
+                <div className="col-span-2">
+                  <Field label="CNPJ" {...fieldProps('cnpj')} placeholder="00.000.000/0000-00" />
+                </div>
+                <div className="col-span-2">
+                  <Field label="Rua" value={draft.enderecoEmpresa.rua} onChange={v => setEndereco('enderecoEmpresa', 'rua', v)} />
+                </div>
+                <Field label="Número" value={draft.enderecoEmpresa.numero} onChange={v => setEndereco('enderecoEmpresa', 'numero', v)} />
+                <Field label="Complemento" value={draft.enderecoEmpresa.complemento} onChange={v => setEndereco('enderecoEmpresa', 'complemento', v)} />
+                <Field label="Bairro" value={draft.enderecoEmpresa.bairro} onChange={v => setEndereco('enderecoEmpresa', 'bairro', v)} />
+                <Field label="Cidade" value={draft.enderecoEmpresa.cidade} onChange={v => setEndereco('enderecoEmpresa', 'cidade', v)} />
+                <Field label="Estado" value={draft.enderecoEmpresa.estado} onChange={v => setEndereco('enderecoEmpresa', 'estado', v.toUpperCase().slice(0, 2))} placeholder="SP" />
+                <Field label="CEP" value={draft.enderecoEmpresa.cep} onChange={v => setEndereco('enderecoEmpresa', 'cep', maskCEP(v))} placeholder="00000-000" />
+              </div>
+            )}
           </section>
 
           {/* ── Capacidade e financeiro ────────────────────────────────── */}
