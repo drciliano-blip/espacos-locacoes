@@ -40,6 +40,7 @@ interface ContasPagarContextValue {
   contas: ContaPagar[]
   loading: boolean
   addConta: (c: ContaPagar) => Promise<void>
+  darBaixa: (id: string, dataPagamento: string) => Promise<void>
 }
 
 const ContasPagarContext = createContext<ContasPagarContextValue | null>(null)
@@ -97,8 +98,27 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function darBaixa(id: string, dataPagamento: string) {
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from('contas_pagar')
+      .update({ status: 'pago', data_pagamento: dataPagamento })
+      .eq('id', id)
+      .select(SELECT)
+      .single()
+
+    if (error) throw error
+    const atualizada = fromRow(data as unknown as ContaPagarRow)
+    setContas(prev => prev.map(c => c.id === id ? atualizada : c))
+    try {
+      await logAtividade({ tipo: 'financeiro', acao: 'Conta a pagar paga', detalhes: atualizada.descricao, espaco: atualizada.espaco !== 'Todos' ? atualizada.espaco : undefined })
+    } catch {
+      // log é secundário, não deve impedir a baixa da conta
+    }
+  }
+
   return (
-    <ContasPagarContext.Provider value={{ contas, loading, addConta }}>
+    <ContasPagarContext.Provider value={{ contas, loading, addConta, darBaixa }}>
       {children}
     </ContasPagarContext.Provider>
   )

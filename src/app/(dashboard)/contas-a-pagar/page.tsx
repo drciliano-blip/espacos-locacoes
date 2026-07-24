@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef } from 'react'
 import {
   Receipt, TrendingDown, CheckCircle2, AlertCircle, Clock,
-  Filter, X, Plus, FolderOpen, Paperclip, ChevronDown, ChevronUp, Sparkles, Camera,
+  Filter, X, Plus, FolderOpen, Paperclip, ChevronDown, ChevronUp, Sparkles, Camera, Banknote,
 } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
@@ -46,6 +46,15 @@ const statusBadge: Record<StatusContaPagar, string> = {
 }
 const statusLabel: Record<StatusContaPagar, string> = { pago: 'Pago', pendente: 'Pendente', atrasado: 'Atrasado' }
 
+// "atrasado" não é um valor gravado no banco — é calculado a partir do vencimento,
+// pra toda conta pendente vencida virar "Em atraso" automaticamente, sem precisar
+// de um job rodando. Só "pago" é um estado que precisa ser confirmado manualmente.
+function statusEfetivo(conta: ContaPagar): StatusContaPagar {
+  if (conta.status === 'pago') return 'pago'
+  const hoje = new Date().toISOString().split('T')[0]
+  return conta.dataVencimento < hoje ? 'atrasado' : 'pendente'
+}
+
 const SUB_FIXAS:    string[] = ['aluguel', 'energia', 'internet', 'funcionários', 'outros']
 const SUB_VARIAVEIS:string[] = ['manutenção', 'fornecedores', 'extras', 'outros']
 const subcategoriaLabel: Record<string, string> = {
@@ -77,7 +86,8 @@ const FORM_EMPTY: FormState = {
 
 export default function ContasPagarPage() {
   const { espacosNomes } = useEspacos()
-  const { contas, addConta } = useContasPagar()
+  const { contas, addConta, darBaixa } = useContasPagar()
+  const [contaBaixa, setContaBaixa] = useState<ContaPagar | null>(null)
   const [tab,               setTab]               = useState<'apagar' | 'pagas' | 'atraso'>('apagar')
   const [filterEspaco,      setFilterEspaco]      = useState('')
   const [filterCategoria,   setFilterCategoria]   = useState<CategoriaContaPagar | ''>('')
@@ -160,9 +170,10 @@ export default function ContasPagarPage() {
   }, [todasContas])
 
   const filtered = useMemo(() => todasContas.filter(c => {
-    if (tab === 'apagar' && c.status === 'pago') return false
-    if (tab === 'pagas'  && c.status !== 'pago') return false
-    if (tab === 'atraso' && c.status !== 'atrasado') return false
+    const status = statusEfetivo(c)
+    if (tab === 'apagar' && status === 'pago') return false
+    if (tab === 'pagas'  && status !== 'pago') return false
+    if (tab === 'atraso' && status !== 'atrasado') return false
     if (filterEspaco       && c.espaco       !== filterEspaco)       return false
     if (filterCategoria    && c.categoria    !== filterCategoria)    return false
     if (filterSubcategoria && c.subcategoria !== filterSubcategoria) return false
@@ -173,9 +184,9 @@ export default function ContasPagarPage() {
   const fixas    = filtered.filter(c => c.categoria === 'fixa')
   const variaveis= filtered.filter(c => c.categoria === 'variavel')
 
-  const totalPago     = todasContas.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0)
-  const totalPendente = todasContas.filter(c => c.status === 'pendente').reduce((s, c) => s + c.valor, 0)
-  const totalAtrasado = todasContas.filter(c => c.status === 'atrasado').reduce((s, c) => s + c.valor, 0)
+  const totalPago     = todasContas.filter(c => statusEfetivo(c) === 'pago').reduce((s, c) => s + c.valor, 0)
+  const totalPendente = todasContas.filter(c => statusEfetivo(c) === 'pendente').reduce((s, c) => s + c.valor, 0)
+  const totalAtrasado = todasContas.filter(c => statusEfetivo(c) === 'atrasado').reduce((s, c) => s + c.valor, 0)
   const totalGeral    = todasContas.reduce((s, c) => s + c.valor, 0)
 
   const subcategorias = filterCategoria === 'fixa' ? SUB_FIXAS : filterCategoria === 'variavel' ? SUB_VARIAVEIS : Array.from(new Set([...SUB_FIXAS, ...SUB_VARIAVEIS]))
@@ -273,7 +284,7 @@ export default function ContasPagarPage() {
                   {t === 'apagar' ? <Receipt className="h-3.5 w-3.5" /> : t === 'pagas' ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
                   {t === 'apagar' ? 'Contas a Pagar' : t === 'pagas' ? 'Contas Pagas' : 'Em Atraso'}
                   <span className={`rounded-full text-xs px-1.5 py-0.5 ${t === 'apagar' ? 'bg-amber-500/15 text-amber-600' : t === 'pagas' ? 'bg-emerald-500/15 text-emerald-600' : 'bg-red-500/15 text-red-600'}`}>
-                    {t === 'apagar' ? todasContas.filter(c => c.status !== 'pago').length : t === 'pagas' ? todasContas.filter(c => c.status === 'pago').length : todasContas.filter(c => c.status === 'atrasado').length}
+                    {t === 'apagar' ? todasContas.filter(c => statusEfetivo(c) !== 'pago').length : t === 'pagas' ? todasContas.filter(c => statusEfetivo(c) === 'pago').length : todasContas.filter(c => statusEfetivo(c) === 'atrasado').length}
                   </span>
                 </span>
               </button>
@@ -315,7 +326,7 @@ export default function ContasPagarPage() {
                   <span className="text-xs text-app-subtle">— {formatCurrency(rows.reduce((s, c) => s + c.valor, 0))}</span>
                 </div>
                 <div className="space-y-2">
-                  {rows.map(conta => <ContaRow key={conta.id} conta={conta} />)}
+                  {rows.map(conta => <ContaRow key={conta.id} conta={conta} onDarBaixa={() => setContaBaixa(conta)} />)}
                 </div>
               </section>
             )
@@ -492,13 +503,118 @@ export default function ContasPagarPage() {
       )}
 
       {docModalOpen && <FileSearchModal onClose={() => setDocModalOpen(false)} defaultModule="contas" />}
+      {contaBaixa && (
+        <DarBaixaModal
+          conta={contaBaixa}
+          onClose={() => setContaBaixa(null)}
+          onConfirm={async (dataPagamento) => {
+            await darBaixa(contaBaixa.id, dataPagamento)
+            setContaBaixa(null)
+            showToast('Conta marcada como paga.')
+          }}
+        />
+      )}
       <Toast message={toastMsg} />
     </div>
   )
 }
 
-function ContaRow({ conta }: { conta: ContaPagar }) {
+function DarBaixaModal({ conta, onClose, onConfirm }: { conta: ContaPagar; onClose: () => void; onConfirm: (dataPagamento: string) => Promise<void> }) {
+  const [dataPagamento, setDataPagamento] = useState(() => new Date().toISOString().split('T')[0])
+  const [comprovante, setComprovante] = useState<File | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
+
+  async function handleConfirm() {
+    setSubmitted(true)
+    if (!comprovante || !dataPagamento) return
+    setSaving(true)
+    try {
+      await saveFile(comprovante, {
+        module: 'contas',
+        entityId: conta.id,
+        entityName: conta.descricao,
+        espaco: conta.espaco === 'Todos' ? undefined : conta.espaco,
+        categoria: 'comprovante_pagamento',
+      })
+      await onConfirm(dataPagamento)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="w-full max-w-md bg-app-surface rounded-2xl border border-app-border shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-app-border">
+          <h2 className="text-sm font-semibold text-app-text flex items-center gap-2">
+            <Banknote className="h-4 w-4 text-[#25D366]" />
+            Dar baixa — {conta.descricao}
+          </h2>
+          <button onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-lg text-app-subtle hover:bg-app-surface2 transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <p className="text-xs text-app-subtle">
+            Valor: <span className="font-semibold text-app-text">{formatCurrency(conta.valor)}</span>
+          </p>
+
+          <div>
+            <label className="block text-xs text-app-muted mb-1">Data do pagamento *</label>
+            <input type="date" value={dataPagamento} onChange={e => setDataPagamento(e.target.value)}
+              className={`w-full rounded-lg border ${submitted && !dataPagamento ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-3 py-1.5 text-sm text-app-text focus:outline-none`}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-app-muted mb-1">
+              Comprovante de pagamento<span className="text-red-400 ml-0.5">*</span>
+            </label>
+            <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden"
+              onChange={e => setComprovante(e.target.files?.[0] ?? null)} />
+            <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+              onChange={e => setComprovante(e.target.files?.[0] ?? null)} />
+            <div className="flex items-center gap-2 flex-wrap">
+              <button onClick={() => fileRef.current?.click()}
+                className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors">
+                <Paperclip className="h-3.5 w-3.5" />
+                {comprovante ? comprovante.name : 'Selecionar arquivo…'}
+              </button>
+              <button onClick={() => cameraRef.current?.click()}
+                className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors">
+                <Camera className="h-3.5 w-3.5" />
+                Tirar foto
+              </button>
+            </div>
+            {submitted && !comprovante && (
+              <p className="text-xs text-red-400 mt-1">Anexe o comprovante antes de confirmar o pagamento.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 px-5 py-4 border-t border-app-border">
+          <button onClick={onClose} className="rounded-lg border border-app-border2 px-4 py-2 text-sm text-app-muted hover:bg-app-surface2 transition-colors">
+            Cancelar
+          </button>
+          <button onClick={handleConfirm} disabled={saving}
+            className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+            style={{ backgroundColor: GREEN }}>
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {saving ? 'Confirmando…' : 'Confirmar pagamento'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ContaRow({ conta, onDarBaixa }: { conta: ContaPagar; onDarBaixa: () => void }) {
   const [expanded, setExpanded] = useState(false)
+  const status = statusEfetivo(conta)
 
   return (
     <div className="rounded-lg border border-app-border2/50 bg-app-surface2/40 overflow-hidden">
@@ -518,10 +634,18 @@ function ContaRow({ conta }: { conta: ContaPagar }) {
           </div>
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${statusBadge[conta.status]}`}>
-            {statusLabel[conta.status]}
+          <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${statusBadge[status]}`}>
+            {statusLabel[status]}
           </span>
           <span className="text-sm font-bold text-app-text w-24 text-right">{formatCurrency(conta.valor)}</span>
+          {status !== 'pago' && (
+            <button onClick={onDarBaixa}
+              className="flex items-center gap-1.5 rounded-md border border-app-border2 px-2.5 py-1 text-xs font-medium text-app-muted hover:border-[#25D366] hover:text-[#128C7E] transition-colors"
+              title="Dar baixa">
+              <Banknote className="h-3.5 w-3.5" />
+              Dar baixa
+            </button>
+          )}
           <button onClick={() => setExpanded(v => !v)}
             className="flex h-7 w-7 items-center justify-center rounded-md text-app-subtle hover:bg-app-surface2 transition-colors"
             title="Documentos">

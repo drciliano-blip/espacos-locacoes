@@ -137,12 +137,17 @@ export async function getFileUrl(id: string): Promise<string | null> {
 }
 
 export async function viewFile(id: string): Promise<void> {
+  // Abre a aba ANTES de qualquer await — se abrirmos depois, o navegador não
+  // reconhece mais a ação como resultado direto do clique do usuário e bloqueia
+  // o popup silenciosamente (o botão "olhinho" parecia não fazer nada).
+  const win = window.open('', '_blank')
   const supabase = createClient()
   const { data: row } = await supabase.from('files').select('storage_path').eq('id', id).single()
-  if (!row) return
+  if (!row) { win?.close(); return }
   const { data } = await supabase.storage.from(BUCKET).createSignedUrl(row.storage_path, 60)
-  if (!data) return
-  window.open(data.signedUrl, '_blank')
+  if (!data) { win?.close(); return }
+  if (win) win.location.href = data.signedUrl
+  else window.open(data.signedUrl, '_blank')
 }
 
 export function formatFileSize(bytes: number): string {
