@@ -28,17 +28,28 @@ const PROMPT = `Analise esta ficha de cadastro de cliente (pode ser um formulár
   "valorLocacao": string | null,
   "formaPagamento": string | null,
   "valorSinal": string | null,
-  "dataVencimentoSaldo": "DD/MM/AAAA" | null
+  "dataVencimentoSaldo": "DD/MM/AAAA" | null,
+  "parcelas": [
+    { "descricao": string | null, "valor": string, "data": "DD/MM/AAAA" | null, "pago": boolean }
+  ] | null
 }
 
 Dicas para localizar os campos de valor, que podem aparecer com nomes diferentes no documento:
 - "valorLocacao": procure por "valor da locação", "valor total", "valor do contrato", "valor combinado", "valor do evento" ou qualquer quantia em R$ que represente o valor total acordado. Retorne só os números (ex: "16.000,00"), sem o "R$".
 - "valorSinal": procure por "sinal", "entrada", "adiantamento" ou primeira parcela. Mesmo formato numérico.
-- Se o documento tiver uma tabela ou lista de parcelas/pagamentos, some os valores para preencher "valorLocacao" caso não haja um total explícito.`
+- Se o documento tiver uma tabela ou lista de parcelas/pagamentos, some os valores para preencher "valorLocacao" caso não haja um total explícito.
+- "parcelas": se o texto descrever um cronograma com MAIS DE UMA parcela/pagamento (ex: um campo "Forma de pagamento" listando vários valores com datas, como "R$5.000 dia 20/07, R$3.000 dia 28/08, R$8.000 dia 23/10"), retorne CADA parcela como um item deste array, na ordem em que aparecem, com seu valor (só números, ex: "5.000,00") e data. Se o texto indicar explicitamente que aquela parcela já foi paga (ex: "já pago", "pago em", "quitado", "recebido"), marque "pago": true; caso contrário "pago": false. Se houver apenas sinal+saldo (2 parcelas) ou nenhum cronograma detalhado, retorne null neste campo — esses casos já são cobertos por "valorSinal"/"dataVencimentoSaldo".`
 
 interface EnderecoExtraido {
   rua?: string | null; numero?: string | null; complemento?: string | null
   bairro?: string | null; cidade?: string | null; estado?: string | null; cep?: string | null
+}
+
+interface ParcelaExtraida {
+  descricao?: string | null
+  valor: string
+  data?: string | null
+  pago?: boolean | null
 }
 
 interface FichaExtraida {
@@ -64,6 +75,7 @@ interface FichaExtraida {
   formaPagamento?: string | null
   valorSinal?: string | null
   dataVencimentoSaldo?: string | null
+  parcelas?: ParcelaExtraida[] | null
 }
 
 export async function POST(request: Request) {
@@ -168,6 +180,14 @@ export async function POST(request: Request) {
       formaPagamento: parsed.formaPagamento ?? null,
       valorSinal: parsed.valorSinal ?? null,
       dataVencimentoSaldo: parsed.dataVencimentoSaldo ?? null,
+      parcelas: Array.isArray(parsed.parcelas) && parsed.parcelas.length > 0
+        ? parsed.parcelas.map(p => ({
+            descricao: p.descricao ?? null,
+            valor: p.valor,
+            data: p.data ?? null,
+            pago: p.pago ?? false,
+          }))
+        : null,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido ao consultar a IA.'

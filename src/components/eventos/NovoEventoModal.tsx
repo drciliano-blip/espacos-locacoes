@@ -46,6 +46,7 @@ interface FichaExtracao {
   formaPagamento: string | null
   valorSinal: string | null
   dataVencimentoSaldo: string | null
+  parcelas: { descricao: string | null; valor: string; data: string | null; pago: boolean }[] | null
 }
 
 // Parseia valor extraído pela IA (texto livre) — usa a mesma lógica robusta de
@@ -312,7 +313,9 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
           horaInicio: data.horaInicioEvento ?? d.horaInicio,
           horaFim: data.horaTerminoEvento ?? d.horaFim,
           valor: data.valorLocacao ? parseValorBR(data.valorLocacao) || d.valor : d.valor,
-          formaPagamento: (matchFromList(data.formaPagamento, FORMAS_PAGAMENTO) as FormaPagamento) ?? d.formaPagamento,
+          formaPagamento: (data.parcelas && data.parcelas.length > 0)
+            ? 'Parcelado'
+            : (matchFromList(data.formaPagamento, FORMAS_PAGAMENTO) as FormaPagamento) ?? d.formaPagamento,
           valorSinal: data.valorSinal ? parseValorBR(data.valorSinal) || d.valorSinal : d.valorSinal,
           dataVencimentoSaldo: data.dataVencimentoSaldo ? parseDataBR(data.dataVencimentoSaldo) || d.dataVencimentoSaldo : d.dataVencimentoSaldo,
           nomeEvento: data.nomeEvento ?? d.nomeEvento,
@@ -337,10 +340,21 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
         }
         return novoDraft
       })
-      if (novoDraft.formaPagamento === 'Parcelado' && parcelas === null) {
+      if (data.parcelas && data.parcelas.length > 0) {
+        setParcelas(data.parcelas.map((p, i) => ({
+          numero: i + 1,
+          label: p.descricao?.trim() || `Parcela ${i + 1}`,
+          data: p.data ? parseDataBR(p.data) : '',
+          valor: parseValorBR(p.valor),
+        })))
+      } else if (novoDraft.formaPagamento === 'Parcelado' && parcelas === null) {
         setParcelas(gerarParcelasPadrao(novoDraft.data, parseCurrencyBR(novoDraft.valor), novoDraft.valorSinal, novoDraft.dataVencimentoSaldo))
       }
-      showToast('Campos preenchidos automaticamente pela IA — confira antes de salvar.')
+      showToast(
+        data.parcelas?.some(p => p.pago)
+          ? 'Campos preenchidos automaticamente pela IA — há parcela(s) indicada(s) como já paga(s) no texto; confirme com "Dar baixa" no plano de pagamento após salvar o evento.'
+          : 'Campos preenchidos automaticamente pela IA — confira antes de salvar.'
+      )
     } catch {
       showToast('Falha ao conectar com a IA. Preencha os campos manualmente.')
     } finally {
