@@ -26,6 +26,7 @@ interface ContratoRow {
   valor_negociado: number | string | null
   observacao_negociacao: string | null
   observacao_parceria: string | null
+  evento_id: string | null
 }
 
 function fromRow(row: ContratoRow): Contrato {
@@ -49,6 +50,7 @@ function fromRow(row: ContratoRow): Contrato {
     valorNegociado: row.valor_negociado != null ? Number(row.valor_negociado) : undefined,
     observacaoNegociacao: row.observacao_negociacao ?? undefined,
     observacaoParceria: row.observacao_parceria ?? undefined,
+    eventoId: row.evento_id ?? undefined,
   }
 }
 
@@ -102,6 +104,7 @@ export function ContratosProvider({ children }: { children: ReactNode }) {
         valor_negociado: c.valorNegociado ?? null,
         observacao_negociacao: c.observacaoNegociacao ?? null,
         observacao_parceria: c.observacaoParceria ?? null,
+        evento_id: c.eventoId ?? null,
         created_by: user?.id ?? null,
       })
       .select(SELECT)

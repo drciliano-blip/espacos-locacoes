@@ -117,6 +117,7 @@ export interface Contrato {
   valorNegociado?: number
   observacaoNegociacao?: string
   observacaoParceria?: string
+  eventoId?: string
 }
 
 // Feature 1: Conta a Pagar

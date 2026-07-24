@@ -1,14 +1,17 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { X, Save, Edit3, Users, DollarSign, User, Calendar, ClipboardCheck, Paperclip, Trash2 } from 'lucide-react'
-import type { Evento, StatusVistoria, TipoEvento } from '@/types'
+import { X, Save, Edit3, Users, DollarSign, User, Calendar, ClipboardCheck, Paperclip, Trash2, FileSignature } from 'lucide-react'
+import type { Evento, StatusVistoria, TipoEvento, Contrato } from '@/types'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useCurrentUser } from '@/contexts/UserContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
+import { useContratos } from '@/contexts/ContratosContext'
 import FileList from '@/components/shared/FileList'
 import FileAttachButton from '@/components/shared/FileAttachButton'
 import PlanoPagamentoSection from '@/components/eventos/PlanoPagamentoSection'
+import GerarContratoDoEventoModal from '@/components/eventos/GerarContratoDoEventoModal'
+import GerarContratoModal from '@/components/contratos/GerarContratoModal'
 import Toast from '@/components/shared/Toast'
 
 const statusBadge: Record<string, string> = {
@@ -49,6 +52,7 @@ interface EventoDrawerProps {
 export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: EventoDrawerProps) {
   const { role } = useCurrentUser()
   const { receitas, syncParcelasDoEvento, updateReceita } = useReceitas()
+  const { contratos, addContrato } = useContratos()
   const [tab, setTab] = useState<DrawerTab>('detalhes')
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<Evento>({ ...evento })
@@ -56,6 +60,10 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
   const [deleting, setDeleting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
+  const [gerarContratoDoEventoOpen, setGerarContratoDoEventoOpen] = useState(false)
+  const [contratoParaGerar, setContratoParaGerar] = useState<Contrato | null>(null)
+
+  const contratoExistente = contratos.find(c => c.eventoId === evento.id)
 
   function showToast(msg: string) {
     setToastMsg(msg)
@@ -202,6 +210,13 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   )}
+                  <button
+                    onClick={() => contratoExistente ? setContratoParaGerar(contratoExistente) : setGerarContratoDoEventoOpen(true)}
+                    className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs font-medium text-app-muted hover:bg-app-surface2 transition-colors"
+                  >
+                    <FileSignature className="h-3.5 w-3.5" />
+                    {contratoExistente ? 'Gerar documento do contrato' : 'Gerar Contrato'}
+                  </button>
                   <button
                     onClick={() => setEditing(true)}
                     className="flex items-center gap-1.5 rounded-lg border border-[#25D366]/30 bg-[#25D366]/10 px-3 py-1.5 text-xs font-medium text-[#128C7E] hover:bg-[#25D366]/20 transition-colors"
@@ -463,6 +478,27 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
           </div>
         </div>
       )}
+
+      {gerarContratoDoEventoOpen && (
+        <GerarContratoDoEventoModal
+          evento={evento}
+          onClose={() => setGerarContratoDoEventoOpen(false)}
+          onSave={addContrato}
+          onCreated={(contrato) => {
+            setGerarContratoDoEventoOpen(false)
+            setContratoParaGerar(contrato)
+            showToast('Contrato criado — gerando o documento…')
+          }}
+        />
+      )}
+
+      {contratoParaGerar && (
+        <GerarContratoModal
+          origem={{ tipo: 'contrato', dados: contratoParaGerar, eventoOrigem: evento }}
+          onClose={() => setContratoParaGerar(null)}
+        />
+      )}
+
       <Toast message={toastMsg} />
     </div>
   )

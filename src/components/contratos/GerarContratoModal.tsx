@@ -7,7 +7,7 @@ import type { TipoMinuta } from '@/lib/contract-templates'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { formatCurrency } from '@/lib/utils'
 import { saveFile, getFiles, type StoredFile } from '@/lib/file-storage'
-import type { Contrato, FichaCliente } from '@/types'
+import type { Contrato, FichaCliente, Evento } from '@/types'
 
 async function gerarPdfFile(texto: string, nomeArquivo: string): Promise<File> {
   const { jsPDF } = await import('jspdf')
@@ -40,7 +40,7 @@ const GREEN = '#25D366'
 const DARK_GREEN = '#128C7E'
 
 type Origem =
-  | { tipo: 'contrato'; dados: Contrato }
+  | { tipo: 'contrato'; dados: Contrato; eventoOrigem?: Evento }
   | { tipo: 'ficha'; dados: FichaCliente }
 
 function destinoAnexo(origem: Origem): { module: 'contratos' | 'fichas'; entityId: string; entityName: string; espaco?: string } {
@@ -96,18 +96,23 @@ function valoresIniciais(origem: Origem, campos: string[], dadosLegais: DadosLeg
 
   if (origem.tipo === 'contrato') {
     const c = origem.dados
-    base.CESSIONARIA_NOME = c.cliente
-    base.CESSIONARIA_CNPJ_CPF = c.cpfCnpj
-    base.CESSIONARIA_ENDERECO = ''
-    base.CESSIONARIA_EMAIL = ''
+    const ev = origem.eventoOrigem
+    const cnpjCpf = ev ? (ev.pessoaJuridica ? ev.cnpj : ev.cpf) : undefined
+    const enderecoEv = ev ? (ev.pessoaJuridica ? ev.enderecoEmpresa : ev.endereco) : undefined
+    base.CESSIONARIA_NOME = ev && ev.pessoaJuridica && ev.razaoSocial ? ev.razaoSocial : c.cliente
+    base.CESSIONARIA_CNPJ_CPF = cnpjCpf || c.cpfCnpj
+    base.CESSIONARIA_ENDERECO = enderecoEv
+      ? [enderecoEv.rua, enderecoEv.numero, enderecoEv.bairro, enderecoEv.cidade, enderecoEv.estado].filter(Boolean).join(', ')
+      : ''
+    base.CESSIONARIA_EMAIL = ev?.email ?? ''
     base.DATA_EVENTO = formatDataBR(c.dataEvento)
-    base.HORA_INICIO_MONTAGEM = ''
+    base.HORA_INICIO_MONTAGEM = ev?.horaInicioMontagem ?? ''
     base.HORA_INICIO_EVENTO = c.horaInicio
     base.HORA_TERMINO_EVENTO = c.horaFim
     base.VALOR_NEGOCIADO = formatCurrency(c.valorNegociado ?? c.valorTotal)
     base.VALOR_EXTENSO = ''
-    base.FORMA_PAGAMENTO = ''
-    base.DATA_PAGAMENTO = ''
+    base.FORMA_PAGAMENTO = ev?.formaPagamento ?? ''
+    base.DATA_PAGAMENTO = ev?.dataVencimentoSaldo ? formatDataBR(ev.dataVencimentoSaldo) : ''
     base.PERCENTUAL_CESSIONARIA = ''
     base.PERCENTUAL_CEDENTE = ''
     base.VALOR_MINIMO = ''

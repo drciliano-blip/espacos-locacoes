@@ -7,6 +7,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import FileList from '@/components/shared/FileList'
 import FileAttachButton from '@/components/shared/FileAttachButton'
 import GerarContratoModal from '@/components/contratos/GerarContratoModal'
+import { useEventos } from '@/contexts/EventosContext'
 
 const statusBadge: Record<string, string> = {
   confirmado:    'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
@@ -33,11 +34,14 @@ interface ContractCardProps {
 }
 
 export default function ContractCard({ contrato: c }: ContractCardProps) {
+  const { eventos } = useEventos()
   const [expanded, setExpanded] = useState(false)
   const [obs, setObs] = useState(c.observacoes)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(c.observacoes)
   const [gerarContratoOpen, setGerarContratoOpen] = useState(false)
+
+  const eventoOrigem = c.eventoId ? eventos.find(e => e.id === c.eventoId) : undefined
 
   const saldoRestante = c.valorTotal - c.valorEntrada
   const pctPago = c.valorTotal > 0 ? Math.round((c.valorEntrada / c.valorTotal) * 100) : 0
@@ -110,7 +114,7 @@ export default function ContractCard({ contrato: c }: ContractCardProps) {
       </div>
 
       {gerarContratoOpen && (
-        <GerarContratoModal origem={{ tipo: 'contrato', dados: c }} onClose={() => setGerarContratoOpen(false)} />
+        <GerarContratoModal origem={{ tipo: 'contrato', dados: c, eventoOrigem }} onClose={() => setGerarContratoOpen(false)} />
       )}
 
       {expanded && (
