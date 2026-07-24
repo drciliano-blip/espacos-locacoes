@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { FileDown } from 'lucide-react'
 import FilterBar, { type RelatorioFilters, type Periodo } from './FilterBar'
 import KPISummary from './KPISummary'
@@ -39,6 +39,30 @@ export default function RelatoriosClient() {
   const { eventos } = useEventos()
   const { receitas } = useReceitas()
   const [filters, setFilters] = useState<RelatorioFilters>(getDefaultFilters)
+
+  // As listas discriminadas (receita/despesa item a item) ficam recolhidas na tela
+  // pra não poluir a visualização, mas um <details> fechado não aparece no PDF/impressão
+  // — sem isso, o relatório exportado saía sem o detalhamento exigido pra prestação de contas.
+  useEffect(() => {
+    function expandAll() {
+      document.querySelectorAll<HTMLDetailsElement>('details').forEach(d => {
+        d.dataset.wasOpen = d.open ? '1' : '0'
+        d.open = true
+      })
+    }
+    function restoreAll() {
+      document.querySelectorAll<HTMLDetailsElement>('details[data-was-open]').forEach(d => {
+        d.open = d.dataset.wasOpen === '1'
+        delete d.dataset.wasOpen
+      })
+    }
+    window.addEventListener('beforeprint', expandAll)
+    window.addEventListener('afterprint', restoreAll)
+    return () => {
+      window.removeEventListener('beforeprint', expandAll)
+      window.removeEventListener('afterprint', restoreAll)
+    }
+  }, [])
 
   function handleFiltersChange(f: RelatorioFilters) {
     if (f.periodo !== filters.periodo) {
