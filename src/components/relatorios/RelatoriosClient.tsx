@@ -16,6 +16,7 @@ import { useEventos } from '@/contexts/EventosContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
 import DespesasSection from './DespesasSection'
 import RelatorioMensalSection from './RelatorioMensalSection'
+import FluxoCaixaEspaco from './FluxoCaixaEspaco'
 
 function getDefaultFilters(): RelatorioFilters {
   const { inicio, fim } = getPeriodRange('anual')
@@ -147,6 +148,8 @@ export default function RelatoriosClient() {
         dataInicio={filters.dataInicio}
         dataFim={filters.dataFim}
       />
+
+      <FluxoCaixaEspaco />
     </div>
   )
 }

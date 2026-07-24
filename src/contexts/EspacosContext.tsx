@@ -30,6 +30,7 @@ interface EspacoRow {
   responsavel_nome: string | null
   responsavel_rg: string | null
   responsavel_cpf: string | null
+  saldo_inicial_caixa: number | string
 }
 
 function toDadosLegais(row: EspacoRow): DadosLegaisEspaco {
@@ -50,7 +51,7 @@ function toConfig(row: EspacoRow, paletteIndex: number): EspacoConfig {
   const base = builtin
     ? { ...builtin, nome: row.nome, descricao: row.descricao || builtin.descricao, capacidade: row.capacidade }
     : { slug: row.slug, nome: row.nome, descricao: row.descricao ?? '', capacidade: row.capacidade, categorias: [], ...PALETTE[paletteIndex % PALETTE.length] }
-  return { ...base, id: row.id, fotoFileId: row.foto_file_id ?? undefined, dadosLegais: toDadosLegais(row) }
+  return { ...base, id: row.id, fotoFileId: row.foto_file_id ?? undefined, saldoInicialCaixa: Number(row.saldo_inicial_caixa ?? 0), dadosLegais: toDadosLegais(row) }
 }
 
 function toCustomData(row: EspacoRow): EspacoCustomData {
@@ -94,6 +95,7 @@ interface EspacosContextValue {
   addEspaco: (draft: NovoEspacoDraft) => Promise<EspacoCustomData>
   updateEspacoFoto: (id: string, fotoFileId: string) => Promise<void>
   updateDadosLegais: (id: string, dados: DadosLegaisEspaco) => Promise<void>
+  updateSaldoInicial: (id: string, valor: number) => Promise<void>
 }
 
 const EspacosContext = createContext<EspacosContextValue | null>(null)
@@ -180,6 +182,20 @@ export function EspacosProvider({ children }: { children: ReactNode }) {
     setRows(prev => prev.map(r => (r.id === id ? row : r)))
   }
 
+  async function updateSaldoInicial(id: string, valor: number): Promise<void> {
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from('espacos')
+      .update({ saldo_inicial_caixa: valor })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw error
+    const row = data as EspacoRow
+    setRows(prev => prev.map(r => (r.id === id ? row : r)))
+  }
+
   const ativos = rows.filter(r => r.status === 'ativo')
   let paletteIndex = 0
   const espacosConfig: EspacoConfig[] = ativos.map(r => toConfig(r, isBuiltin(r.slug) ? 0 : paletteIndex++))
@@ -187,7 +203,7 @@ export function EspacosProvider({ children }: { children: ReactNode }) {
   const customEspacos = rows.filter(r => !isBuiltin(r.slug)).map(toCustomData)
 
   return (
-    <EspacosContext.Provider value={{ espacosConfig, espacosNomes, customEspacos, loading, addEspaco, updateEspacoFoto, updateDadosLegais }}>
+    <EspacosContext.Provider value={{ espacosConfig, espacosNomes, customEspacos, loading, addEspaco, updateEspacoFoto, updateDadosLegais, updateSaldoInicial }}>
       {children}
     </EspacosContext.Provider>
   )

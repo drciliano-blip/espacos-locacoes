@@ -19,6 +19,7 @@ export interface EspacoConfig {
   categorias: CategoriaEvento[]
   id?: string
   fotoFileId?: string
+  saldoInicialCaixa?: number
   dadosLegais?: {
     cnpj?: string
     responsavelNome?: string
