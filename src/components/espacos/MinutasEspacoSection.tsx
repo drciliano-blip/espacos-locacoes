@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { FileText, Paperclip, Eye, Trash2 } from 'lucide-react'
 import { getFiles, saveFile, viewFile, deleteFile, type StoredFile } from '@/lib/file-storage'
+import Toast from '@/components/shared/Toast'
 
 const GREEN = '#25D366'
 
@@ -20,6 +21,12 @@ export default function MinutasEspacoSection({ espacoId, espacoNome }: Props) {
   const [arquivos, setArquivos] = useState<StoredFile[]>([])
   const [loading, setLoading] = useState(true)
   const [enviando, setEnviando] = useState<string | null>(null)
+  const [toastMsg, setToastMsg] = useState<string | null>(null)
+
+  function showToast(msg: string) {
+    setToastMsg(msg)
+    setTimeout(() => setToastMsg(null), 3500)
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -38,13 +45,16 @@ export default function MinutasEspacoSection({ espacoId, espacoNome }: Props) {
   async function handleUpload(categoria: string, file: File | null) {
     if (!file) return
     if (file.type !== 'application/pdf') {
-      alert('A minuta precisa ser um arquivo PDF (a IA lê o PDF direto para gerar o contrato).')
+      showToast('A minuta precisa ser um arquivo PDF (a IA lê o PDF direto para gerar o contrato).')
       return
     }
     setEnviando(categoria)
     try {
       await saveFile(file, { module: 'espacos', entityId: espacoId, entityName: espacoNome, categoria })
       await load()
+      showToast('Minuta anexada com sucesso.')
+    } catch (err) {
+      showToast(err instanceof Error ? `Falha ao anexar: ${err.message}` : 'Falha ao anexar a minuta. Tente novamente.')
     } finally {
       setEnviando(null)
     }
@@ -103,6 +113,7 @@ export default function MinutasEspacoSection({ espacoId, espacoNome }: Props) {
           )
         })}
       </div>
+      <Toast message={toastMsg} />
     </div>
   )
 }
