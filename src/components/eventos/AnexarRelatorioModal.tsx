@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import { X, Save, Sparkles, Paperclip, FileText, Camera } from 'lucide-react'
 import { saveFile } from '@/lib/file-storage'
+import { parseCurrencyBR } from '@/lib/utils'
 import type { CategoriaReceita, NovaReceitaInput } from '@/contexts/ReceitasContext'
 import type { Evento } from '@/types'
 
@@ -91,7 +92,7 @@ export default function AnexarRelatorioModal({ evento, categorias, onClose, onSa
     }
   }
 
-  const hasErrors = !file || !valor || Number.isNaN(Number(valor)) || Number(valor) <= 0 || !descricao.trim()
+  const hasErrors = !file || !valor || parseCurrencyBR(valor) <= 0 || !descricao.trim()
 
   async function handleSave() {
     setSubmitted(true)
@@ -111,7 +112,7 @@ export default function AnexarRelatorioModal({ evento, categorias, onClose, onSa
         cliente: evento.cliente,
         descricao: descricao.trim(),
         data: evento.data,
-        valor: Number(valor),
+        valor: parseCurrencyBR(valor),
         status: 'pendente',
       })
       onClose()
@@ -193,11 +194,11 @@ export default function AnexarRelatorioModal({ evento, categorias, onClose, onSa
                 Valor (R$)<span className="text-red-400 ml-0.5">*</span>
               </label>
               <input
-                type="number" min="0" step="0.01"
+                type="text" inputMode="decimal"
                 value={valor}
                 onChange={e => setValor(e.target.value)}
                 placeholder="0,00"
-                className={`w-full rounded-lg border ${submitted && (!valor || Number(valor) <= 0) ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
+                className={`w-full rounded-lg border ${submitted && (!valor || parseCurrencyBR(valor) <= 0) ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
               />
             </div>
             <div>

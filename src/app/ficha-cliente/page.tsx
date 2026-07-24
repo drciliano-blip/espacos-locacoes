@@ -105,7 +105,7 @@ const FORM_VAZIO: FormState = {
 }
 
 function Field({
-  label, value, onChange, required = false, type = 'text', placeholder = '',
+  label, value, onChange, required = false, type = 'text', placeholder = '', inputMode,
 }: {
   label: string
   value: string
@@ -113,6 +113,7 @@ function Field({
   required?: boolean
   type?: string
   placeholder?: string
+  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode']
 }) {
   return (
     <div>
@@ -121,6 +122,7 @@ function Field({
       </label>
       <input
         type={type}
+        inputMode={inputMode}
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
@@ -484,7 +486,7 @@ export default function FichaClientePage() {
               <Field label="Término evento" type="time" value={form.horaTerminoEvento} onChange={v => set('horaTerminoEvento', v)} />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Valor da locação (R$)" type="number" value={form.valorLocacao} onChange={v => set('valorLocacao', v)} placeholder="0,00" />
+              <Field label="Valor da locação (R$)" type="text" inputMode="decimal" value={form.valorLocacao} onChange={v => set('valorLocacao', v)} placeholder="0,00" />
               <div>
                 <label className="text-xs text-stone-600 mb-1 block">Forma de pagamento</label>
                 <select
@@ -499,7 +501,7 @@ export default function FichaClientePage() {
             </div>
             {form.formaPagamento === 'Parcelado' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-lg border border-[#25D366]/30 bg-[#25D366]/5 p-3">
-                <Field label="Valor do sinal (R$)" type="number" value={form.valorSinal} onChange={v => set('valorSinal', v)} placeholder="0,00" />
+                <Field label="Valor do sinal (R$)" type="text" inputMode="decimal" value={form.valorSinal} onChange={v => set('valorSinal', v)} placeholder="0,00" />
                 <Field label="Vencimento do saldo" type="date" value={form.dataVencimentoSaldo} onChange={v => set('dataVencimentoSaldo', v)} />
               </div>
             )}

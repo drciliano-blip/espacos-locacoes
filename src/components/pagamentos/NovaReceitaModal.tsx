@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { X, Save, DollarSign } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
+import { parseCurrencyBR } from '@/lib/utils'
 import type { CategoriaReceita, NovaReceitaInput } from '@/contexts/ReceitasContext'
 import type { FormaPagamento } from '@/types'
 
@@ -66,7 +67,7 @@ export default function NovaReceitaModal({
     categoriaId: !draft.categoriaId,
     descricao: !draft.descricao.trim(),
     data: !draft.data,
-    valor: !draft.valor || Number.isNaN(Number(draft.valor)) || Number(draft.valor) <= 0,
+    valor: !draft.valor || parseCurrencyBR(draft.valor) <= 0,
   }
   const hasErrors = Object.values(errors).some(Boolean)
 
@@ -83,7 +84,7 @@ export default function NovaReceitaModal({
         descricao: draft.descricao.trim(),
         data: draft.data,
         dataRecebimento: draft.dataRecebimento || undefined,
-        valor: Number(draft.valor),
+        valor: parseCurrencyBR(draft.valor),
         status: draft.status,
         metodoPagamento: draft.metodoPagamento || undefined,
         observacoes: draft.observacoes.trim() || undefined,
@@ -178,7 +179,7 @@ export default function NovaReceitaModal({
                 Valor (R$)<span className="text-red-400 ml-0.5">*</span>
               </label>
               <input
-                type="number" min="0" step="0.01"
+                type="text" inputMode="decimal"
                 value={draft.valor}
                 onChange={e => set('valor', e.target.value)}
                 placeholder="0,00"

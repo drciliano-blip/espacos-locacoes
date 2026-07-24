@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { X, Save, FileText, DollarSign, User, Paperclip, Camera, Sparkles, MessageSquareText, FileSignature, Handshake } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
-import { maskCPF, maskCNPJ } from '@/lib/utils'
+import { maskCPF, maskCNPJ, parseCurrencyBR } from '@/lib/utils'
 import Toast from '@/components/shared/Toast'
 import GerarContratoModal from '@/components/contratos/GerarContratoModal'
 import type { Contrato, Espaco, TipoMinuta } from '@/types'
@@ -83,18 +83,20 @@ function Field({
   label: string
   value: string
   onChange: (v: string) => void
-  type?: 'text' | 'number' | 'date' | 'time'
+  type?: 'text' | 'number' | 'date' | 'time' | 'currency'
   required?: boolean
   placeholder?: string
   hasError?: boolean
 }) {
+  const isCurrency = type === 'currency'
   return (
     <div>
       <label className="text-xs text-app-subtle mb-0.5 block">
         {label}{required && <span className="text-red-400 ml-0.5">*</span>}
       </label>
       <input
-        type={type}
+        type={isCurrency ? 'text' : type}
+        inputMode={isCurrency ? 'decimal' : undefined}
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
@@ -208,7 +210,7 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
     dataEvento: !draft.dataEvento,
     horaInicio: !draft.horaInicio,
     horaFim:    !draft.horaFim,
-    valorTotal: !draft.valorTotal || isNaN(Number(draft.valorTotal)) || Number(draft.valorTotal) <= 0,
+    valorTotal: !draft.valorTotal || parseCurrencyBR(draft.valorTotal) <= 0,
   }
   const hasErrors = Object.values(errors).some(Boolean)
 
@@ -229,14 +231,14 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
       horaInicio:      draft.horaInicio,
       horaFim:         draft.horaFim,
       tipo:            draft.tipo.trim() || 'Evento',
-      valorTotal:      Number(draft.valorTotal) || 0,
-      valorEntrada:    Number(draft.valorEntrada) || 0,
+      valorTotal:      parseCurrencyBR(draft.valorTotal),
+      valorEntrada:    draft.valorEntrada ? parseCurrencyBR(draft.valorEntrada) : 0,
       dataAssinatura:  now.toISOString().split('T')[0],
       status:          draft.status,
       responsavel:     draft.responsavel.trim() || '—',
       observacoes:     draft.observacoes.trim(),
       tipoMinuta:      draft.tipoMinuta,
-      valorNegociado:  draft.valorNegociado ? Number(draft.valorNegociado) : undefined,
+      valorNegociado:  draft.valorNegociado ? parseCurrencyBR(draft.valorNegociado) : undefined,
       observacaoNegociacao: draft.observacaoNegociacao.trim() || undefined,
       observacaoParceria:   draft.tipoMinuta === 'parceria' ? (draft.observacaoParceria.trim() || undefined) : undefined,
     }
@@ -440,8 +442,8 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
               Financeiro
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
-              <Field label="Valor Total (R$)"  {...fieldProps('valorTotal', true)}   type="number" required placeholder="0,00" />
-              <Field label="Entrada (R$)"       {...fieldProps('valorEntrada')} type="number" placeholder="0,00" />
+              <Field label="Valor Total (R$)"  {...fieldProps('valorTotal', true)}   type="currency" required placeholder="0,00" />
+              <Field label="Entrada (R$)"       {...fieldProps('valorEntrada')} type="currency" placeholder="0,00" />
               <div className="col-span-2">
                 <Field label="Responsável" {...fieldProps('responsavel')} placeholder="Nome do funcionário responsável" />
               </div>
@@ -468,7 +470,7 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
                   <option value="parceria">Parceria (% sobre faturamento)</option>
                 </select>
               </div>
-              <Field label="Valor negociado (R$)" {...fieldProps('valorNegociado')} type="number" placeholder="0,00" />
+              <Field label="Valor negociado (R$)" {...fieldProps('valorNegociado')} type="currency" placeholder="0,00" />
               <div className="col-span-2">
                 <label className="text-xs text-app-subtle mb-0.5 block">Observação sobre a negociação</label>
                 <textarea

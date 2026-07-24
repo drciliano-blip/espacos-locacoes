@@ -8,6 +8,7 @@ import FileList from '@/components/shared/FileList'
 import Toast from '@/components/shared/Toast'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
+import { parseCurrencyBR } from '@/lib/utils'
 
 const FORMAS_PAGAMENTO: FormaPagamento[] = [
   'PIX',
@@ -68,7 +69,7 @@ interface ParcelaDraft {
 
 function gerarParcelasPadrao(dataEvento: string, valorTotal: number, valorSinal: string, dataVencimentoSaldo: string): ParcelaDraft[] {
   const hoje = new Date().toISOString().split('T')[0]
-  const sinal = valorSinal ? Number(valorSinal) : Math.round((valorTotal / 2) * 100) / 100
+  const sinal = valorSinal ? parseCurrencyBR(valorSinal) : Math.round((valorTotal / 2) * 100) / 100
   const saldo = Math.round((valorTotal - sinal) * 100) / 100
 
   let dataSaldo = dataVencimentoSaldo
@@ -140,11 +141,12 @@ function Field({
   label: string
   value: string
   onChange: (v: string) => void
-  type?: 'text' | 'number' | 'date' | 'time'
+  type?: 'text' | 'number' | 'date' | 'time' | 'currency'
   required?: boolean
   placeholder?: string
   hasError?: boolean
 }) {
+  const isCurrency = type === 'currency'
   return (
     <div>
       <label className="text-xs text-app-subtle mb-0.5 block">
@@ -152,7 +154,8 @@ function Field({
         {required && <span className="text-red-400 ml-0.5">*</span>}
       </label>
       <input
-        type={type}
+        type={isCurrency ? 'text' : type}
+        inputMode={isCurrency ? 'decimal' : undefined}
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
@@ -192,7 +195,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
     data:       !draft.data,
     horaInicio: !draft.horaInicio,
     horaFim:    !draft.horaFim,
-    valor:      !draft.valor || Number.isNaN(Number(draft.valor)) || Number(draft.valor) <= 0,
+    valor:      !draft.valor || parseCurrencyBR(draft.valor) <= 0,
   }
 
   const hasErrors = Object.values(errors).some(Boolean)
@@ -242,7 +245,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
         return novoDraft
       })
       if (novoDraft.formaPagamento === 'Parcelado' && parcelas === null) {
-        setParcelas(gerarParcelasPadrao(novoDraft.data, Number(novoDraft.valor) || 0, novoDraft.valorSinal, novoDraft.dataVencimentoSaldo))
+        setParcelas(gerarParcelasPadrao(novoDraft.data, parseCurrencyBR(novoDraft.valor), novoDraft.valorSinal, novoDraft.dataVencimentoSaldo))
       }
       showToast('Campos preenchidos automaticamente pela IA — confira antes de salvar.')
     } catch {
@@ -302,12 +305,12 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
       tipo:            draft.tipo.trim() || 'Evento',
       tipoEvento:      (draft.tipoEvento as TipoEvento) || undefined,
       status:          draft.status,
-      valor:           Number(draft.valor),
+      valor:           parseCurrencyBR(draft.valor),
       numeroPessoas:   draft.numeroPessoas ? Number(draft.numeroPessoas) : undefined,
       responsavel:     draft.responsavel.trim() || undefined,
       telefoneContato: draft.telefoneContato.trim() || undefined,
       formaPagamento:  (draft.formaPagamento as FormaPagamento) || undefined,
-      valorSinal:      draft.formaPagamento === 'Parcelado' && draft.valorSinal ? Number(draft.valorSinal) : undefined,
+      valorSinal:      draft.formaPagamento === 'Parcelado' && draft.valorSinal ? parseCurrencyBR(draft.valorSinal) : undefined,
       dataVencimentoSaldo: draft.formaPagamento === 'Parcelado' && draft.dataVencimentoSaldo ? draft.dataVencimentoSaldo : undefined,
       observacoes:     draft.observacoes.trim() || undefined,
       documentos:      [],
@@ -325,13 +328,13 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
     // Evento já foi salvo com sucesso a partir daqui — uma falha ao gravar o plano
     // de parcelas customizado não deve parecer um erro de salvamento do evento.
     try {
-      const parcelasValidas = (parcelas ?? []).filter(p => p.label.trim() && p.data && p.valor && Number(p.valor) > 0)
+      const parcelasValidas = (parcelas ?? []).filter(p => p.label.trim() && p.data && p.valor && parseCurrencyBR(p.valor) > 0)
       if (evento.formaPagamento === 'Parcelado' && parcelasValidas.length > 0) {
         await syncParcelasDoEvento({
           eventoId: evento.id,
           cliente: evento.cliente,
           espaco: evento.espaco,
-          parcelas: parcelasValidas.map(p => ({ numero: p.numero, label: p.label.trim(), data: p.data, valor: Number(p.valor) })),
+          parcelas: parcelasValidas.map(p => ({ numero: p.numero, label: p.label.trim(), data: p.data, valor: parseCurrencyBR(p.valor) })),
         })
       }
     } catch {
@@ -552,7 +555,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
               <Field label="Nº de Pessoas" {...fieldProps('numeroPessoas')} type="number" placeholder="0" />
-              <Field label="Valor (R$)"    {...fieldProps('valor', true)}   type="number" required placeholder="0,00" />
+              <Field label="Valor (R$)"    {...fieldProps('valor', true)}   type="currency" required placeholder="0,00" />
               <div className="col-span-2">
                 <label className="text-xs text-app-subtle mb-0.5 block">Forma de Pagamento</label>
                 <select
@@ -561,7 +564,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
                     const valor = e.target.value
                     set('formaPagamento', valor)
                     if (valor === 'Parcelado' && parcelas === null) {
-                      setParcelas(gerarParcelasPadrao(draft.data, Number(draft.valor) || 0, draft.valorSinal, draft.dataVencimentoSaldo))
+                      setParcelas(gerarParcelasPadrao(draft.data, parseCurrencyBR(draft.valor), draft.valorSinal, draft.dataVencimentoSaldo))
                     }
                   }}
                   className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none cursor-pointer"
@@ -575,14 +578,14 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
               {draft.formaPagamento === 'Parcelado' && (
                 <div className="col-span-2 space-y-3 rounded-lg border border-[#25D366]/30 bg-[#25D366]/5 p-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Field label="Valor do sinal (R$)" {...fieldProps('valorSinal')} type="number" placeholder="0,00" />
+                    <Field label="Valor do sinal (R$)" {...fieldProps('valorSinal')} type="currency" placeholder="0,00" />
                     <Field label="Vencimento do saldo" {...fieldProps('dataVencimentoSaldo')} type="date" />
                   </div>
 
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-medium text-app-text">Plano de pagamento (parcelas)</p>
                     <button
-                      onClick={() => setParcelas(gerarParcelasPadrao(draft.data, Number(draft.valor) || 0, draft.valorSinal, draft.dataVencimentoSaldo))}
+                      onClick={() => setParcelas(gerarParcelasPadrao(draft.data, parseCurrencyBR(draft.valor), draft.valorSinal, draft.dataVencimentoSaldo))}
                       className="text-xs text-app-muted hover:text-app-text transition-colors underline"
                     >
                       Recalcular padrão (Sinal + Saldo)
@@ -605,7 +608,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
                           className="rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-xs text-app-text focus:outline-none"
                         />
                         <input
-                          type="number" min="0" step="0.01"
+                          type="text" inputMode="decimal"
                           value={p.valor}
                           onChange={e => setParcelas(ps => (ps ?? []).map(x => x.numero === p.numero ? { ...x, valor: e.target.value } : x))}
                           placeholder="0,00"

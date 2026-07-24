@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { CheckCircle2, Pencil, Plus, Save, Trash2, X } from 'lucide-react'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, parseCurrencyBR } from '@/lib/utils'
 import type { Receita, ParcelaPlano } from '@/contexts/ReceitasContext'
 
 const GREEN = '#25D366'
@@ -77,11 +77,11 @@ export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEdita
   }
 
   async function salvarPlano() {
-    const parcelasValidas = draft.filter(p => p.label.trim() && p.data && p.valor && Number(p.valor) > 0)
+    const parcelasValidas = draft.filter(p => p.label.trim() && p.data && p.valor && parseCurrencyBR(p.valor) > 0)
     if (parcelasValidas.length === 0) return
     setSaving(true)
     try {
-      await onSync(parcelasValidas.map(p => ({ numero: p.numero, label: p.label.trim(), data: p.data, valor: Number(p.valor) })))
+      await onSync(parcelasValidas.map(p => ({ numero: p.numero, label: p.label.trim(), data: p.data, valor: parseCurrencyBR(p.valor) })))
       setEditando(false)
     } finally {
       setSaving(false)
@@ -179,23 +179,20 @@ export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEdita
                 value={p.label}
                 onChange={e => setCampo(p.numero, 'label', e.target.value)}
                 placeholder="Ex: Sinal"
-                disabled={p.status === 'pago'}
-                className="w-32 shrink-0 rounded-lg border border-app-border2 bg-app-surface px-2 py-1.5 text-xs text-app-text focus:outline-none disabled:opacity-60"
+                className="w-32 shrink-0 rounded-lg border border-app-border2 bg-app-surface px-2 py-1.5 text-xs text-app-text focus:outline-none"
               />
               <input
                 type="date"
                 value={p.data}
                 onChange={e => setCampo(p.numero, 'data', e.target.value)}
-                disabled={p.status === 'pago'}
-                className="rounded-lg border border-app-border2 bg-app-surface px-2 py-1.5 text-xs text-app-text focus:outline-none disabled:opacity-60"
+                className="rounded-lg border border-app-border2 bg-app-surface px-2 py-1.5 text-xs text-app-text focus:outline-none"
               />
               <input
-                type="number" min="0" step="0.01"
+                type="text" inputMode="decimal"
                 value={p.valor}
                 onChange={e => setCampo(p.numero, 'valor', e.target.value)}
                 placeholder="0,00"
-                disabled={p.status === 'pago'}
-                className="w-28 rounded-lg border border-app-border2 bg-app-surface px-2 py-1.5 text-xs text-app-text focus:outline-none disabled:opacity-60"
+                className="w-28 rounded-lg border border-app-border2 bg-app-surface px-2 py-1.5 text-xs text-app-text focus:outline-none"
               />
               <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium ${statusStyles[p.status]}`}>
                 {statusLabels[p.status]}

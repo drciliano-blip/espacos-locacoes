@@ -16,6 +16,29 @@ export function formatCurrency(value: number): string {
   }).format(value)
 }
 
+// Interpreta texto digitado em formato brasileiro (ex: "3.000,00", "3000,00", "3000")
+// como número — usar sempre que o valor vier de um <input type="text"> de dinheiro.
+// Nunca usar Number()/parseFloat() direto num valor digitado por usuário: "3.000,00"
+// vira 3 (perde os zeros), porque o ponto é lido como separador decimal em vez de milhar.
+export function parseCurrencyBR(input: string): number {
+  const cleaned = input.trim().replace(/[^\d,.-]/g, '')
+  if (!cleaned) return 0
+
+  if (cleaned.includes(',')) {
+    const semSeparadorMilhar = cleaned.replace(/\.(?=\d{3}(\D|$))/g, '')
+    const n = parseFloat(semSeparadorMilhar.replace(',', '.'))
+    return Number.isFinite(n) ? n : 0
+  }
+
+  // Sem vírgula: "3.000" (só grupos de 3 dígitos após ponto) é separador de milhar.
+  if (/^\d{1,3}(\.\d{3})+$/.test(cleaned)) {
+    return parseFloat(cleaned.replace(/\./g, ''))
+  }
+
+  const n = parseFloat(cleaned)
+  return Number.isFinite(n) ? n : 0
+}
+
 export function formatDate(dateStr: string): string {
   const [year, month, day] = dateStr.split('-')
   return `${day}/${month}/${year}`

@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, parseCurrencyBR } from '@/lib/utils'
 import { saveFile } from '@/lib/file-storage'
 import FileList from '@/components/shared/FileList'
 import FileSearchModal from '@/components/shared/FileSearchModal'
@@ -193,7 +193,7 @@ export default function ContasPagarPage() {
       espaco:          form.espaco as ContaPagar['espaco'],
       categoria:       form.categoria as CategoriaContaPagar,
       subcategoria:    form.subcategoria as ContaPagar['subcategoria'],
-      valor:           parseFloat(form.valor.replace(',', '.')),
+      valor:           parseCurrencyBR(form.valor),
       status:          'pendente',
       dataVencimento:  form.dataVencimento,
       fornecedor:      form.fornecedor || undefined,
@@ -362,7 +362,7 @@ export default function ContasPagarPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-app-muted mb-1">Valor (R$) *</label>
-                  <input type="number" min="0" step="0.01" value={form.valor}
+                  <input type="text" inputMode="decimal" value={form.valor}
                     onChange={e => setForm(f => ({ ...f, valor: e.target.value }))}
                     placeholder="0,00"
                     className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-3 py-1.5 text-sm text-app-text focus:outline-none"
