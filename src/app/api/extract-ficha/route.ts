@@ -29,7 +29,12 @@ const PROMPT = `Analise esta ficha de cadastro de cliente (pode ser um formulár
   "formaPagamento": string | null,
   "valorSinal": string | null,
   "dataVencimentoSaldo": "DD/MM/AAAA" | null
-}`
+}
+
+Dicas para localizar os campos de valor, que podem aparecer com nomes diferentes no documento:
+- "valorLocacao": procure por "valor da locação", "valor total", "valor do contrato", "valor combinado", "valor do evento" ou qualquer quantia em R$ que represente o valor total acordado. Retorne só os números (ex: "16.000,00"), sem o "R$".
+- "valorSinal": procure por "sinal", "entrada", "adiantamento" ou primeira parcela. Mesmo formato numérico.
+- Se o documento tiver uma tabela ou lista de parcelas/pagamentos, some os valores para preencher "valorLocacao" caso não haja um total explícito.`
 
 interface EnderecoExtraido {
   rua?: string | null; numero?: string | null; complemento?: string | null
