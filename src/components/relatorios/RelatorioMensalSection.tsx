@@ -4,9 +4,11 @@ import { useMemo } from 'react'
 import { ArrowUpCircle, ArrowDownCircle, Wallet } from 'lucide-react'
 import { useReceitas } from '@/contexts/ReceitasContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
+import { useEspacos } from '@/contexts/EspacosContext'
 import { formatCurrency } from '@/lib/utils'
-import { ESPACOS_CONFIG } from '@/lib/espacos-config'
 import { DIVISAO_SOCIOS } from '@/lib/socios-config'
+import type { Receita } from '@/contexts/ReceitasContext'
+import type { ContaPagar } from '@/types'
 
 interface Props {
   selectedSpaces?: string[]
@@ -14,9 +16,16 @@ interface Props {
   dataFim?: string
 }
 
+const statusBadgeClass: Record<string, string> = {
+  pago: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
+  atrasado: 'bg-red-500/10 text-red-400 border-red-500/20',
+  pendente: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+}
+
 export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dataFim }: Props) {
   const { receitas } = useReceitas()
   const { contas: contasPagar } = useContasPagar()
+  const { espacosConfig } = useEspacos()
 
   const entradas = useMemo(() => receitas.filter(r => {
     const matchEspaco = !selectedSpaces?.length || (r.espaco && selectedSpaces.includes(r.espaco))
@@ -39,25 +48,29 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
   const lucroLiquido  = totalEntradas - totalSaidas
 
   const espacos = selectedSpaces?.length
-    ? ESPACOS_CONFIG.filter(e => selectedSpaces.includes(e.nome))
-    : ESPACOS_CONFIG
+    ? espacosConfig.filter(e => selectedSpaces.includes(e.nome))
+    : espacosConfig
 
   const porEspaco = useMemo(() => espacos.map(e => {
-    const entradaEspaco = entradas.filter(r => r.status === 'pago' && r.espaco === e.nome).reduce((s, r) => s + r.valor, 0)
+    const entradasEspaco = entradas.filter(r => r.espaco === e.nome)
     // Contas com espaço "Todos" são despesas gerais, não entram na divisão por espaço.
-    const saidaEspaco = saidas.filter(c => c.status === 'pago' && c.espaco === e.nome).reduce((s, c) => s + c.valor, 0)
-    const lucroEspaco = entradaEspaco - saidaEspaco
-    const socios = (DIVISAO_SOCIOS[e.nome] ?? []).map(s => ({ ...s, valor: lucroEspaco * (s.percentual / 100) }))
-    return { nome: e.nome, entrada: entradaEspaco, saida: saidaEspaco, lucro: lucroEspaco, socios }
+    const saidasEspaco = saidas.filter(c => c.espaco === e.nome)
+    const receitaTotal = entradasEspaco.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)
+    const despesaTotal = saidasEspaco.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0)
+    const lucro = receitaTotal - despesaTotal
+    // Se o espaço não estiver configurado em DIVISAO_SOCIOS, presume-se que não tem sócio.
+    const socios = (DIVISAO_SOCIOS[e.nome] ?? []).map(s => ({ ...s, valor: lucro * (s.percentual / 100) }))
+    return { nome: e.nome, entradasEspaco, saidasEspaco, receitaTotal, despesaTotal, lucro, socios }
   }), [espacos, entradas, saidas])
 
-  const saidasGerais = saidas.filter(c => c.status === 'pago' && c.espaco === 'Todos').reduce((s, c) => s + c.valor, 0)
+  const saidasGerais = saidas.filter(c => c.espaco === 'Todos')
+  const totalSaidasGerais = saidasGerais.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0)
 
   return (
     <div className="rounded-2xl border border-app-border bg-app-surface p-5 space-y-5">
       <h3 className="text-sm font-semibold text-app-text">Relatório Mensal — Entradas, Saídas e Divisão de Lucro</h3>
 
-      {/* KPIs */}
+      {/* KPIs gerais */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
           <div className="flex items-center gap-2 mb-1"><ArrowUpCircle className="h-4 w-4 text-emerald-500" /><span className="text-xs text-emerald-600 font-medium">Total de Entradas</span></div>
@@ -75,132 +88,135 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
         </div>
       </div>
 
-      {/* Divisão de lucro por espaço/sócio */}
-      <div>
-        <p className="text-xs font-medium text-app-muted mb-3">Divisão de lucro por espaço</p>
-        <div className="space-y-3">
-          {porEspaco.map(e => (
-            <div key={e.nome} className="rounded-lg border border-app-border2/60 bg-app-bg p-4">
-              <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-                <p className="text-sm font-semibold text-app-text">{e.nome}</p>
-                <div className="flex items-center gap-3 text-xs text-app-subtle">
-                  <span>Entradas: <span className="text-emerald-600 font-medium">{formatCurrency(e.entrada)}</span></span>
-                  <span>Saídas: <span className="text-red-500 font-medium">{formatCurrency(e.saida)}</span></span>
-                  <span>Lucro: <span className={`font-semibold ${e.lucro >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>{formatCurrency(e.lucro)}</span></span>
-                </div>
-              </div>
-              {e.socios.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {e.socios.map(s => (
-                    <span key={s.nome} className="flex items-center gap-1.5 rounded-full bg-app-surface2 border border-app-border2/60 px-2.5 py-1 text-xs">
-                      <span className="text-app-text font-medium">{s.nome}</span>
-                      <span className="text-app-subtle">{s.percentual}%</span>
-                      <span className={`font-semibold ${s.valor >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>{formatCurrency(s.valor)}</span>
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-app-subtle italic">Divisão de sócios não configurada para este espaço.</p>
-              )}
-            </div>
-          ))}
-          {saidasGerais > 0 && (
-            <p className="text-xs text-app-subtle italic">
-              Despesas gerais (não vinculadas a um espaço específico): {formatCurrency(saidasGerais)} — não entram na divisão por espaço acima.
-            </p>
-          )}
-        </div>
+      {/* Relatório por espaço */}
+      <div className="space-y-4">
+        {porEspaco.map(e => (
+          <EspacoReportCard key={e.nome} {...e} />
+        ))}
+        {espacos.length === 0 && (
+          <p className="text-sm text-app-subtle text-center py-4">Nenhum espaço cadastrado.</p>
+        )}
       </div>
 
-      {/* Lançamentos de entrada */}
-      {entradas.length > 0 && (
-        <details className="group">
-          <summary className="cursor-pointer text-xs font-medium text-[#128C7E] hover:text-[#25D366] transition-colors list-none flex items-center gap-1">
-            <span className="group-open:hidden">▶</span>
-            <span className="hidden group-open:inline">▼</span>
-            Ver lançamentos de entrada ({entradas.length})
+      {/* Despesas gerais, não vinculadas a um espaço específico */}
+      {saidasGerais.length > 0 && (
+        <details className="group rounded-lg border border-app-border2/60 bg-app-bg p-4">
+          <summary className="cursor-pointer text-xs font-medium text-app-muted hover:text-app-text transition-colors list-none flex items-center justify-between gap-1">
+            <span className="flex items-center gap-1">
+              <span className="group-open:hidden">▶</span>
+              <span className="hidden group-open:inline">▼</span>
+              Despesas gerais (não vinculadas a um espaço) — {saidasGerais.length} lançamentos
+            </span>
+            <span className="font-semibold text-red-500">{formatCurrency(totalSaidasGerais)}</span>
           </summary>
-          <div className="mt-3 overflow-x-auto rounded-lg border border-app-border2">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-app-border bg-app-surface2">
-                  {['Descrição', 'Cliente', 'Espaço', 'Categoria', 'Data', 'Valor', 'Status'].map(h => (
-                    <th key={h} className="px-3 py-2 text-left text-app-subtle font-medium whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-app-border/40">
-                {entradas.map(r => (
-                  <tr key={r.id} className="hover:bg-app-surface2/30 transition-colors">
-                    <td className="px-3 py-2 text-app-text max-w-[200px] truncate">{r.descricao}</td>
-                    <td className="px-3 py-2 text-app-muted whitespace-nowrap">{r.cliente ?? '—'}</td>
-                    <td className="px-3 py-2 text-app-muted whitespace-nowrap">{r.espaco ?? '—'}</td>
-                    <td className="px-3 py-2 text-app-muted whitespace-nowrap">{r.categoriaNome}</td>
-                    <td className="px-3 py-2 text-app-muted whitespace-nowrap">{r.data.split('-').reverse().join('/')}</td>
-                    <td className="px-3 py-2 font-semibold text-app-text whitespace-nowrap">{formatCurrency(r.valor)}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium border ${
-                        r.status === 'pago'
-                          ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-                          : r.status === 'atrasado'
-                            ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                            : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                      }`}>
-                        {r.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ul className="mt-3 space-y-1">
+            {saidasGerais.map(c => (
+              <li key={c.id} className="flex items-center justify-between gap-2 text-xs">
+                <span className="text-app-muted truncate">{c.descricao} <span className="text-app-subtle">· {c.dataVencimento.split('-').reverse().join('/')}</span></span>
+                <span className="flex items-center gap-2 shrink-0">
+                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium border ${statusBadgeClass[c.status]}`}>{c.status}</span>
+                  <span className="font-medium text-app-text">{formatCurrency(c.valor)}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
         </details>
       )}
+    </div>
+  )
+}
 
-      {/* Lançamentos de saída */}
-      {saidas.length > 0 && (
-        <details className="group">
-          <summary className="cursor-pointer text-xs font-medium text-[#128C7E] hover:text-[#25D366] transition-colors list-none flex items-center gap-1">
+interface EspacoReportCardProps {
+  nome: string
+  entradasEspaco: Receita[]
+  saidasEspaco: ContaPagar[]
+  receitaTotal: number
+  despesaTotal: number
+  lucro: number
+  socios: { nome: string; percentual: number; valor: number }[]
+}
+
+function EspacoReportCard({ nome, entradasEspaco, saidasEspaco, receitaTotal, despesaTotal, lucro, socios }: EspacoReportCardProps) {
+  return (
+    <div className="rounded-lg border border-app-border2/60 bg-app-bg p-4 space-y-3">
+      <p className="text-sm font-semibold text-app-text">{nome}</p>
+
+      {/* Receita discriminada */}
+      <details className="group">
+        <summary className="cursor-pointer text-xs font-medium text-app-muted hover:text-app-text transition-colors list-none flex items-center justify-between gap-1">
+          <span className="flex items-center gap-1">
             <span className="group-open:hidden">▶</span>
             <span className="hidden group-open:inline">▼</span>
-            Ver lançamentos de saída ({saidas.length})
-          </summary>
-          <div className="mt-3 overflow-x-auto rounded-lg border border-app-border2">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-app-border bg-app-surface2">
-                  {['Descrição', 'Beneficiário', 'Espaço', 'Categoria', 'Vencimento', 'Valor', 'Status'].map(h => (
-                    <th key={h} className="px-3 py-2 text-left text-app-subtle font-medium whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-app-border/40">
-                {saidas.map(c => (
-                  <tr key={c.id} className="hover:bg-app-surface2/30 transition-colors">
-                    <td className="px-3 py-2 text-app-text max-w-[200px] truncate">{c.descricao}</td>
-                    <td className="px-3 py-2 text-app-muted whitespace-nowrap">{c.fornecedor ?? '—'}</td>
-                    <td className="px-3 py-2 text-app-muted whitespace-nowrap">{c.espaco}</td>
-                    <td className="px-3 py-2 text-app-muted whitespace-nowrap">{c.categoria === 'fixa' ? 'Fixa' : 'Variável'}</td>
-                    <td className="px-3 py-2 text-app-muted whitespace-nowrap">{c.dataVencimento.split('-').reverse().join('/')}</td>
-                    <td className="px-3 py-2 font-semibold text-app-text whitespace-nowrap">{formatCurrency(c.valor)}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium border ${
-                        c.status === 'pago'
-                          ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-                          : c.status === 'atrasado'
-                            ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                            : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                      }`}>
-                        {c.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            Receita discriminada ({entradasEspaco.length})
+          </span>
+          <span className="font-semibold text-emerald-600">Total: {formatCurrency(receitaTotal)}</span>
+        </summary>
+        {entradasEspaco.length === 0 ? (
+          <p className="text-xs italic text-app-subtle mt-2">Nenhum lançamento no período.</p>
+        ) : (
+          <ul className="mt-2 space-y-1">
+            {entradasEspaco.map(r => (
+              <li key={r.id} className="flex items-center justify-between gap-2 text-xs">
+                <span className="text-app-muted truncate">{r.descricao}{r.cliente ? ` — ${r.cliente}` : ''} <span className="text-app-subtle">· {r.data.split('-').reverse().join('/')}</span></span>
+                <span className="flex items-center gap-2 shrink-0">
+                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium border ${statusBadgeClass[r.status]}`}>{r.status}</span>
+                  <span className="font-medium text-app-text">{formatCurrency(r.valor)}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </details>
+
+      {/* Despesa discriminada */}
+      <details className="group">
+        <summary className="cursor-pointer text-xs font-medium text-app-muted hover:text-app-text transition-colors list-none flex items-center justify-between gap-1">
+          <span className="flex items-center gap-1">
+            <span className="group-open:hidden">▶</span>
+            <span className="hidden group-open:inline">▼</span>
+            Despesa discriminada ({saidasEspaco.length})
+          </span>
+          <span className="font-semibold text-red-500">Total: {formatCurrency(despesaTotal)}</span>
+        </summary>
+        {saidasEspaco.length === 0 ? (
+          <p className="text-xs italic text-app-subtle mt-2">Nenhum lançamento no período.</p>
+        ) : (
+          <ul className="mt-2 space-y-1">
+            {saidasEspaco.map(c => (
+              <li key={c.id} className="flex items-center justify-between gap-2 text-xs">
+                <span className="text-app-muted truncate">{c.descricao} <span className="text-app-subtle">· {c.dataVencimento.split('-').reverse().join('/')}</span></span>
+                <span className="flex items-center gap-2 shrink-0">
+                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium border ${statusBadgeClass[c.status]}`}>{c.status}</span>
+                  <span className="font-medium text-app-text">{formatCurrency(c.valor)}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </details>
+
+      <div className="flex items-center justify-between pt-1 border-t border-app-border/50">
+        <span className="text-xs font-medium text-app-muted">Lucro</span>
+        <span className={`text-sm font-bold ${lucro >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>{formatCurrency(lucro)}</span>
+      </div>
+
+      {/* Repasse para os sócios */}
+      <div>
+        <p className="text-xs font-medium text-app-muted mb-1.5">Repasse para os sócios</p>
+        {socios.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {socios.map(s => (
+              <span key={s.nome} className="flex items-center gap-1.5 rounded-full bg-app-surface2 border border-app-border2/60 px-2.5 py-1 text-xs">
+                <span className="text-app-text font-medium">{s.nome}</span>
+                <span className="text-app-subtle">{s.percentual}%</span>
+                <span className={`font-semibold ${s.valor >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>{formatCurrency(s.valor)}</span>
+              </span>
+            ))}
           </div>
-        </details>
-      )}
+        ) : (
+          <p className="text-xs text-app-subtle italic">Sem sócio configurado para este espaço — o lucro fica integral.</p>
+        )}
+      </div>
     </div>
   )
 }

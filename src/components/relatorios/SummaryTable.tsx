@@ -3,7 +3,7 @@
 import { Printer } from 'lucide-react'
 import type { MonthlyAggregate } from '@/lib/relatorios-utils'
 import { formatCurrency } from '@/lib/utils'
-import { ESPACOS_CONFIG } from '@/lib/espacos-config'
+import { useEspacos } from '@/contexts/EspacosContext'
 
 interface SummaryTableProps {
   data: MonthlyAggregate[]
@@ -11,9 +11,10 @@ interface SummaryTableProps {
 }
 
 export default function SummaryTable({ data, selectedSpaces }: SummaryTableProps) {
+  const { espacosConfig } = useEspacos()
   const spaces = selectedSpaces.length > 0
-    ? ESPACOS_CONFIG.filter((e) => selectedSpaces.includes(e.nome))
-    : ESPACOS_CONFIG
+    ? espacosConfig.filter((e) => selectedSpaces.includes(e.nome))
+    : espacosConfig
 
   const totals = {
     receita: data.reduce((s, m) => s + m.receita, 0),

@@ -1,6 +1,6 @@
 'use client'
 
-import { ESPACOS_CONFIG } from '@/lib/espacos-config'
+import { useEspacos } from '@/contexts/EspacosContext'
 
 export type Periodo = 'semanal' | 'mensal' | 'trimestral' | 'semestral' | 'anual'
 
@@ -25,6 +25,8 @@ interface FilterBarProps {
 }
 
 export default function FilterBar({ filters, onChange }: FilterBarProps) {
+  const { espacosConfig } = useEspacos()
+
   function setPeriodo(periodo: Periodo) {
     onChange({ ...filters, periodo })
   }
@@ -100,7 +102,7 @@ export default function FilterBar({ filters, onChange }: FilterBarProps) {
           >
             Todos
           </button>
-          {ESPACOS_CONFIG.map((e) => {
+          {espacosConfig.map((e) => {
             const active = filters.espacos.includes(e.nome)
             return (
               <button

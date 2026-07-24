@@ -11,15 +11,18 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import type { MonthlyAggregate } from '@/lib/relatorios-utils'
-import { ESPACOS_CONFIG } from '@/lib/espacos-config'
+import { useEspacos } from '@/contexts/EspacosContext'
 
-const ESPACO_STROKE: Record<string, string> = {
-  'Usine': '#a78bfa',
-  'Fabrique': '#818cf8',
-  'House Pacaembu': '#38bdf8',
-  'Complexo Jussara': '#34d399',
-  'Espaço Solon': '#fb923c',
+// Cores por paleta (não por nome) — assim espaços cadastrados depois (ex: "Casa")
+// também recebem uma cor consistente, sem precisar editar este mapa a cada novo espaço.
+const COR_HEX: Record<string, string> = {
+  violet: '#a78bfa',
+  indigo: '#818cf8',
+  sky: '#38bdf8',
+  emerald: '#34d399',
+  orange: '#fb923c',
 }
+const COR_FALLBACK = '#8696A0'
 
 function CustomTooltip({ active, payload, label }: any) {
   if (active && payload && payload.length) {
@@ -44,9 +47,10 @@ interface SpaceBarChartProps {
 }
 
 export default function SpaceBarChart({ data, selectedSpaces }: SpaceBarChartProps) {
+  const { espacosConfig } = useEspacos()
   const spaces = selectedSpaces.length > 0
-    ? ESPACOS_CONFIG.filter((e) => selectedSpaces.includes(e.nome))
-    : ESPACOS_CONFIG
+    ? espacosConfig.filter((e) => selectedSpaces.includes(e.nome))
+    : espacosConfig
 
   const chartData = data.map((m) => {
     const row: Record<string, string | number> = { label: m.label }
@@ -84,7 +88,7 @@ export default function SpaceBarChart({ data, selectedSpaces }: SpaceBarChartPro
               <Bar
                 key={e.nome}
                 dataKey={e.nome}
-                fill={ESPACO_STROKE[e.nome]}
+                fill={COR_HEX[e.cor] ?? COR_FALLBACK}
                 radius={[2, 2, 0, 0]}
                 stackId="stack"
               />
