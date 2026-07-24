@@ -694,6 +694,15 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
                   label="Anexar comprovante do sinal"
                   onUploaded={() => setFileCount(n => n + 1)}
                 />
+                <FileAttachButton
+                  module="agenda"
+                  entityId={eventId}
+                  entityName={draft.cliente.trim() || 'Novo Evento'}
+                  espaco={(draft.espaco as Espaco) || undefined}
+                  categoria="documento_identidade"
+                  label="Anexar CNH/RG de quem assina"
+                  onUploaded={() => setFileCount(n => n + 1)}
+                />
               </div>
               {fileCount > 0 && (
                 <FileList

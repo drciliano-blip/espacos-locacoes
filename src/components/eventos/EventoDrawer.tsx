@@ -7,6 +7,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { useCurrentUser } from '@/contexts/UserContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
 import FileList from '@/components/shared/FileList'
+import FileAttachButton from '@/components/shared/FileAttachButton'
 import PlanoPagamentoSection from '@/components/eventos/PlanoPagamentoSection'
 import Toast from '@/components/shared/Toast'
 
@@ -418,12 +419,18 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
 
         {/* Conteúdo da aba Documentos */}
         {tab === 'documentos' && (
-          <div className="p-5">
+          <div className="p-5 space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <FileAttachButton module="agenda" entityId={evento.id} entityName={`${evento.cliente} — ${evento.espaco}`} espaco={evento.espaco} categoria="contrato" label="Anexar contrato" />
+              <FileAttachButton module="agenda" entityId={evento.id} entityName={`${evento.cliente} — ${evento.espaco}`} espaco={evento.espaco} categoria="comprovante_sinal" label="Anexar comprovante do sinal" />
+              <FileAttachButton module="agenda" entityId={evento.id} entityName={`${evento.cliente} — ${evento.espaco}`} espaco={evento.espaco} categoria="documento_identidade" label="Anexar CNH/RG de quem assina" />
+            </div>
             <FileList
               module="agenda"
               entityId={evento.id}
               entityName={`${evento.cliente} — ${evento.espaco}`}
               espaco={evento.espaco}
+              showAttach={false}
             />
           </div>
         )}
