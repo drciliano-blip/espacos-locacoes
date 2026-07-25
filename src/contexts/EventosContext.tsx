@@ -17,6 +17,7 @@ interface EventoRow {
   tipo: string
   tipo_evento: string | null
   tipo_contrato: string | null
+  condicoes_parceria: string | null
   status: string
   valor: number | string
   observacoes: string | null
@@ -57,6 +58,7 @@ function fromRow(row: EventoRow): Evento {
     tipo: row.tipo,
     tipoEvento: (row.tipo_evento as Evento['tipoEvento']) ?? undefined,
     tipoContrato: (row.tipo_contrato as Evento['tipoContrato']) ?? undefined,
+    condicoesParceria: row.condicoes_parceria ?? undefined,
     status: row.status as Evento['status'],
     valor: Number(row.valor),
     observacoes: row.observacoes ?? undefined,
@@ -97,6 +99,7 @@ function toPayload(e: Evento) {
     tipo: e.tipo,
     tipo_evento: e.tipoEvento ?? null,
     tipo_contrato: e.tipoContrato ?? null,
+    condicoes_parceria: e.condicoesParceria ?? null,
     status: e.status,
     valor: e.valor,
     observacoes: e.observacoes ?? null,

@@ -1,14 +1,15 @@
 'use client'
 
 import { useMemo } from 'react'
-import { ArrowUpCircle, ArrowDownCircle, Wallet } from 'lucide-react'
+import { ArrowUpCircle, ArrowDownCircle, Wallet, Handshake } from 'lucide-react'
 import { useReceitas } from '@/contexts/ReceitasContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { useEspacos } from '@/contexts/EspacosContext'
+import { useEventos } from '@/contexts/EventosContext'
 import { formatCurrency } from '@/lib/utils'
 import { DIVISAO_SOCIOS } from '@/lib/socios-config'
 import type { Receita } from '@/contexts/ReceitasContext'
-import type { ContaPagar } from '@/types'
+import type { ContaPagar, Evento } from '@/types'
 
 interface Props {
   selectedSpaces?: string[]
@@ -26,6 +27,8 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
   const { receitas } = useReceitas()
   const { contas: contasPagar } = useContasPagar()
   const { espacosConfig } = useEspacos()
+  const { eventos } = useEventos()
+  const eventosPorId = useMemo(() => new Map(eventos.map(e => [e.id, e])), [eventos])
 
   const entradas = useMemo(() => receitas.filter(r => {
     const matchEspaco = !selectedSpaces?.length || (r.espaco && selectedSpaces.includes(r.espaco))
@@ -91,7 +94,7 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
       {/* Relatório por espaço */}
       <div className="space-y-4">
         {porEspaco.map(e => (
-          <EspacoReportCard key={e.nome} {...e} />
+          <EspacoReportCard key={e.nome} {...e} eventosPorId={eventosPorId} />
         ))}
         {espacos.length === 0 && (
           <p className="text-sm text-app-subtle text-center py-4">Nenhum espaço cadastrado.</p>
@@ -134,9 +137,10 @@ interface EspacoReportCardProps {
   despesaTotal: number
   lucro: number
   socios: { nome: string; percentual: number; valor: number }[]
+  eventosPorId: Map<string, Evento>
 }
 
-function EspacoReportCard({ nome, entradasEspaco, saidasEspaco, receitaTotal, despesaTotal, lucro, socios }: EspacoReportCardProps) {
+function EspacoReportCard({ nome, entradasEspaco, saidasEspaco, receitaTotal, despesaTotal, lucro, socios, eventosPorId }: EspacoReportCardProps) {
   return (
     <div className="rounded-lg border border-app-border2/60 bg-app-bg p-4 space-y-3">
       <p className="text-sm font-semibold text-app-text">{nome}</p>
@@ -154,16 +158,27 @@ function EspacoReportCard({ nome, entradasEspaco, saidasEspaco, receitaTotal, de
         {entradasEspaco.length === 0 ? (
           <p className="text-xs italic text-app-subtle mt-2">Nenhum lançamento no período.</p>
         ) : (
-          <ul className="mt-2 space-y-1">
-            {entradasEspaco.map(r => (
-              <li key={r.id} className="flex items-center justify-between gap-2 text-xs">
-                <span className="text-app-muted truncate">{r.descricao}{r.cliente ? ` — ${r.cliente}` : ''} <span className="text-app-subtle">· {r.data.split('-').reverse().join('/')}</span></span>
-                <span className="flex items-center gap-2 shrink-0">
-                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium border ${statusBadgeClass[r.status]}`}>{r.status}</span>
-                  <span className="font-medium text-app-text">{formatCurrency(r.valor)}</span>
-                </span>
-              </li>
-            ))}
+          <ul className="mt-2 space-y-1.5">
+            {entradasEspaco.map(r => {
+              const evento = r.eventoId ? eventosPorId.get(r.eventoId) : undefined
+              return (
+                <li key={r.id} className="text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-app-muted truncate">{r.descricao}{r.cliente ? ` — ${r.cliente}` : ''} <span className="text-app-subtle">· {r.data.split('-').reverse().join('/')}</span></span>
+                    <span className="flex items-center gap-2 shrink-0">
+                      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium border ${statusBadgeClass[r.status]}`}>{r.status}</span>
+                      <span className="font-medium text-app-text">{formatCurrency(r.valor)}</span>
+                    </span>
+                  </div>
+                  {evento?.tipoContrato === 'parceria' && evento.condicoesParceria && (
+                    <p className="mt-0.5 flex items-start gap-1 text-app-subtle italic">
+                      <Handshake className="h-3 w-3 shrink-0 mt-0.5" />
+                      Condições da Parceria: {evento.condicoesParceria}
+                    </p>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         )}
       </details>

@@ -110,6 +110,7 @@ export default function RelatoriosClient() {
       ],
     }
 
+    const eventosPorId = new Map(eventos.map(e => [e.id, e]))
     const entradas = receitas.filter(r => {
       const matchEspaco = !selectedSpaces || (r.espaco && selectedSpaces.includes(r.espaco))
       const matchInicio = !filters.dataInicio || r.data >= filters.dataInicio
@@ -119,8 +120,12 @@ export default function RelatoriosClient() {
     const receitasSheet: ExportSheet = {
       name: 'Receitas',
       rows: [
-        ['Descrição', 'Cliente', 'Espaço', 'Categoria', 'Data', 'Valor', 'Status'],
-        ...entradas.map(r => [r.descricao, r.cliente ?? '', r.espaco ?? '', r.categoriaNome, r.data, r.valor, r.status]),
+        ['Descrição', 'Cliente', 'Espaço', 'Categoria', 'Data', 'Valor', 'Status', 'Condições da Parceria'],
+        ...entradas.map(r => {
+          const evento = r.eventoId ? eventosPorId.get(r.eventoId) : undefined
+          const condicoesParceria = evento?.tipoContrato === 'parceria' ? (evento.condicoesParceria ?? '') : ''
+          return [r.descricao, r.cliente ?? '', r.espaco ?? '', r.categoriaNome, r.data, r.valor, r.status, condicoesParceria]
+        }),
       ],
     }
 

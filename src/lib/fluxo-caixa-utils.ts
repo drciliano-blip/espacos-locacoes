@@ -1,6 +1,6 @@
 import type { Receita } from '@/contexts/ReceitasContext'
 import type { RepasseSocio } from '@/contexts/RepassesContext'
-import type { ContaPagar } from '@/types'
+import type { ContaPagar, Evento } from '@/types'
 import { DIVISAO_SOCIOS } from './socios-config'
 
 const MESES_LABEL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
@@ -18,6 +18,7 @@ export interface FluxoCaixaItem {
   status: 'pago' | 'pendente' | 'atrasado'
   categoria?: string
   cliente?: string
+  condicoesParceria?: string
 }
 
 export interface DivisaoSocioMes {
@@ -65,7 +66,9 @@ export function aggregateFluxoCaixa(
   receitas: Receita[],
   contasPagar: ContaPagar[],
   repasses: RepasseSocio[],
+  eventos: Evento[] = [],
 ): FluxoCaixaMes[] {
+  const eventosPorId = new Map(eventos.map(e => [e.id, e]))
   const entradasEspaco = receitas.filter(r => r.espaco === espaco)
   const saidasEspaco = contasPagar.filter(c => c.espaco === espaco)
   const repassesEspaco = repasses.filter(r => r.espaco === espaco)
@@ -103,7 +106,13 @@ export function aggregateFluxoCaixa(
       yearMonth,
       label,
       temLancamentos: entradas.length > 0 || saidas.length > 0,
-      entradas: entradas.map(r => ({ id: r.id, descricao: r.descricao, data: r.data, valor: r.valor, status: r.status, cliente: r.cliente })),
+      entradas: entradas.map(r => {
+        const evento = r.eventoId ? eventosPorId.get(r.eventoId) : undefined
+        return {
+          id: r.id, descricao: r.descricao, data: r.data, valor: r.valor, status: r.status, cliente: r.cliente,
+          condicoesParceria: evento?.tipoContrato === 'parceria' ? evento.condicoesParceria : undefined,
+        }
+      }),
       saidas: saidas.map(c => ({ id: c.id, descricao: c.descricao, data: c.dataVencimento, valor: c.valor, status: c.status, categoria: SUBCATEGORIA_LABEL[c.subcategoria] ?? c.subcategoria })),
       totalEntradas,
       totalSaidas,

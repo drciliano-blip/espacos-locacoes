@@ -52,6 +52,7 @@ export interface Evento {
   tipo: string
   tipoEvento?: TipoEvento  // Feature 3
   tipoContrato?: TipoMinuta
+  condicoesParceria?: string
   status: StatusEvento
   valor: number
   observacoes?: string

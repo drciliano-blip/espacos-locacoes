@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
-import { Wallet, PiggyBank, TrendingUp, Plus, X, Pencil, Check } from 'lucide-react'
+import { Wallet, PiggyBank, TrendingUp, Plus, X, Pencil, Check, Handshake } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
+import { useEventos } from '@/contexts/EventosContext'
 import { useRepasses } from '@/contexts/RepassesContext'
 import { useCurrentUser } from '@/contexts/UserContext'
 import { formatCurrency, parseCurrencyBR } from '@/lib/utils'
@@ -40,6 +41,7 @@ export default function FluxoCaixaEspaco() {
   const { espacosConfig, updateSaldoInicial } = useEspacos()
   const { receitas } = useReceitas()
   const { contas: contasPagar } = useContasPagar()
+  const { eventos } = useEventos()
   const { repasses, addRepasse } = useRepasses()
   const { role } = useCurrentUser()
   const podeRegistrar = role === 'admin' || role === 'financeiro'
@@ -62,8 +64,8 @@ export default function FluxoCaixaEspaco() {
 
   const meses = useMemo(() => gerarMesesDoPeriodo(inicio, fim), [inicio, fim])
   const fluxo = useMemo(
-    () => espacoSelecionado ? aggregateFluxoCaixa(espacoSelecionado, meses, receitas, contasPagar, repasses) : [],
-    [espacoSelecionado, meses, receitas, contasPagar, repasses],
+    () => espacoSelecionado ? aggregateFluxoCaixa(espacoSelecionado, meses, receitas, contasPagar, repasses, eventos) : [],
+    [espacoSelecionado, meses, receitas, contasPagar, repasses, eventos],
   )
   const projecao = useMemo(() => projecaoProximoMes(fluxo), [fluxo])
 
@@ -87,8 +89,8 @@ export default function FluxoCaixaEspaco() {
     const receitasSheet: ExportSheet = {
       name: 'Receitas',
       rows: [
-        ['Mês', 'Descrição', 'Cliente', 'Data', 'Valor', 'Status'],
-        ...fluxo.flatMap(m => m.entradas.map(r => [m.label, r.descricao, r.cliente ?? '', r.data, r.valor, r.status])),
+        ['Mês', 'Descrição', 'Cliente', 'Data', 'Valor', 'Status', 'Condições da Parceria'],
+        ...fluxo.flatMap(m => m.entradas.map(r => [m.label, r.descricao, r.cliente ?? '', r.data, r.valor, r.status, r.condicoesParceria ?? ''])),
       ],
     }
     const despesasSheet: ExportSheet = {
@@ -300,15 +302,23 @@ function MesCard({ mes, primeiroMes, saldoInicial, projecao, podeRegistrar, onRe
           ) : (
             <ul className="space-y-1.5">
               {mes.entradas.map(r => (
-                <li key={r.id} className="flex items-center justify-between gap-2 rounded-lg bg-app-surface px-2.5 py-1.5 text-xs">
-                  <span className="min-w-0">
-                    <span className="block font-medium text-app-text truncate">{r.descricao}</span>
-                    <span className="flex items-center gap-1.5 text-app-subtle">
-                      {r.data.split('-').reverse().slice(0, 2).join('/')}
-                      <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-medium border ${statusBadgeClass(r.status)}`}>{r.status}</span>
+                <li key={r.id} className="rounded-lg bg-app-surface px-2.5 py-1.5 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="min-w-0">
+                      <span className="block font-medium text-app-text truncate">{r.descricao}</span>
+                      <span className="flex items-center gap-1.5 text-app-subtle">
+                        {r.data.split('-').reverse().slice(0, 2).join('/')}
+                        <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-medium border ${statusBadgeClass(r.status)}`}>{r.status}</span>
+                      </span>
                     </span>
-                  </span>
-                  <span className="shrink-0 font-semibold text-emerald-500">+ {formatCurrency(r.valor)}</span>
+                    <span className="shrink-0 font-semibold text-emerald-500">+ {formatCurrency(r.valor)}</span>
+                  </div>
+                  {r.condicoesParceria && (
+                    <p className="mt-1 flex items-start gap-1 text-app-subtle italic">
+                      <Handshake className="h-3 w-3 shrink-0 mt-0.5" />
+                      Condições da Parceria: {r.condicoesParceria}
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>

@@ -154,6 +154,7 @@ interface Draft {
   formaPagamento: FormaPagamento | ''
   valorSinal: string
   dataVencimentoSaldo: string
+  condicoesParceria: string
   observacoes: string
   nomeEvento: string
   horaInicioMontagem: string
@@ -187,6 +188,7 @@ function emptyDraft(espacoPadrao?: Espaco): Draft {
     formaPagamento: '',
     valorSinal: '',
     dataVencimentoSaldo: '',
+    condicoesParceria: '',
     observacoes: '',
     nomeEvento: '',
     horaInicioMontagem: '',
@@ -448,6 +450,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
       nomeFantasia:    draft.pessoaJuridica ? (draft.nomeFantasia.trim() || undefined) : undefined,
       cnpj:            draft.pessoaJuridica ? (draft.cnpj.trim() || undefined) : undefined,
       enderecoEmpresa,
+      condicoesParceria: draft.tipoContrato === 'parceria' ? (draft.condicoesParceria.trim() || undefined) : undefined,
     }
 
     setSaving(true)
@@ -767,85 +770,103 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
               <Field label="Nº de Pessoas" {...fieldProps('numeroPessoas')} type="number" placeholder="0" />
               <Field label="Valor (R$)"    {...fieldProps('valor', true)}   type="currency" required placeholder="0,00" />
-              <div className="col-span-2">
-                <label className="text-xs text-app-subtle mb-0.5 block">Forma de Pagamento</label>
-                <select
-                  value={draft.formaPagamento}
-                  onChange={e => {
-                    const valor = e.target.value
-                    set('formaPagamento', valor)
-                    if (valor === 'Parcelado' && parcelas === null) {
-                      setParcelas(gerarParcelasPadrao(draft.data, parseCurrencyBR(draft.valor), draft.valorSinal, draft.dataVencimentoSaldo))
-                    }
-                  }}
-                  className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none cursor-pointer"
-                  onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
-                  onBlur={e => { e.currentTarget.style.borderColor = '' }}
-                >
-                  <option value="">— Selecione —</option>
-                  {FORMAS_PAGAMENTO.map(f => <option key={f} value={f}>{f}</option>)}
-                </select>
-              </div>
-              {draft.formaPagamento === 'Parcelado' && (
-                <div className="col-span-2 space-y-3 rounded-lg border border-[#25D366]/30 bg-[#25D366]/5 p-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Field label="Valor do sinal (R$)" {...fieldProps('valorSinal')} type="currency" placeholder="0,00" />
-                    <Field label="Vencimento do saldo" {...fieldProps('dataVencimentoSaldo')} type="date" />
-                  </div>
 
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-medium text-app-text">Plano de pagamento (parcelas)</p>
-                    <button
-                      onClick={() => setParcelas(gerarParcelasPadrao(draft.data, parseCurrencyBR(draft.valor), draft.valorSinal, draft.dataVencimentoSaldo))}
-                      className="text-xs text-app-muted hover:text-app-text transition-colors underline"
+              {draft.tipoContrato === 'parceria' ? (
+                <div className="col-span-2">
+                  <label className="text-xs text-app-subtle mb-0.5 block">Condições da Parceria</label>
+                  <textarea
+                    value={draft.condicoesParceria}
+                    onChange={e => set('condicoesParceria', e.target.value)}
+                    rows={6}
+                    placeholder="Descreva todas as condições acordadas: percentual da bilheteria para cada parte, divisão da receita do bar, quem paga os funcionários, quem contrata e paga o artístico, responsabilidade pela divulgação, divisão dos custos, valor mínimo garantido, ou qualquer outra condição comercial específica…"
+                    className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none resize-none"
+                    onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
+                    onBlur={e => { e.currentTarget.style.borderColor = '' }}
+                  />
+                </div>
+              ) : (
+                <>
+                  <div className="col-span-2">
+                    <label className="text-xs text-app-subtle mb-0.5 block">Forma de Pagamento</label>
+                    <select
+                      value={draft.formaPagamento}
+                      onChange={e => {
+                        const valor = e.target.value
+                        set('formaPagamento', valor)
+                        if (valor === 'Parcelado' && parcelas === null) {
+                          setParcelas(gerarParcelasPadrao(draft.data, parseCurrencyBR(draft.valor), draft.valorSinal, draft.dataVencimentoSaldo))
+                        }
+                      }}
+                      className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none cursor-pointer"
+                      onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
+                      onBlur={e => { e.currentTarget.style.borderColor = '' }}
                     >
-                      Recalcular padrão (Sinal + Saldo)
-                    </button>
+                      <option value="">— Selecione —</option>
+                      {FORMAS_PAGAMENTO.map(f => <option key={f} value={f}>{f}</option>)}
+                    </select>
                   </div>
+                  {draft.formaPagamento === 'Parcelado' && (
+                    <div className="col-span-2 space-y-3 rounded-lg border border-[#25D366]/30 bg-[#25D366]/5 p-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Field label="Valor do sinal (R$)" {...fieldProps('valorSinal')} type="currency" placeholder="0,00" />
+                        <Field label="Vencimento do saldo" {...fieldProps('dataVencimentoSaldo')} type="date" />
+                      </div>
 
-                  <div className="space-y-2">
-                    {(parcelas ?? []).map(p => (
-                      <div key={p.numero} className="flex items-center gap-2">
-                        <input
-                          value={p.label}
-                          onChange={e => setParcelas(ps => (ps ?? []).map(x => x.numero === p.numero ? { ...x, label: e.target.value } : x))}
-                          placeholder="Ex: Sinal"
-                          className="w-28 shrink-0 rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-xs text-app-text focus:outline-none"
-                        />
-                        <input
-                          type="date"
-                          value={p.data}
-                          onChange={e => setParcelas(ps => (ps ?? []).map(x => x.numero === p.numero ? { ...x, data: e.target.value } : x))}
-                          className="rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-xs text-app-text focus:outline-none"
-                        />
-                        <input
-                          type="text" inputMode="decimal"
-                          value={p.valor}
-                          onChange={e => setParcelas(ps => (ps ?? []).map(x => x.numero === p.numero ? { ...x, valor: e.target.value } : x))}
-                          placeholder="0,00"
-                          className="w-28 rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-xs text-app-text focus:outline-none"
-                        />
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-medium text-app-text">Plano de pagamento (parcelas)</p>
                         <button
-                          onClick={() => setParcelas(ps => (ps ?? []).filter(x => x.numero !== p.numero))}
-                          className="ml-auto shrink-0 text-red-400 hover:text-red-500 transition-colors"
+                          onClick={() => setParcelas(gerarParcelasPadrao(draft.data, parseCurrencyBR(draft.valor), draft.valorSinal, draft.dataVencimentoSaldo))}
+                          className="text-xs text-app-muted hover:text-app-text transition-colors underline"
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          Recalcular padrão (Sinal + Saldo)
                         </button>
                       </div>
-                    ))}
-                    <button
-                      onClick={() => setParcelas(ps => {
-                        const base = ps ?? []
-                        const proximo = base.length > 0 ? Math.max(...base.map(x => x.numero)) + 1 : 1
-                        return [...base, { numero: proximo, label: `Parcela ${proximo}`, data: '', valor: '' }]
-                      })}
-                      className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      Adicionar parcela
-                    </button>
-                  </div>
-                </div>
+
+                      <div className="space-y-2">
+                        {(parcelas ?? []).map(p => (
+                          <div key={p.numero} className="flex items-center gap-2">
+                            <input
+                              value={p.label}
+                              onChange={e => setParcelas(ps => (ps ?? []).map(x => x.numero === p.numero ? { ...x, label: e.target.value } : x))}
+                              placeholder="Ex: Sinal"
+                              className="w-28 shrink-0 rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-xs text-app-text focus:outline-none"
+                            />
+                            <input
+                              type="date"
+                              value={p.data}
+                              onChange={e => setParcelas(ps => (ps ?? []).map(x => x.numero === p.numero ? { ...x, data: e.target.value } : x))}
+                              className="rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-xs text-app-text focus:outline-none"
+                            />
+                            <input
+                              type="text" inputMode="decimal"
+                              value={p.valor}
+                              onChange={e => setParcelas(ps => (ps ?? []).map(x => x.numero === p.numero ? { ...x, valor: e.target.value } : x))}
+                              placeholder="0,00"
+                              className="w-28 rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-xs text-app-text focus:outline-none"
+                            />
+                            <button
+                              onClick={() => setParcelas(ps => (ps ?? []).filter(x => x.numero !== p.numero))}
+                              className="ml-auto shrink-0 text-red-400 hover:text-red-500 transition-colors"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => setParcelas(ps => {
+                            const base = ps ?? []
+                            const proximo = base.length > 0 ? Math.max(...base.map(x => x.numero)) + 1 : 1
+                            return [...base, { numero: proximo, label: `Parcela ${proximo}`, data: '', valor: '' }]
+                          })}
+                          className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Adicionar parcela
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </section>

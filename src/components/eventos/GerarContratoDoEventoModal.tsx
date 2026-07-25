@@ -21,7 +21,9 @@ export default function GerarContratoDoEventoModal({ evento, onClose, onSave, on
   const [tipoMinuta, setTipoMinuta] = useState<TipoMinuta>(evento.tipoContrato ?? 'locacao')
   const [valorNegociado, setValorNegociado] = useState(String(evento.valor))
   const [observacaoNegociacao, setObservacaoNegociacao] = useState('')
-  const [observacaoParceria, setObservacaoParceria] = useState('')
+  // Já vem preenchido com o que foi descrito no cadastro do evento — a cláusula
+  // de condições comerciais do contrato usa esse texto automaticamente.
+  const [observacaoParceria, setObservacaoParceria] = useState(evento.condicoesParceria ?? '')
   const [saving, setSaving] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 

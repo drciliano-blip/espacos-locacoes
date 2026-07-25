@@ -426,18 +426,25 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
                 {field('Faturamento Bruto', current.faturamentoBruto ? formatCurrency(current.faturamentoBruto) : undefined, 'faturamentoBruto', 'number')}
                 {field('Faturamento Líquido', current.faturamentoLiquido ? formatCurrency(current.faturamentoLiquido) : undefined, 'faturamentoLiquido', 'number')}
-                {field('Forma de Pagamento', current.formaPagamento, 'formaPagamento', 'select', ['PIX', 'Transferência', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Cheque', 'Parcelado'])}
-                {current.formaPagamento === 'Parcelado' && (
+                {current.tipoContrato === 'parceria' ? (
+                  textArea('Condições da Parceria', 'condicoesParceria')
+                ) : (
                   <>
-                    {field('Valor do Sinal', current.valorSinal ? formatCurrency(current.valorSinal) : undefined, 'valorSinal', 'number')}
-                    {field('Vencimento do Saldo', current.dataVencimentoSaldo ? formatDate(current.dataVencimentoSaldo) : undefined, 'dataVencimentoSaldo', 'date')}
+                    {field('Forma de Pagamento', current.formaPagamento, 'formaPagamento', 'select', ['PIX', 'Transferência', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Cheque', 'Parcelado'])}
+                    {current.formaPagamento === 'Parcelado' && (
+                      <>
+                        {field('Valor do Sinal', current.valorSinal ? formatCurrency(current.valorSinal) : undefined, 'valorSinal', 'number')}
+                        {field('Vencimento do Saldo', current.dataVencimentoSaldo ? formatDate(current.dataVencimentoSaldo) : undefined, 'dataVencimentoSaldo', 'date')}
+                      </>
+                    )}
                   </>
                 )}
               </div>
             </section>
 
-            {/* Plano de Pagamento (sinal + parcelas) */}
-            {!editing && (
+            {/* Plano de Pagamento (sinal + parcelas) — não se aplica a eventos de Parceria,
+                que usam Condições da Parceria em texto livre no lugar de forma de pagamento fixa */}
+            {!editing && current.tipoContrato !== 'parceria' && (
               <PlanoPagamentoSection
                 valorEvento={evento.valor}
                 parcelas={parcelas}
