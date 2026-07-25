@@ -106,13 +106,7 @@ export default function CalendarView({ eventos, onDaySelect, selectedDate }: Cal
               </span>
               <div className="flex flex-wrap gap-0.5 justify-center">
                 {dayEvents.slice(0, 3).map((e, i) => (
-                  e.status === 'em_negociacao' ? (
-                    <span
-                      key={i}
-                      className="h-1.5 w-1.5 rounded-full border border-amber-400 bg-amber-400/30"
-                      title="Em negociação"
-                    />
-                  ) : e.status === 'cancelado' ? (
+                  e.status === 'cancelado' ? (
                     <span
                       key={i}
                       className="h-1.5 w-1.5 rounded-full bg-red-400/60"
@@ -145,10 +139,6 @@ export default function CalendarView({ eventos, onDaySelect, selectedDate }: Cal
           <div className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-emerald-400" />
             <span className="text-xs text-app-subtle">Confirmado</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full border border-amber-400 bg-amber-400/30" />
-            <span className="text-xs text-app-subtle">Em negociação</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-red-400/60" />

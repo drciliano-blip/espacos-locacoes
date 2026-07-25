@@ -5,15 +5,13 @@ import type { Evento, TipoEvento } from '@/types'
 import { formatDate, formatCurrency } from '@/lib/utils'
 
 const statusBadge: Record<string, string> = {
-  confirmado:    'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  em_negociacao: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  cancelado:     'bg-red-500/10 text-red-400 border-red-500/20',
+  confirmado: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  cancelado:  'bg-red-500/10 text-red-400 border-red-500/20',
 }
 
 const statusLabel: Record<string, string> = {
-  confirmado:    'Confirmado',
-  em_negociacao: 'Em negociação',
-  cancelado:     'Cancelado',
+  confirmado: 'Confirmado',
+  cancelado:  'Cancelado',
 }
 
 const espacoColors: Record<string, string> = {

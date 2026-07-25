@@ -109,7 +109,6 @@ export default function EventosPage() {
             >
               <option value="todos">Todos status</option>
               <option value="confirmado">Confirmado</option>
-              <option value="em_negociacao">Em negociação</option>
               <option value="cancelado">Cancelado</option>
             </select>
           </div>

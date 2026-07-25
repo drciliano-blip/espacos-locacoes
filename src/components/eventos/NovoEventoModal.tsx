@@ -137,7 +137,7 @@ interface Draft {
   horaFim: string
   tipo: string
   tipoEvento: TipoEvento | ''
-  status: 'confirmado' | 'em_negociacao' | 'cancelado'
+  status: 'confirmado' | 'cancelado'
   valor: string
   numeroPessoas: string
   responsavel: string
@@ -169,7 +169,7 @@ function emptyDraft(espacoPadrao?: Espaco): Draft {
     horaFim: '',
     tipo: '',
     tipoEvento: '',
-    status: 'em_negociacao',
+    status: 'confirmado',
     valor: '',
     numeroPessoas: '',
     responsavel: '',
@@ -621,24 +621,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
 
               <Field label="Data" {...fieldProps('data', true)} type="date" required />
 
-              {/* Status */}
-              <div>
-                <label className="text-xs text-app-subtle mb-0.5 block">Status</label>
-                <select
-                  value={draft.status}
-                  onChange={e => set('status', e.target.value)}
-                  className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none cursor-pointer"
-                  onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
-                  onBlur={e => { e.currentTarget.style.borderColor = '' }}
-                >
-                  <option value="em_negociacao">Em negociação</option>
-                  <option value="confirmado">Confirmado</option>
-                  <option value="cancelado">Cancelado</option>
-                </select>
-              </div>
-
               <Field label="Início montagem" {...fieldProps('horaInicioMontagem')} type="time" />
-              <div />
               <Field label="Hora início" {...fieldProps('horaInicio', true)} type="time" required />
               <Field label="Hora fim"    {...fieldProps('horaFim', true)}    type="time" required />
 

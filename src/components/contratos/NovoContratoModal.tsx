@@ -53,7 +53,7 @@ interface Draft {
   valorEntrada: string
   responsavel: string
   observacoes: string
-  status: 'confirmado' | 'em_negociacao' | 'cancelado'
+  status: 'confirmado' | 'cancelado'
   tipoMinuta: TipoMinuta
   valorNegociado: string
   observacaoNegociacao: string
@@ -65,7 +65,7 @@ function emptyDraft(): Draft {
     cliente: '', cpfCnpj: '', espaco: '', dataEvento: '',
     horaInicio: '', horaFim: '', tipo: '', valorTotal: '',
     valorEntrada: '', responsavel: '', observacoes: '',
-    status: 'em_negociacao',
+    status: 'confirmado',
     tipoMinuta: 'locacao', valorNegociado: '', observacaoNegociacao: '', observacaoParceria: '',
   }
 }
@@ -421,7 +421,6 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
                   onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
                   onBlur={e => { e.currentTarget.style.borderColor = '' }}
                 >
-                  <option value="em_negociacao">Em negociação</option>
                   <option value="confirmado">Confirmado</option>
                   <option value="cancelado">Cancelado</option>
                 </select>

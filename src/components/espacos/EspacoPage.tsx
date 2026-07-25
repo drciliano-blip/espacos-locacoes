@@ -5,7 +5,7 @@ import type { ComponentType } from 'react'
 import {
   Users, DollarSign, CalendarCheck, TrendingUp,
   Building2, FileText, User, MapPin,
-  CheckCircle2, AlertCircle, XCircle, BarChart3,
+  CheckCircle2, XCircle, BarChart3,
   Activity, ChevronRight, Layers, Plus, Clock,
   List, CalendarDays,
 } from 'lucide-react'
@@ -45,9 +45,8 @@ const COR_HEX: Record<string, string> = {
 }
 
 const STATUS_CFG: Record<string, { badge: string; label: string; Icon: ComponentType<{ className?: string }> }> = {
-  confirmado:    { badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', label: 'Confirmado',     Icon: CheckCircle2 },
-  em_negociacao: { badge: 'bg-amber-500/10  text-amber-400  border-amber-500/20',    label: 'Em negociação',  Icon: AlertCircle },
-  cancelado:     { badge: 'bg-red-500/10    text-red-400    border-red-500/20',       label: 'Cancelado',      Icon: XCircle },
+  confirmado: { badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', label: 'Confirmado', Icon: CheckCircle2 },
+  cancelado:  { badge: 'bg-red-500/10    text-red-400    border-red-500/20',       label: 'Cancelado',  Icon: XCircle },
 }
 
 const AT_CFG: Record<TipoAtividade, { color: string; Icon: ComponentType<{ className?: string }> }> = {
@@ -180,7 +179,6 @@ export default function EspacoPage({ config }: EspacoPageProps) {
   const statusChips = [
     { key: 'todos',     label: 'Todos',      count: eventosEspaco.length },
     { key: 'confirmado',label: 'Confirmados', count: eventosEspaco.filter(e => e.status === 'confirmado').length },
-    { key: 'em_negociacao', label: 'Em negociação', count: eventosEspaco.filter(e => e.status === 'em_negociacao').length },
     { key: 'cancelado', label: 'Cancelados',  count: eventosEspaco.filter(e => e.status === 'cancelado').length },
   ]
 
@@ -337,7 +335,7 @@ export default function EspacoPage({ config }: EspacoPageProps) {
             ) : (
               <div className="divide-y divide-app-border/40">
                 {eventosVisiveis.map((evento) => {
-                  const sc = STATUS_CFG[evento.status] ?? STATUS_CFG['em_negociacao']
+                  const sc = STATUS_CFG[evento.status] ?? STATUS_CFG['confirmado']
                   const iconColor = sc.badge.split(' ')[1]
                   return (
                     <button
@@ -408,7 +406,7 @@ export default function EspacoPage({ config }: EspacoPageProps) {
             <div className="grid grid-cols-3 gap-3">
               {[
                 { label: 'Receita Confirmada', value: formatCurrency(receitaConfirmada), color: config.colorClass },
-                { label: 'Receita Em Negociação', value: formatCurrency(eventosEspaco.filter(e => e.status === 'em_negociacao').reduce((s, e) => s + e.valor, 0)), color: 'text-amber-400' },
+                { label: 'Receita Cancelada', value: formatCurrency(eventosEspaco.filter(e => e.status === 'cancelado').reduce((s, e) => s + e.valor, 0)), color: 'text-red-400' },
                 { label: 'Ticket Médio',        value: ticketMedio > 0 ? formatCurrency(ticketMedio) : '—', color: 'text-sky-400' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="rounded-lg border border-app-border2/50 bg-app-surface2/30 p-4">

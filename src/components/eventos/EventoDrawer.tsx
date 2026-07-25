@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { X, Save, Edit3, Users, DollarSign, User, Calendar, ClipboardCheck, Paperclip, Trash2, FileSignature } from 'lucide-react'
+import { X, Save, Edit3, Users, DollarSign, User, Calendar, ClipboardCheck, Paperclip, Trash2, FileSignature, Ban, RotateCcw } from 'lucide-react'
 import type { Evento, StatusVistoria, TipoEvento, Contrato } from '@/types'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useCurrentUser } from '@/contexts/UserContext'
@@ -15,15 +15,13 @@ import GerarContratoModal from '@/components/contratos/GerarContratoModal'
 import Toast from '@/components/shared/Toast'
 
 const statusBadge: Record<string, string> = {
-  confirmado:    'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  em_negociacao: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  cancelado:     'bg-red-500/10 text-red-400 border-red-500/20',
+  confirmado: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  cancelado:  'bg-red-500/10 text-red-400 border-red-500/20',
 }
 
 const statusLabel: Record<string, string> = {
-  confirmado:    'Confirmado',
-  em_negociacao: 'Em negociação',
-  cancelado:     'Cancelado',
+  confirmado: 'Confirmado',
+  cancelado:  'Cancelado',
 }
 
 const vistoriaStyles: Record<StatusVistoria, string> = {
@@ -58,6 +56,8 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
   const [draft, setDraft] = useState<Evento>({ ...evento })
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [cancelConfirm, setCancelConfirm] = useState(false)
+  const [togglingStatus, setTogglingStatus] = useState(false)
   const [saving, setSaving] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [gerarContratoDoEventoOpen, setGerarContratoDoEventoOpen] = useState(false)
@@ -104,6 +104,18 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
     setDeleting(true)
     await onDelete(evento.id)
     setDeleting(false)
+  }
+
+  async function handleToggleStatus() {
+    setTogglingStatus(true)
+    try {
+      await onUpdate({ ...evento, status: evento.status === 'confirmado' ? 'cancelado' : 'confirmado' })
+      setCancelConfirm(false)
+    } catch (err) {
+      showToast(err instanceof Error ? `Não foi possível atualizar o status: ${err.message}` : 'Não foi possível atualizar o status. Tente novamente.')
+    } finally {
+      setTogglingStatus(false)
+    }
   }
 
   const field = <T extends string | number | undefined>(
@@ -217,6 +229,23 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                     <FileSignature className="h-3.5 w-3.5" />
                     {contratoExistente ? 'Gerar documento do contrato' : 'Gerar Contrato'}
                   </button>
+                  {evento.status === 'confirmado' ? (
+                    <button
+                      onClick={() => setCancelConfirm(true)}
+                      className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors"
+                    >
+                      <Ban className="h-3.5 w-3.5" />
+                      Cancelar evento
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setCancelConfirm(true)}
+                      className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs font-medium text-app-muted hover:bg-app-surface2 transition-colors"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      Reativar evento
+                    </button>
+                  )}
                   <button
                     onClick={() => setEditing(true)}
                     className="flex items-center gap-1.5 rounded-lg border border-[#25D366]/30 bg-[#25D366]/10 px-3 py-1.5 text-xs font-medium text-[#128C7E] hover:bg-[#25D366]/20 transition-colors"
@@ -271,21 +300,9 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
           <div className="p-5 space-y-5">
             {/* Status e valor */}
             <div className="flex items-center gap-3">
-              {editing ? (
-                <select
-                  value={draft.status}
-                  onChange={(e) => setDraft((d) => ({ ...d, status: e.target.value as Evento['status'] }))}
-                  className="rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-xs font-semibold text-app-text focus:border-[#25D366] focus:outline-none cursor-pointer"
-                >
-                  <option value="em_negociacao">Em negociação</option>
-                  <option value="confirmado">Confirmado</option>
-                  <option value="cancelado">Cancelado</option>
-                </select>
-              ) : (
-                <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusBadge[current.status]}`}>
-                  {statusLabel[current.status] ?? current.status}
-                </span>
-              )}
+              <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusBadge[current.status]}`}>
+                {statusLabel[current.status] ?? current.status}
+              </span>
               <span className="text-xl font-bold" style={{ color: '#25D366' }}>{formatCurrency(current.valor)}</span>
             </div>
 
@@ -473,6 +490,40 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 transition-colors disabled:opacity-50"
               >
                 {deleting ? 'Excluindo…' : 'Excluir'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmação de cancelamento / reativação */}
+      {cancelConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-sm rounded-2xl border border-app-border bg-app-surface p-6 shadow-2xl">
+            <h3 className="text-base font-bold text-app-text mb-2">
+              {evento.status === 'confirmado' ? 'Cancelar evento?' : 'Reativar evento?'}
+            </h3>
+            <p className="text-sm text-app-muted mb-5">
+              {evento.status === 'confirmado'
+                ? 'O evento não será excluído — ficará marcado como Cancelado, continua disponível no histórico, e o horário e a data ficam livres novamente na agenda.'
+                : 'O status volta para Confirmado.'}
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setCancelConfirm(false)}
+                disabled={togglingStatus}
+                className="rounded-lg border border-app-border2 px-4 py-2 text-sm text-app-muted hover:bg-app-surface2 transition-colors disabled:opacity-50"
+              >
+                Voltar
+              </button>
+              <button
+                onClick={handleToggleStatus}
+                disabled={togglingStatus}
+                className={`rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50 ${
+                  evento.status === 'confirmado' ? 'bg-red-600 hover:bg-red-500' : 'bg-[#25D366] hover:bg-[#128C7E]'
+                }`}
+              >
+                {togglingStatus ? 'Aguarde…' : evento.status === 'confirmado' ? 'Cancelar evento' : 'Reativar evento'}
               </button>
             </div>
           </div>
