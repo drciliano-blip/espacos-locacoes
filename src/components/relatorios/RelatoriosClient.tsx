@@ -117,14 +117,20 @@ export default function RelatoriosClient() {
       const matchFim = !filters.dataFim || r.data <= filters.dataFim
       return matchEspaco && matchInicio && matchFim
     })
+    // Mesmas colunas exibidas na tela (Relatório Mensal) — nenhum lançamento ou
+    // campo cadastrado fica de fora da exportação.
     const receitasSheet: ExportSheet = {
       name: 'Receitas',
       rows: [
-        ['Descrição', 'Cliente', 'Espaço', 'Categoria', 'Data', 'Valor', 'Status', 'Condições da Parceria'],
+        ['Descrição', 'Categoria', 'Evento', 'Cliente/Pagador', 'Espaço', 'Data Vencimento', 'Data Recebimento', 'Valor', 'Forma Pagamento', 'Status', 'Parcela', 'Observações', 'Condições da Parceria'],
         ...entradas.map(r => {
           const evento = r.eventoId ? eventosPorId.get(r.eventoId) : undefined
           const condicoesParceria = evento?.tipoContrato === 'parceria' ? (evento.condicoesParceria ?? '') : ''
-          return [r.descricao, r.cliente ?? '', r.espaco ?? '', r.categoriaNome, r.data, r.valor, r.status, condicoesParceria]
+          return [
+            r.descricao, r.categoriaNome, evento?.nomeEvento || evento?.tipo || '', r.cliente ?? '', r.espaco ?? '',
+            r.data, r.dataRecebimento ?? '', r.valor, r.metodoPagamento ?? '', r.status, r.parcelaLabel ?? '',
+            r.observacoes ?? '', condicoesParceria,
+          ]
         }),
       ],
     }
@@ -138,8 +144,21 @@ export default function RelatoriosClient() {
     const despesasSheet: ExportSheet = {
       name: 'Despesas',
       rows: [
-        ['Descrição', 'Beneficiário', 'Espaço', 'Categoria', 'Subcategoria', 'Vencimento', 'Valor', 'Status'],
-        ...saidas.map(c => [c.descricao, c.fornecedor ?? '', c.espaco, c.categoria, c.subcategoria, c.dataVencimento, c.valor, c.status]),
+        ['Descrição', 'Categoria', 'Subcategoria', 'Fornecedor/Beneficiário', 'Espaço', 'Data Vencimento', 'Data Pagamento', 'Valor', 'Status', 'Observações'],
+        ...saidas.map(c => [c.descricao, c.categoria, c.subcategoria, c.fornecedor ?? '', c.espaco, c.dataVencimento, c.dataPagamento ?? '', c.valor, c.status, c.observacoes ?? '']),
+      ],
+    }
+
+    const totalReceitasPeriodo = entradas.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)
+    const totalDespesasPeriodo = saidas.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0)
+    const totaisSheet: ExportSheet = {
+      name: 'Totais do Período',
+      rows: [
+        ['Total de Receitas', totalReceitasPeriodo],
+        ['Total de Despesas', totalDespesasPeriodo],
+        ['Saldo Final do Período', totalReceitasPeriodo - totalDespesasPeriodo],
+        ['Lançamentos de Receita', entradas.length],
+        ['Lançamentos de Despesa', saidas.length],
       ],
     }
 
@@ -163,7 +182,7 @@ export default function RelatoriosClient() {
     const divisaoSheet: ExportSheet = { name: 'Divisão de Lucro', rows: divisaoRows }
 
     downloadWorkbook(
-      [resumoMensal, receitasSheet, despesasSheet, divisaoSheet],
+      [totaisSheet, resumoMensal, receitasSheet, despesasSheet, divisaoSheet],
       `relatorio-${filters.dataInicio}-a-${filters.dataFim}.xlsx`,
     )
   }

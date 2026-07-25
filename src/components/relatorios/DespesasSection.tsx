@@ -148,7 +148,7 @@ export default function DespesasSection({ selectedSpaces, dataInicio, dataFim }:
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-app-border bg-app-surface2">
-                  {['Descrição', 'Espaço', 'Categoria', 'Subcategoria', 'Vencimento', 'Valor', 'Status'].map(h => (
+                  {['Descrição', 'Espaço', 'Categoria', 'Subcategoria', 'Fornecedor/Beneficiário', 'Vencimento', 'Pagamento', 'Valor', 'Status', 'Observações'].map(h => (
                     <th key={h} className="px-3 py-2 text-left text-app-subtle font-medium whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -168,7 +168,9 @@ export default function DespesasSection({ selectedSpaces, dataInicio, dataFim }:
                       </span>
                     </td>
                     <td className="px-3 py-2 text-app-muted whitespace-nowrap capitalize">{SUB_LABELS[c.subcategoria] ?? c.subcategoria}</td>
+                    <td className="px-3 py-2 text-app-muted whitespace-nowrap">{c.fornecedor ?? '—'}</td>
                     <td className="px-3 py-2 text-app-muted whitespace-nowrap">{c.dataVencimento.split('-').reverse().join('/')}</td>
+                    <td className="px-3 py-2 text-app-muted whitespace-nowrap">{c.dataPagamento ? c.dataPagamento.split('-').reverse().join('/') : '—'}</td>
                     <td className="px-3 py-2 font-semibold text-app-text whitespace-nowrap">{formatCurrency(c.valor)}</td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium border ${
@@ -181,6 +183,7 @@ export default function DespesasSection({ selectedSpaces, dataInicio, dataFim }:
                         {c.status}
                       </span>
                     </td>
+                    <td className="px-3 py-2 text-app-muted max-w-[200px] truncate">{c.observacoes ?? '—'}</td>
                   </tr>
                 ))}
               </tbody>

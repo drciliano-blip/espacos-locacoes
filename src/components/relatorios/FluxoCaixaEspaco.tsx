@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
-import { Wallet, PiggyBank, TrendingUp, Plus, X, Pencil, Check, Handshake } from 'lucide-react'
+import { Wallet, PiggyBank, TrendingUp, Plus, X, Pencil, Check } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
@@ -14,19 +14,15 @@ import { useCurrentUser } from '@/contexts/UserContext'
 import { formatCurrency, parseCurrencyBR } from '@/lib/utils'
 import { gerarMesesDoPeriodo, aggregateFluxoCaixa, projecaoProximoMes, type FluxoCaixaMes, type DivisaoSocioMes } from '@/lib/fluxo-caixa-utils'
 import { downloadWorkbook, type ExportSheet } from '@/lib/xlsx-export'
+import { ReceitasTable, DespesasTable, SUBCATEGORIA_LABEL } from './LancamentosTables'
 import ExportarRelatorioButton from './ExportarRelatorioButton'
+import type { Evento } from '@/types'
 
 const AVATAR_COLORS = ['#6366f1', '#ef4444', '#10b981', '#f59e0b', '#0ea5e9', '#a855f7']
 
 function iniciais(nome: string): string {
   const partes = nome.trim().split(/\s+/)
   return ((partes[0]?.[0] ?? '') + (partes[1]?.[0] ?? '')).toUpperCase()
-}
-
-function statusBadgeClass(status: string): string {
-  if (status === 'pago') return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-  if (status === 'atrasado') return 'bg-red-500/10 text-red-400 border-red-500/20'
-  return 'bg-amber-500/10 text-amber-400 border-amber-500/20'
 }
 
 function defaultRange(): { inicio: string; fim: string } {
@@ -61,11 +57,12 @@ export default function FluxoCaixaEspaco() {
   const [editandoSaldo, setEditandoSaldo] = useState(false)
 
   const espaco = espacosConfig.find(e => e.nome === espacoSelecionado)
+  const eventosPorId = useMemo(() => new Map(eventos.map(e => [e.id, e])), [eventos])
 
   const meses = useMemo(() => gerarMesesDoPeriodo(inicio, fim), [inicio, fim])
   const fluxo = useMemo(
-    () => espacoSelecionado ? aggregateFluxoCaixa(espacoSelecionado, meses, receitas, contasPagar, repasses, eventos) : [],
-    [espacoSelecionado, meses, receitas, contasPagar, repasses, eventos],
+    () => espacoSelecionado ? aggregateFluxoCaixa(espacoSelecionado, meses, receitas, contasPagar, repasses) : [],
+    [espacoSelecionado, meses, receitas, contasPagar, repasses],
   )
   const projecao = useMemo(() => projecaoProximoMes(fluxo), [fluxo])
 
@@ -76,6 +73,10 @@ export default function FluxoCaixaEspaco() {
     Saldo: m.saldoDoMes,
   }))
 
+  const totalEntradasPeriodo = fluxo.reduce((s, m) => s + m.totalEntradas, 0)
+  const totalSaidasPeriodo = fluxo.reduce((s, m) => s + m.totalSaidas, 0)
+  const saldoPeriodo = totalEntradasPeriodo - totalSaidasPeriodo
+
   if (espacosConfig.length === 0) return null
 
   function handleExportExcel() {
@@ -84,20 +85,32 @@ export default function FluxoCaixaEspaco() {
       rows: [
         ['Mês', 'Total Entradas', 'Total Saídas', 'Saldo do Mês', 'Partilha Repassada', 'Saldo Após Partilha'],
         ...fluxo.map(m => [m.label, m.totalEntradas, m.totalSaidas, m.saldoDoMes, m.partilhaRepassada, m.saldoAposPartilha]),
+        ['TOTAL DO PERÍODO', totalEntradasPeriodo, totalSaidasPeriodo, totalEntradasPeriodo - totalSaidasPeriodo, '', ''],
       ],
     }
     const receitasSheet: ExportSheet = {
       name: 'Receitas',
       rows: [
-        ['Mês', 'Descrição', 'Cliente', 'Data', 'Valor', 'Status', 'Condições da Parceria'],
-        ...fluxo.flatMap(m => m.entradas.map(r => [m.label, r.descricao, r.cliente ?? '', r.data, r.valor, r.status, r.condicoesParceria ?? ''])),
+        ['Mês', 'Descrição', 'Categoria', 'Evento', 'Cliente/Pagador', 'Data Vencimento', 'Data Recebimento', 'Valor', 'Forma Pagamento', 'Status', 'Parcela', 'Observações', 'Condições da Parceria'],
+        ...fluxo.flatMap(m => m.entradas.map(r => {
+          const evento = r.eventoId ? eventosPorId.get(r.eventoId) : undefined
+          const condicoesParceria = evento?.tipoContrato === 'parceria' ? (evento.condicoesParceria ?? '') : ''
+          return [
+            m.label, r.descricao, r.categoriaNome, evento?.nomeEvento || evento?.tipo || '', r.cliente ?? '',
+            r.data, r.dataRecebimento ?? '', r.valor, r.metodoPagamento ?? '', r.status, r.parcelaLabel ?? '',
+            r.observacoes ?? '', condicoesParceria,
+          ]
+        })),
       ],
     }
     const despesasSheet: ExportSheet = {
       name: 'Despesas',
       rows: [
-        ['Mês', 'Descrição', 'Categoria', 'Data', 'Valor', 'Status'],
-        ...fluxo.flatMap(m => m.saidas.map(c => [m.label, c.descricao, c.categoria ?? '', c.data, c.valor, c.status])),
+        ['Mês', 'Descrição', 'Categoria', 'Subcategoria', 'Fornecedor/Beneficiário', 'Data Vencimento', 'Data Pagamento', 'Valor', 'Status', 'Observações'],
+        ...fluxo.flatMap(m => m.saidas.map(c => [
+          m.label, c.descricao, c.categoria === 'fixa' ? 'Fixa' : 'Variável', SUBCATEGORIA_LABEL[c.subcategoria] ?? c.subcategoria,
+          c.fornecedor ?? '', c.dataVencimento, c.dataPagamento ?? '', c.valor, c.status, c.observacoes ?? '',
+        ])),
       ],
     }
     const categoriaSheet: ExportSheet = {
@@ -182,6 +195,22 @@ export default function FluxoCaixaEspaco() {
         )}
       </div>
 
+      {/* Total do período selecionado */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="min-w-0 rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
+          <p className="text-xs font-medium text-blue-500 uppercase tracking-wide mb-1">Total de Receitas do Período</p>
+          <p className="text-lg font-bold text-app-text break-words">{formatCurrency(totalEntradasPeriodo)}</p>
+        </div>
+        <div className="min-w-0 rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+          <p className="text-xs font-medium text-red-500 uppercase tracking-wide mb-1">Total de Despesas do Período</p>
+          <p className="text-lg font-bold text-app-text break-words">{formatCurrency(totalSaidasPeriodo)}</p>
+        </div>
+        <div className={`min-w-0 rounded-xl border p-4 ${saldoPeriodo >= 0 ? 'border-[#25D366]/25 bg-[#25D366]/5' : 'border-red-500/20 bg-red-500/5'}`}>
+          <p className={`text-xs font-medium uppercase tracking-wide mb-1 ${saldoPeriodo >= 0 ? 'text-[#128C7E]' : 'text-red-500'}`}>Saldo Final do Período</p>
+          <p className={`text-lg font-bold break-words ${saldoPeriodo >= 0 ? 'text-app-text' : 'text-red-500'}`}>{formatCurrency(saldoPeriodo)}</p>
+        </div>
+      </div>
+
       {/* Visão geral do período */}
       <div>
         <p className="text-xs font-medium text-app-muted mb-2">Entradas, saídas e saldo por mês</p>
@@ -209,6 +238,7 @@ export default function FluxoCaixaEspaco() {
             saldoInicial={espaco?.saldoInicialCaixa ?? 0}
             projecao={projecao}
             podeRegistrar={podeRegistrar}
+            eventosPorId={eventosPorId}
             onRegistrarRepasse={socio => setRepasseAlvo({ socio, yearMonth: mes.yearMonth, mesLabel: mes.label })}
           />
         ))}
@@ -248,10 +278,11 @@ interface MesCardProps {
   saldoInicial: number
   projecao: { entradas: number; saidas: number; saldo: number } | null
   podeRegistrar: boolean
+  eventosPorId: Map<string, Evento>
   onRegistrarRepasse: (socio: string) => void
 }
 
-function MesCard({ mes, primeiroMes, saldoInicial, projecao, podeRegistrar, onRegistrarRepasse }: MesCardProps) {
+function MesCard({ mes, primeiroMes, saldoInicial, projecao, podeRegistrar, eventosPorId, onRegistrarRepasse }: MesCardProps) {
   return (
     <div className="rounded-xl border border-app-border2 bg-app-bg p-4 space-y-4 break-inside-avoid">
       <div>
@@ -289,8 +320,8 @@ function MesCard({ mes, primeiroMes, saldoInicial, projecao, podeRegistrar, onRe
       </div>
 
       {/* Receitas e despesas discriminadas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="min-w-0">
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs font-semibold text-blue-500 flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-blue-500" /> Receitas — {mes.label.split(' de ')[0]}
@@ -300,31 +331,10 @@ function MesCard({ mes, primeiroMes, saldoInicial, projecao, podeRegistrar, onRe
           {mes.entradas.length === 0 ? (
             <p className="text-xs italic text-app-subtle">Nenhuma entrada registrada neste mês.</p>
           ) : (
-            <ul className="space-y-1.5">
-              {mes.entradas.map(r => (
-                <li key={r.id} className="rounded-lg bg-app-surface px-2.5 py-1.5 text-xs">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="min-w-0">
-                      <span className="block font-medium text-app-text truncate">{r.descricao}</span>
-                      <span className="flex items-center gap-1.5 text-app-subtle">
-                        {r.data.split('-').reverse().slice(0, 2).join('/')}
-                        <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-medium border ${statusBadgeClass(r.status)}`}>{r.status}</span>
-                      </span>
-                    </span>
-                    <span className="shrink-0 font-semibold text-emerald-500">+ {formatCurrency(r.valor)}</span>
-                  </div>
-                  {r.condicoesParceria && (
-                    <p className="mt-1 flex items-start gap-1 text-app-subtle italic">
-                      <Handshake className="h-3 w-3 shrink-0 mt-0.5" />
-                      Condições da Parceria: {r.condicoesParceria}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <ReceitasTable receitas={mes.entradas} eventosPorId={eventosPorId} />
           )}
         </div>
-        <div>
+        <div className="min-w-0">
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs font-semibold text-red-500 flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-red-500" /> Despesas — {mes.label.split(' de ')[0]}
@@ -334,20 +344,7 @@ function MesCard({ mes, primeiroMes, saldoInicial, projecao, podeRegistrar, onRe
           {mes.saidas.length === 0 ? (
             <p className="text-xs italic text-app-subtle">Nenhuma saída registrada neste mês.</p>
           ) : (
-            <ul className="space-y-1.5">
-              {mes.saidas.map(c => (
-                <li key={c.id} className="flex items-center justify-between gap-2 rounded-lg bg-app-surface px-2.5 py-1.5 text-xs">
-                  <span className="min-w-0">
-                    <span className="block font-medium text-app-text truncate">{c.descricao}</span>
-                    <span className="flex items-center gap-1.5 text-app-subtle">
-                      <span className="rounded-full bg-app-surface3 px-1.5 py-0.5 text-[9px] font-medium">{c.categoria}</span>
-                      <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-medium border ${statusBadgeClass(c.status)}`}>{c.status}</span>
-                    </span>
-                  </span>
-                  <span className="shrink-0 font-semibold text-red-500">− {formatCurrency(c.valor)}</span>
-                </li>
-              ))}
-            </ul>
+            <DespesasTable despesas={mes.saidas} />
           )}
         </div>
       </div>

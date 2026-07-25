@@ -1,6 +1,6 @@
 import type { Receita } from '@/contexts/ReceitasContext'
 import type { RepasseSocio } from '@/contexts/RepassesContext'
-import type { ContaPagar, Evento } from '@/types'
+import type { ContaPagar } from '@/types'
 import { DIVISAO_SOCIOS } from './socios-config'
 
 const MESES_LABEL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
@@ -8,17 +8,6 @@ const MESES_LABEL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
 const SUBCATEGORIA_LABEL: Record<string, string> = {
   aluguel: 'Aluguel', energia: 'Energia', internet: 'Internet', funcionários: 'Funcionários',
   manutenção: 'Manutenção', fornecedores: 'Fornecedores', extras: 'Extras', outros: 'Outros',
-}
-
-export interface FluxoCaixaItem {
-  id: string
-  descricao: string
-  data: string
-  valor: number
-  status: 'pago' | 'pendente' | 'atrasado'
-  categoria?: string
-  cliente?: string
-  condicoesParceria?: string
 }
 
 export interface DivisaoSocioMes {
@@ -34,8 +23,10 @@ export interface FluxoCaixaMes {
   yearMonth: string
   label: string
   temLancamentos: boolean
-  entradas: FluxoCaixaItem[]
-  saidas: FluxoCaixaItem[]
+  // Registros completos (não resumidos) — usados tanto na tela quanto na exportação,
+  // pra nenhum campo cadastrado ficar de fora.
+  entradas: Receita[]
+  saidas: ContaPagar[]
   totalEntradas: number
   totalSaidas: number
   saldoDoMes: number
@@ -66,9 +57,7 @@ export function aggregateFluxoCaixa(
   receitas: Receita[],
   contasPagar: ContaPagar[],
   repasses: RepasseSocio[],
-  eventos: Evento[] = [],
 ): FluxoCaixaMes[] {
-  const eventosPorId = new Map(eventos.map(e => [e.id, e]))
   const entradasEspaco = receitas.filter(r => r.espaco === espaco)
   const saidasEspaco = contasPagar.filter(c => c.espaco === espaco)
   const repassesEspaco = repasses.filter(r => r.espaco === espaco)
@@ -106,14 +95,8 @@ export function aggregateFluxoCaixa(
       yearMonth,
       label,
       temLancamentos: entradas.length > 0 || saidas.length > 0,
-      entradas: entradas.map(r => {
-        const evento = r.eventoId ? eventosPorId.get(r.eventoId) : undefined
-        return {
-          id: r.id, descricao: r.descricao, data: r.data, valor: r.valor, status: r.status, cliente: r.cliente,
-          condicoesParceria: evento?.tipoContrato === 'parceria' ? evento.condicoesParceria : undefined,
-        }
-      }),
-      saidas: saidas.map(c => ({ id: c.id, descricao: c.descricao, data: c.dataVencimento, valor: c.valor, status: c.status, categoria: SUBCATEGORIA_LABEL[c.subcategoria] ?? c.subcategoria })),
+      entradas,
+      saidas,
       totalEntradas,
       totalSaidas,
       saldoDoMes,

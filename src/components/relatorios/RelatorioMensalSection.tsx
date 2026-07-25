@@ -1,13 +1,14 @@
 'use client'
 
 import { useMemo } from 'react'
-import { ArrowUpCircle, ArrowDownCircle, Wallet, Handshake } from 'lucide-react'
+import { ArrowUpCircle, ArrowDownCircle, Wallet } from 'lucide-react'
 import { useReceitas } from '@/contexts/ReceitasContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useEventos } from '@/contexts/EventosContext'
 import { formatCurrency } from '@/lib/utils'
 import { DIVISAO_SOCIOS } from '@/lib/socios-config'
+import { ReceitasTable, DespesasTable } from './LancamentosTables'
 import type { Receita } from '@/contexts/ReceitasContext'
 import type { ContaPagar, Evento } from '@/types'
 
@@ -15,12 +16,6 @@ interface Props {
   selectedSpaces?: string[]
   dataInicio?: string
   dataFim?: string
-}
-
-const statusBadgeClass: Record<string, string> = {
-  pago: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
-  atrasado: 'bg-red-500/10 text-red-400 border-red-500/20',
-  pendente: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
 }
 
 export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dataFim }: Props) {
@@ -112,17 +107,9 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
             </span>
             <span className="font-semibold text-red-500">{formatCurrency(totalSaidasGerais)}</span>
           </summary>
-          <ul className="mt-3 space-y-1">
-            {saidasGerais.map(c => (
-              <li key={c.id} className="flex items-center justify-between gap-2 text-xs">
-                <span className="text-app-muted truncate">{c.descricao} <span className="text-app-subtle">· {c.dataVencimento.split('-').reverse().join('/')}</span></span>
-                <span className="flex items-center gap-2 shrink-0">
-                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium border ${statusBadgeClass[c.status]}`}>{c.status}</span>
-                  <span className="font-medium text-app-text">{formatCurrency(c.valor)}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
+          <div className="mt-3">
+            <DespesasTable despesas={saidasGerais} />
+          </div>
         </details>
       )}
     </div>
@@ -158,28 +145,7 @@ function EspacoReportCard({ nome, entradasEspaco, saidasEspaco, receitaTotal, de
         {entradasEspaco.length === 0 ? (
           <p className="text-xs italic text-app-subtle mt-2">Nenhum lançamento no período.</p>
         ) : (
-          <ul className="mt-2 space-y-1.5">
-            {entradasEspaco.map(r => {
-              const evento = r.eventoId ? eventosPorId.get(r.eventoId) : undefined
-              return (
-                <li key={r.id} className="text-xs">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-app-muted truncate">{r.descricao}{r.cliente ? ` — ${r.cliente}` : ''} <span className="text-app-subtle">· {r.data.split('-').reverse().join('/')}</span></span>
-                    <span className="flex items-center gap-2 shrink-0">
-                      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium border ${statusBadgeClass[r.status]}`}>{r.status}</span>
-                      <span className="font-medium text-app-text">{formatCurrency(r.valor)}</span>
-                    </span>
-                  </div>
-                  {evento?.tipoContrato === 'parceria' && evento.condicoesParceria && (
-                    <p className="mt-0.5 flex items-start gap-1 text-app-subtle italic">
-                      <Handshake className="h-3 w-3 shrink-0 mt-0.5" />
-                      Condições da Parceria: {evento.condicoesParceria}
-                    </p>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
+          <ReceitasTable receitas={entradasEspaco} eventosPorId={eventosPorId} />
         )}
       </details>
 
@@ -196,17 +162,7 @@ function EspacoReportCard({ nome, entradasEspaco, saidasEspaco, receitaTotal, de
         {saidasEspaco.length === 0 ? (
           <p className="text-xs italic text-app-subtle mt-2">Nenhum lançamento no período.</p>
         ) : (
-          <ul className="mt-2 space-y-1">
-            {saidasEspaco.map(c => (
-              <li key={c.id} className="flex items-center justify-between gap-2 text-xs">
-                <span className="text-app-muted truncate">{c.descricao} <span className="text-app-subtle">· {c.dataVencimento.split('-').reverse().join('/')}</span></span>
-                <span className="flex items-center gap-2 shrink-0">
-                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium border ${statusBadgeClass[c.status]}`}>{c.status}</span>
-                  <span className="font-medium text-app-text">{formatCurrency(c.valor)}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
+          <DespesasTable despesas={saidasEspaco} />
         )}
       </details>
 
