@@ -10,10 +10,13 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatCurrency(value: number): string {
+  // Intl.NumberFormat insere um espaço NÃO-QUEBRÁVEL ( ) entre "R$" e o
+  // valor — em cards estreitos isso impede a quebra de linha e o número
+  // estoura a caixa, invadindo o card vizinho. Troca por espaço normal.
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
-  }).format(value)
+  }).format(value).replace(/ /g, ' ')
 }
 
 // Interpreta texto digitado em formato brasileiro (ex: "3.000,00", "3000,00", "3000")

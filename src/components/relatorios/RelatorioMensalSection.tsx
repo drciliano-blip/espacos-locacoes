@@ -72,19 +72,19 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
 
       {/* KPIs gerais */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-          <div className="flex items-center gap-2 mb-1"><ArrowUpCircle className="h-4 w-4 text-emerald-500" /><span className="text-xs text-emerald-600 font-medium">Total de Entradas</span></div>
-          <p className="text-lg font-bold text-emerald-600">{formatCurrency(totalEntradas)}</p>
+        <div className="min-w-0 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+          <div className="flex items-center gap-2 mb-1"><ArrowUpCircle className="h-4 w-4 shrink-0 text-emerald-500" /><span className="text-xs text-emerald-600 font-medium">Total de Entradas</span></div>
+          <p className="text-lg font-bold text-emerald-600 break-words">{formatCurrency(totalEntradas)}</p>
           <p className="text-xs text-app-subtle mt-1">{entradas.length} lançamentos</p>
         </div>
-        <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
-          <div className="flex items-center gap-2 mb-1"><ArrowDownCircle className="h-4 w-4 text-red-500" /><span className="text-xs text-red-600 font-medium">Total de Saídas</span></div>
-          <p className="text-lg font-bold text-red-600">{formatCurrency(totalSaidas)}</p>
+        <div className="min-w-0 rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+          <div className="flex items-center gap-2 mb-1"><ArrowDownCircle className="h-4 w-4 shrink-0 text-red-500" /><span className="text-xs text-red-600 font-medium">Total de Saídas</span></div>
+          <p className="text-lg font-bold text-red-600 break-words">{formatCurrency(totalSaidas)}</p>
           <p className="text-xs text-app-subtle mt-1">{saidas.length} lançamentos</p>
         </div>
-        <div className={`rounded-xl border p-4 ${lucroLiquido >= 0 ? 'border-[#25D366]/25 bg-[#25D366]/5' : 'border-red-500/20 bg-red-500/5'}`}>
-          <div className="flex items-center gap-2 mb-1"><Wallet className={`h-4 w-4 ${lucroLiquido >= 0 ? 'text-[#128C7E]' : 'text-red-500'}`} /><span className={`text-xs font-medium ${lucroLiquido >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>Lucro Líquido</span></div>
-          <p className={`text-lg font-bold ${lucroLiquido >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>{formatCurrency(lucroLiquido)}</p>
+        <div className={`min-w-0 rounded-xl border p-4 ${lucroLiquido >= 0 ? 'border-[#25D366]/25 bg-[#25D366]/5' : 'border-red-500/20 bg-red-500/5'}`}>
+          <div className="flex items-center gap-2 mb-1"><Wallet className={`h-4 w-4 shrink-0 ${lucroLiquido >= 0 ? 'text-[#128C7E]' : 'text-red-500'}`} /><span className={`text-xs font-medium ${lucroLiquido >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>Lucro Líquido</span></div>
+          <p className={`text-lg font-bold break-words ${lucroLiquido >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>{formatCurrency(lucroLiquido)}</p>
         </div>
       </div>
 

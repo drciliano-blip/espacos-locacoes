@@ -63,13 +63,13 @@ export default function KPISummary({ data }: KPISummaryProps) {
   return (
     <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
       {cards.map(({ label, value, sub, icon: Icon, color, bgColor, borderColor }) => (
-        <div key={label} className={`rounded-xl border ${borderColor} ${bgColor} p-4`}>
-          <div className="flex items-start justify-between">
+        <div key={label} className={`min-w-0 rounded-xl border ${borderColor} ${bgColor} p-4`}>
+          <div className="flex items-start justify-between gap-2">
             <p className="text-xs font-medium text-app-subtle uppercase tracking-wider">{label}</p>
-            <Icon className={`h-4 w-4 ${color}`} />
+            <Icon className={`h-4 w-4 shrink-0 ${color}`} />
           </div>
-          <p className={`text-2xl font-bold mt-1 ${color}`}>{value}</p>
-          <p className="text-xs text-app-subtle mt-0.5">{sub}</p>
+          <p className={`text-2xl font-bold mt-1 break-words ${color}`}>{value}</p>
+          <p className="text-xs text-app-subtle mt-0.5 break-words">{sub}</p>
         </div>
       ))}
     </div>

@@ -72,26 +72,26 @@ export default function DespesasSection({ selectedSpaces, dataInicio, dataFim }:
 
       {/* KPI cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="rounded-xl border border-app-border2 bg-app-bg p-4">
+        <div className="min-w-0 rounded-xl border border-app-border2 bg-app-bg p-4">
           <p className="text-xs text-app-subtle mb-1">Total Despesas</p>
-          <p className="text-lg font-bold text-app-text">{formatCurrency(total)}</p>
+          <p className="text-lg font-bold text-app-text break-words">{formatCurrency(total)}</p>
           <p className="text-xs text-app-subtle mt-1">{contas.length} lançamentos</p>
         </div>
-        <div className="rounded-xl border border-[#25D366]/25 bg-[#25D366]/5 p-4">
-          <div className="flex items-center justify-between mb-1">
+        <div className="min-w-0 rounded-xl border border-[#25D366]/25 bg-[#25D366]/5 p-4">
+          <div className="flex items-center justify-between gap-2 mb-1">
             <p className="text-xs text-[#128C7E] font-medium">Despesas Fixas</p>
-            <span className="text-xs font-semibold text-[#128C7E]">{pctFixas}%</span>
+            <span className="text-xs font-semibold text-[#128C7E] shrink-0">{pctFixas}%</span>
           </div>
-          <p className="text-lg font-bold text-[#128C7E]">{formatCurrency(totais.fixas)}</p>
-          <p className="text-xs text-app-subtle mt-1">Pagas: {formatCurrency(totais.fixasPagas)}</p>
+          <p className="text-lg font-bold text-[#128C7E] break-words">{formatCurrency(totais.fixas)}</p>
+          <p className="text-xs text-app-subtle mt-1 break-words">Pagas: {formatCurrency(totais.fixasPagas)}</p>
         </div>
-        <div className="rounded-xl border border-app-border2 bg-app-bg p-4">
-          <div className="flex items-center justify-between mb-1">
+        <div className="min-w-0 rounded-xl border border-app-border2 bg-app-bg p-4">
+          <div className="flex items-center justify-between gap-2 mb-1">
             <p className="text-xs text-app-text2 font-medium">Despesas Variáveis</p>
-            <span className="text-xs font-semibold text-app-text2">{pctVariaveis}%</span>
+            <span className="text-xs font-semibold text-app-text2 shrink-0">{pctVariaveis}%</span>
           </div>
-          <p className="text-lg font-bold text-app-text2">{formatCurrency(totais.variaveis)}</p>
-          <p className="text-xs text-app-subtle mt-1">Pagas: {formatCurrency(totais.variaveisPagas)}</p>
+          <p className="text-lg font-bold text-app-text2 break-words">{formatCurrency(totais.variaveis)}</p>
+          <p className="text-xs text-app-subtle mt-1 break-words">Pagas: {formatCurrency(totais.variaveisPagas)}</p>
         </div>
       </div>
 

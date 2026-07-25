@@ -264,24 +264,24 @@ function MesCard({ mes, primeiroMes, saldoInicial, projecao, podeRegistrar, onRe
 
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="rounded-lg border border-app-border2/60 bg-app-surface p-3">
+        <div className="min-w-0 rounded-lg border border-app-border2/60 bg-app-surface p-3">
           <p className="text-[10px] font-medium text-blue-500 uppercase tracking-wide mb-1">Total de entradas</p>
-          <p className="text-base font-bold text-app-text">{formatCurrency(mes.totalEntradas)}</p>
+          <p className="text-base font-bold text-app-text break-words">{formatCurrency(mes.totalEntradas)}</p>
           <p className="text-[10px] text-app-subtle">{mes.entradas.length} lançamentos</p>
         </div>
-        <div className="rounded-lg border border-app-border2/60 bg-app-surface p-3">
+        <div className="min-w-0 rounded-lg border border-app-border2/60 bg-app-surface p-3">
           <p className="text-[10px] font-medium text-red-500 uppercase tracking-wide mb-1">Total de saídas</p>
-          <p className="text-base font-bold text-app-text">{formatCurrency(mes.totalSaidas)}</p>
+          <p className="text-base font-bold text-app-text break-words">{formatCurrency(mes.totalSaidas)}</p>
           <p className="text-[10px] text-app-subtle">{mes.saidas.length} lançamentos</p>
         </div>
-        <div className="rounded-lg border border-app-border2/60 bg-app-surface p-3">
+        <div className="min-w-0 rounded-lg border border-app-border2/60 bg-app-surface p-3">
           <p className="text-[10px] font-medium text-violet-500 uppercase tracking-wide mb-1">Saldo do mês</p>
-          <p className={`text-base font-bold ${mes.saldoDoMes >= 0 ? 'text-app-text' : 'text-red-500'}`}>{formatCurrency(mes.saldoDoMes)}</p>
+          <p className={`text-base font-bold break-words ${mes.saldoDoMes >= 0 ? 'text-app-text' : 'text-red-500'}`}>{formatCurrency(mes.saldoDoMes)}</p>
           <p className="text-[10px] text-app-subtle">Entradas − saídas</p>
         </div>
-        <div className="rounded-lg border border-app-border2/60 bg-app-surface p-3">
+        <div className="min-w-0 rounded-lg border border-app-border2/60 bg-app-surface p-3">
           <p className="text-[10px] font-medium text-emerald-500 uppercase tracking-wide mb-1">Saldo após partilha</p>
-          <p className={`text-base font-bold ${mes.saldoAposPartilha >= 0 ? 'text-app-text' : 'text-red-500'}`}>{formatCurrency(mes.saldoAposPartilha)}</p>
+          <p className={`text-base font-bold break-words ${mes.saldoAposPartilha >= 0 ? 'text-app-text' : 'text-red-500'}`}>{formatCurrency(mes.saldoAposPartilha)}</p>
           <p className="text-[10px] text-app-subtle">Retirada mensal ainda não realizada</p>
         </div>
       </div>
@@ -348,16 +348,16 @@ function MesCard({ mes, primeiroMes, saldoInicial, projecao, podeRegistrar, onRe
           <p className="text-xs font-semibold text-app-text mb-2 flex items-center gap-1.5"><Wallet className="h-3.5 w-3.5 text-app-subtle" /> Situação do mês</p>
           <dl className="space-y-1.5 text-xs">
             {primeiroMes && (
-              <div className="flex justify-between border-b border-dashed border-app-border/60 pb-1.5">
+              <div className="flex justify-between gap-2 border-b border-dashed border-app-border/60 pb-1.5">
                 <dt className="text-app-muted">Saldo em conta (abertura do mês)</dt>
-                <dd className="font-medium text-app-text">{formatCurrency(saldoInicial)}</dd>
+                <dd className="font-medium text-app-text text-right break-words">{formatCurrency(saldoInicial)}</dd>
               </div>
             )}
-            <div className="flex justify-between"><dt className="text-app-muted">Total de entradas</dt><dd className="font-medium text-emerald-500">{formatCurrency(mes.totalEntradas)}</dd></div>
-            <div className="flex justify-between"><dt className="text-app-muted">Total de saídas</dt><dd className="font-medium text-red-500">{formatCurrency(mes.totalSaidas)}</dd></div>
-            <div className="flex justify-between"><dt className="text-app-muted">Saldo do mês</dt><dd className="font-medium text-app-text">{formatCurrency(mes.saldoDoMes)}</dd></div>
-            <div className="flex justify-between"><dt className="text-app-muted">Partilha já repassada</dt><dd className="font-medium text-app-text">{formatCurrency(mes.partilhaRepassada)}</dd></div>
-            <div className="flex justify-between border-t border-app-border/60 pt-1.5"><dt className="font-semibold text-app-text">Saldo após partilha</dt><dd className="font-bold text-app-text">{formatCurrency(mes.saldoAposPartilha)}</dd></div>
+            <div className="flex justify-between gap-2"><dt className="text-app-muted">Total de entradas</dt><dd className="font-medium text-emerald-500 text-right break-words">{formatCurrency(mes.totalEntradas)}</dd></div>
+            <div className="flex justify-between gap-2"><dt className="text-app-muted">Total de saídas</dt><dd className="font-medium text-red-500 text-right break-words">{formatCurrency(mes.totalSaidas)}</dd></div>
+            <div className="flex justify-between gap-2"><dt className="text-app-muted">Saldo do mês</dt><dd className="font-medium text-app-text text-right break-words">{formatCurrency(mes.saldoDoMes)}</dd></div>
+            <div className="flex justify-between gap-2"><dt className="text-app-muted">Partilha já repassada</dt><dd className="font-medium text-app-text text-right break-words">{formatCurrency(mes.partilhaRepassada)}</dd></div>
+            <div className="flex justify-between gap-2 border-t border-app-border/60 pt-1.5"><dt className="font-semibold text-app-text">Saldo após partilha</dt><dd className="font-bold text-app-text text-right break-words">{formatCurrency(mes.saldoAposPartilha)}</dd></div>
           </dl>
         </div>
 
@@ -404,7 +404,7 @@ function MesCard({ mes, primeiroMes, saldoInicial, projecao, podeRegistrar, onRe
                     <div className="flex-1 h-2 rounded-full bg-app-surface3 overflow-hidden">
                       <div className="h-full rounded-full bg-orange-500" style={{ width: `${max > 0 ? (c.valor / max) * 100 : 0}%` }} />
                     </div>
-                    <span className="w-20 shrink-0 text-right font-medium text-app-text">{formatCurrency(c.valor)}</span>
+                    <span className="w-24 shrink-0 text-right font-medium text-app-text break-words">{formatCurrency(c.valor)}</span>
                   </div>
                 )
               })}
