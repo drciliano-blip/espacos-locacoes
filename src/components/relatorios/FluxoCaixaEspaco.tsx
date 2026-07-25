@@ -365,6 +365,8 @@ function MesCard({ mes, primeiroMes, saldoInicial, projecao, podeRegistrar, onRe
           <p className="text-xs font-semibold text-app-text mb-2">Divisão de lucros</p>
           {mes.divisaoLucros.length === 0 ? (
             <p className="text-xs italic text-app-subtle">Sem sócio configurado para este espaço.</p>
+          ) : !mes.temLancamentos ? (
+            <p className="text-xs italic text-app-subtle">Divisão de lucros não se aplica — sem saldo apurado neste mês.</p>
           ) : (
             <div className="space-y-2">
               {mes.divisaoLucros.map((s, i) => (
