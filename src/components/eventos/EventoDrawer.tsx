@@ -333,7 +333,9 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
               <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusBadge[current.status]}`}>
                 {statusLabel[current.status] ?? current.status}
               </span>
-              <span className="text-xl font-bold" style={{ color: '#25D366' }}>{formatCurrency(current.valor)}</span>
+              {current.tipoContrato !== 'parceria' && (
+                <span className="text-xl font-bold" style={{ color: '#25D366' }}>{formatCurrency(current.valor)}</span>
+              )}
             </div>
 
             {/* Informações básicas */}

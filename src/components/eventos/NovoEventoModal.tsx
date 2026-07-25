@@ -278,7 +278,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
     data:         !draft.data,
     horaInicio:   !draft.horaInicio,
     horaFim:      !draft.horaFim,
-    valor:        !draft.valor || parseCurrencyBR(draft.valor) <= 0,
+    valor:        draft.tipoContrato !== 'parceria' && (!draft.valor || parseCurrencyBR(draft.valor) <= 0),
     tipoContrato: !draft.tipoContrato,
   }
 
@@ -769,7 +769,9 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
               <Field label="Nº de Pessoas" {...fieldProps('numeroPessoas')} type="number" placeholder="0" />
-              <Field label="Valor (R$)"    {...fieldProps('valor', true)}   type="currency" required placeholder="0,00" />
+              {draft.tipoContrato !== 'parceria' && (
+                <Field label="Valor (R$)" {...fieldProps('valor', true)} type="currency" required placeholder="0,00" />
+              )}
 
               {draft.tipoContrato === 'parceria' ? (
                 <div className="col-span-2">
