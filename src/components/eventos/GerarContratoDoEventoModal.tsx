@@ -16,7 +16,9 @@ interface Props {
 }
 
 export default function GerarContratoDoEventoModal({ evento, onClose, onSave, onCreated }: Props) {
-  const [tipoMinuta, setTipoMinuta] = useState<TipoMinuta>('locacao')
+  // O modelo já vem vinculado desde o cadastro do evento — o usuário não precisa
+  // selecionar de novo, só confere/troca se necessário.
+  const [tipoMinuta, setTipoMinuta] = useState<TipoMinuta>(evento.tipoContrato ?? 'locacao')
   const [valorNegociado, setValorNegociado] = useState(String(evento.valor))
   const [observacaoNegociacao, setObservacaoNegociacao] = useState('')
   const [observacaoParceria, setObservacaoParceria] = useState('')
@@ -89,8 +91,12 @@ export default function GerarContratoDoEventoModal({ evento, onClose, onSave, on
               onBlur={e => { e.currentTarget.style.borderColor = '' }}
             >
               <option value="locacao">Locação (valor fixo)</option>
+              <option value="locacao_bilheteria">Locação bilheteria (valor fixo + repasse)</option>
               <option value="parceria">Parceria (% sobre faturamento)</option>
             </select>
+            {evento.tipoContrato && (
+              <p className="text-xs text-app-subtle mt-1">Definido automaticamente pelo tipo do evento cadastrado.</p>
+            )}
           </div>
 
           <div>

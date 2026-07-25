@@ -1,6 +1,6 @@
 // Biblioteca de Contratos — modelos por tipo de minuta (não mais travados por espaço)
 
-export type TipoMinuta = 'locacao' | 'parceria'
+export type TipoMinuta = 'locacao' | 'locacao_bilheteria' | 'parceria'
 
 export interface ModeloContrato {
   id: string
@@ -50,6 +50,42 @@ As partes obrigam-se a cumprir as normas de uso do espaço, segurança, e legisl
 E por estarem assim justas e contratadas, firmam o presente instrumento em {{DATA_ASSINATURA}}.`,
 }
 
+export const MODELO_LOCACAO_BILHETERIA: ModeloContrato = {
+  id: 'modelo-locacao-bilheteria',
+  nome: 'Locação Bilheteria — valor fixo + repasse de bilheteria',
+  tipoMinuta: 'locacao_bilheteria',
+  variaveis: [
+    ...VARIAVEIS_COMUNS,
+    'VALOR_NEGOCIADO', 'VALOR_EXTENSO', 'FORMA_PAGAMENTO', 'DATA_PAGAMENTO',
+    'PERCENTUAL_BILHETERIA_CESSIONARIA', 'PERCENTUAL_BILHETERIA_CEDENTE',
+    'OBSERVACAO_NEGOCIACAO',
+  ],
+  texto: `CONTRATO DE LOCAÇÃO DE ESPAÇO COM REPASSE DE BILHETERIA
+
+LOCADORA: {{CEDENTE_NOME}}, CNPJ {{CEDENTE_CNPJ}}, com sede em {{CEDENTE_ENDERECO}}, neste ato representada por {{CEDENTE_RESPONSAVEL}}, RG {{CEDENTE_RESPONSAVEL_RG}}, CPF {{CEDENTE_RESPONSAVEL_CPF}}.
+
+LOCATÁRIA: {{CESSIONARIA_NOME}}, inscrita no CPF/CNPJ sob o nº {{CESSIONARIA_CNPJ_CPF}}, com endereço em {{CESSIONARIA_ENDERECO}}, e-mail de contato {{CESSIONARIA_EMAIL}}.
+
+As partes acima identificadas celebram o presente CONTRATO DE LOCAÇÃO COM REPASSE DE BILHETERIA, mediante as cláusulas a seguir:
+
+CLÁUSULA 1ª — DO OBJETO
+O presente contrato tem por objeto a locação do espaço para realização de evento na data de {{DATA_EVENTO}}, com montagem a partir de {{HORA_INICIO_MONTAGEM}}, início do evento às {{HORA_INICIO_EVENTO}} e término às {{HORA_TERMINO_EVENTO}}.
+
+CLÁUSULA 2ª — DO VALOR FIXO E FORMA DE PAGAMENTO
+O valor fixo da locação é de {{VALOR_NEGOCIADO}} ({{VALOR_EXTENSO}}), a ser pago via {{FORMA_PAGAMENTO}}, com vencimento em {{DATA_PAGAMENTO}}.
+
+CLÁUSULA 3ª — DO REPASSE DE BILHETERIA
+Além do valor fixo, a receita líquida da bilheteria do evento será dividida entre as partes na proporção de {{PERCENTUAL_BILHETERIA_CESSIONARIA}}% para a LOCATÁRIA e {{PERCENTUAL_BILHETERIA_CEDENTE}}% para a LOCADORA, com prestação de contas e repasse em até 5 (cinco) dias úteis após a realização do evento.
+
+CLÁUSULA 4ª — DAS CONDIÇÕES NEGOCIADAS
+{{OBSERVACAO_NEGOCIACAO}}
+
+CLÁUSULA 5ª — DAS OBRIGAÇÕES GERAIS
+As partes obrigam-se a cumprir as normas de uso do espaço, segurança, e legislação aplicável a eventos.
+
+E por estarem assim justas e contratadas, firmam o presente instrumento em {{DATA_ASSINATURA}}.`,
+}
+
 export const MODELO_PARCERIA: ModeloContrato = {
   id: 'modelo-parceria',
   nome: 'Parceria — porcentagem sobre faturamento',
@@ -85,7 +121,7 @@ As partes obrigam-se a cumprir as normas de uso do espaço, segurança, e legisl
 E por estarem assim justas e contratadas, firmam o presente instrumento em {{DATA_ASSINATURA}}.`,
 }
 
-export const MODELOS_CONTRATO: ModeloContrato[] = [MODELO_LOCACAO, MODELO_PARCERIA]
+export const MODELOS_CONTRATO: ModeloContrato[] = [MODELO_LOCACAO, MODELO_LOCACAO_BILHETERIA, MODELO_PARCERIA]
 
 export function getModeloPorTipo(tipoMinuta: TipoMinuta): ModeloContrato {
   return MODELOS_CONTRATO.find(m => m.tipoMinuta === tipoMinuta) ?? MODELO_LOCACAO

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { X, Save, Edit3, Users, DollarSign, User, Calendar, ClipboardCheck, Paperclip, Trash2, FileSignature, Ban, RotateCcw } from 'lucide-react'
-import type { Evento, StatusVistoria, TipoEvento, Contrato } from '@/types'
+import type { Evento, StatusVistoria, TipoEvento, Contrato, TipoMinuta } from '@/types'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useCurrentUser } from '@/contexts/UserContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
@@ -38,6 +38,17 @@ const tipoEventoBadge: Record<TipoEvento, string> = {
   'Audiovisual': 'bg-orange-500/15 text-orange-400 border-orange-500/20',
 }
 
+const TIPOS_CONTRATO: { value: TipoMinuta; label: string }[] = [
+  { value: 'locacao', label: 'Locação' },
+  { value: 'locacao_bilheteria', label: 'Locação bilheteria' },
+  { value: 'parceria', label: 'Parceria' },
+]
+const tipoContratoLabel: Record<TipoMinuta, string> = {
+  locacao: 'Locação',
+  locacao_bilheteria: 'Locação bilheteria',
+  parceria: 'Parceria',
+}
+
 type DrawerTab = 'detalhes' | 'documentos'
 
 interface EventoDrawerProps {
@@ -58,6 +69,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
   const [deleting, setDeleting] = useState(false)
   const [cancelConfirm, setCancelConfirm] = useState(false)
   const [togglingStatus, setTogglingStatus] = useState(false)
+  const [trocaTipoContratoPendente, setTrocaTipoContratoPendente] = useState<TipoMinuta | null>(null)
   const [saving, setSaving] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [gerarContratoDoEventoOpen, setGerarContratoDoEventoOpen] = useState(false)
@@ -116,6 +128,24 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
     } finally {
       setTogglingStatus(false)
     }
+  }
+
+  // Trocar o tipo do evento troca automaticamente o modelo de contrato vinculado.
+  // Se já existe um contrato gerado, confirma antes — o contrato já gerado não é alterado
+  // retroativamente, só a próxima geração passa a usar o novo modelo.
+  function handleTipoContratoChange(novoTipo: TipoMinuta) {
+    if (contratoExistente && novoTipo !== evento.tipoContrato) {
+      setTrocaTipoContratoPendente(novoTipo)
+    } else {
+      setDraft(d => ({ ...d, tipoContrato: novoTipo }))
+    }
+  }
+
+  function confirmarTrocaTipoContrato() {
+    if (trocaTipoContratoPendente) {
+      setDraft(d => ({ ...d, tipoContrato: trocaTipoContratoPendente }))
+    }
+    setTrocaTipoContratoPendente(null)
   }
 
   const field = <T extends string | number | undefined>(
@@ -336,6 +366,26 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                       : <p className="text-sm text-app-subtle italic mt-0.5">—</p>
                   )}
                 </div>
+                <div className="col-span-2">
+                  <p className="text-xs text-app-subtle mb-0.5">Tipo do evento (contrato)</p>
+                  {editing ? (
+                    <select
+                      value={draft.tipoContrato ?? ''}
+                      onChange={(e) => handleTipoContratoChange(e.target.value as TipoMinuta)}
+                      className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:border-[#25D366] focus:outline-none cursor-pointer"
+                    >
+                      <option value="">— Selecione —</option>
+                      {TIPOS_CONTRATO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  ) : current.tipoContrato ? (
+                    <p className="text-sm font-medium text-app-text mt-0.5">
+                      {tipoContratoLabel[current.tipoContrato]}
+                      <span className="text-app-subtle font-normal"> — Modelo vinculado: Contrato de {tipoContratoLabel[current.tipoContrato]}</span>
+                    </p>
+                  ) : (
+                    <p className="text-sm text-app-subtle italic mt-0.5">—</p>
+                  )}
+                </div>
               </div>
             </section>
 
@@ -524,6 +574,32 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                 }`}
               >
                 {togglingStatus ? 'Aguarde…' : evento.status === 'confirmado' ? 'Cancelar evento' : 'Reativar evento'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmação de troca de modelo de contrato (só quando já existe contrato gerado) */}
+      {trocaTipoContratoPendente && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-sm rounded-2xl border border-app-border bg-app-surface p-6 shadow-2xl">
+            <h3 className="text-base font-bold text-app-text mb-2">Trocar modelo de contrato?</h3>
+            <p className="text-sm text-app-muted mb-5">
+              Este evento já tem um contrato gerado ({evento.tipoContrato ? tipoContratoLabel[evento.tipoContrato] : '—'}). Ao trocar para <strong>{tipoContratoLabel[trocaTipoContratoPendente]}</strong>, a próxima geração de contrato vai usar o novo modelo — o contrato já gerado não é alterado automaticamente.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setTrocaTipoContratoPendente(null)}
+                className="rounded-lg border border-app-border2 px-4 py-2 text-sm text-app-muted hover:bg-app-surface2 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarTrocaTipoContrato}
+                className="rounded-lg bg-[#25D366] px-4 py-2 text-sm font-medium text-white hover:bg-[#128C7E] transition-colors"
+              >
+                Confirmar troca
               </button>
             </div>
           </div>

@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { X, Save, Calendar, DollarSign, User, ClipboardCheck, Paperclip, Camera, Sparkles, Plus, Trash2, MessageSquareText, IdCard, Building2, FileSignature } from 'lucide-react'
-import type { Evento, Espaco, TipoEvento, FormaPagamento, Contrato } from '@/types'
+import type { Evento, Espaco, TipoEvento, FormaPagamento, Contrato, TipoMinuta } from '@/types'
 import FileAttachButton from '@/components/shared/FileAttachButton'
 import FileList from '@/components/shared/FileList'
 import Toast from '@/components/shared/Toast'
@@ -21,6 +21,14 @@ const FORMAS_PAGAMENTO: FormaPagamento[] = [
   'Cartão de Débito',
   'Cheque',
   'Parcelado',
+]
+
+// Define automaticamente o modelo de contrato vinculado ao evento — o usuário
+// não precisa selecionar o contrato de novo na hora de gerar o documento.
+const TIPOS_CONTRATO: { value: TipoMinuta; label: string }[] = [
+  { value: 'locacao', label: 'Locação' },
+  { value: 'locacao_bilheteria', label: 'Locação bilheteria' },
+  { value: 'parceria', label: 'Parceria' },
 ]
 
 interface FichaExtracao {
@@ -137,6 +145,7 @@ interface Draft {
   horaFim: string
   tipo: string
   tipoEvento: TipoEvento | ''
+  tipoContrato: TipoMinuta | ''
   status: 'confirmado' | 'cancelado'
   valor: string
   numeroPessoas: string
@@ -169,6 +178,7 @@ function emptyDraft(espacoPadrao?: Espaco): Draft {
     horaFim: '',
     tipo: '',
     tipoEvento: '',
+    tipoContrato: '',
     status: 'confirmado',
     valor: '',
     numeroPessoas: '',
@@ -261,12 +271,13 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
   const [contratoParaGerar, setContratoParaGerar] = useState<Contrato | null>(null)
 
   const errors: Partial<Record<keyof Draft, boolean>> = {
-    cliente:    !draft.cliente.trim(),
-    espaco:     !draft.espaco,
-    data:       !draft.data,
-    horaInicio: !draft.horaInicio,
-    horaFim:    !draft.horaFim,
-    valor:      !draft.valor || parseCurrencyBR(draft.valor) <= 0,
+    cliente:      !draft.cliente.trim(),
+    espaco:       !draft.espaco,
+    data:         !draft.data,
+    horaInicio:   !draft.horaInicio,
+    horaFim:      !draft.horaFim,
+    valor:        !draft.valor || parseCurrencyBR(draft.valor) <= 0,
+    tipoContrato: !draft.tipoContrato,
   }
 
   const hasErrors = Object.values(errors).some(Boolean)
@@ -414,6 +425,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
       horaFim:         draft.horaFim,
       tipo:            draft.tipo.trim() || 'Evento',
       tipoEvento:      (draft.tipoEvento as TipoEvento) || undefined,
+      tipoContrato:    (draft.tipoContrato as TipoMinuta) || undefined,
       status:          draft.status,
       valor:           parseCurrencyBR(draft.valor),
       numeroPessoas:   draft.numeroPessoas ? Number(draft.numeroPessoas) : undefined,
@@ -587,6 +599,36 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
               Informações do Evento
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+
+              <div className="col-span-2">
+                <label className="text-xs text-app-subtle mb-1 block">
+                  Qual é o tipo do evento?<span className="text-red-400 ml-0.5">*</span>
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {TIPOS_CONTRATO.map(t => (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() => set('tipoContrato', t.value)}
+                      className={`rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+                        draft.tipoContrato === t.value
+                          ? 'border-[#25D366] bg-[#25D366]/10 text-[#128C7E]'
+                          : `border-app-border2 bg-app-surface2 text-app-muted hover:bg-app-surface3 ${submitted && errors.tipoContrato ? 'border-red-500/50' : ''}`
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                {submitted && errors.tipoContrato && (
+                  <p className="text-xs text-red-400 mt-0.5">Selecione o tipo do evento</p>
+                )}
+                {draft.tipoContrato && (
+                  <p className="text-xs text-app-subtle mt-1">
+                    Modelo de contrato vinculado: <span className="font-medium text-app-text2">Contrato de {TIPOS_CONTRATO.find(t => t.value === draft.tipoContrato)?.label}</span>
+                  </p>
+                )}
+              </div>
 
               <div className="col-span-2">
                 <Field label="Nome do Cliente" {...fieldProps('cliente', true)} required placeholder="Ex: João Silva" />

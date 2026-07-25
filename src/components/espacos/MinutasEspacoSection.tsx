@@ -12,8 +12,9 @@ interface Props {
   espacoNome: string
 }
 
-const TIPOS: { categoria: 'minuta_locacao' | 'minuta_parceria'; label: string }[] = [
+const TIPOS: { categoria: 'minuta_locacao' | 'minuta_locacao_bilheteria' | 'minuta_parceria'; label: string }[] = [
   { categoria: 'minuta_locacao', label: 'Minuta de Locação' },
+  { categoria: 'minuta_locacao_bilheteria', label: 'Minuta de Locação Bilheteria' },
   { categoria: 'minuta_parceria', label: 'Minuta de Parceria' },
 ]
 

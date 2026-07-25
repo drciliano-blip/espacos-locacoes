@@ -51,6 +51,7 @@ export interface Evento {
   horaFim: string
   tipo: string
   tipoEvento?: TipoEvento  // Feature 3
+  tipoContrato?: TipoMinuta
   status: StatusEvento
   valor: number
   observacoes?: string
@@ -95,7 +96,7 @@ export interface Pagamento {
   descricao: string
 }
 
-export type TipoMinuta = 'locacao' | 'parceria'
+export type TipoMinuta = 'locacao' | 'locacao_bilheteria' | 'parceria'
 
 export interface Contrato {
   id: string

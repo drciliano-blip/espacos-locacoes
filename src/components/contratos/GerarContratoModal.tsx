@@ -39,6 +39,12 @@ async function gerarPdfFile(texto: string, nomeArquivo: string): Promise<File> {
 const GREEN = '#25D366'
 const DARK_GREEN = '#128C7E'
 
+const TIPO_MINUTA_LABEL: Record<TipoMinuta, string> = {
+  locacao: 'Locação',
+  locacao_bilheteria: 'Locação Bilheteria',
+  parceria: 'Parceria',
+}
+
 type Origem =
   | { tipo: 'contrato'; dados: Contrato; eventoOrigem?: Evento }
   | { tipo: 'ficha'; dados: FichaCliente }
@@ -299,6 +305,7 @@ export default function GerarContratoModal({ origem, onClose }: Props) {
                   onBlur={e => { e.currentTarget.style.borderColor = '' }}
                 >
                   <option value="locacao">Locação (valor fixo)</option>
+                  <option value="locacao_bilheteria">Locação bilheteria (valor fixo + repasse)</option>
                   <option value="parceria">Parceria (% sobre faturamento)</option>
                 </select>
               </div>
@@ -315,7 +322,7 @@ export default function GerarContratoModal({ origem, onClose }: Props) {
                   <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2.5 flex items-start gap-2">
                     <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
                     <p className="text-xs text-amber-600">
-                      {espaco} ainda não tem a minuta real de {tipoMinuta === 'parceria' ? 'Parceria' : 'Locação'} anexada — usando um modelo genérico temporário. Anexe o PDF real em Espaços → {espaco} → Documentos para usar o texto oficial.
+                      {espaco} ainda não tem a minuta real de {TIPO_MINUTA_LABEL[tipoMinuta]} anexada — usando um modelo genérico temporário. Anexe o PDF real em Espaços → {espaco} → Documentos para usar o texto oficial.
                     </p>
                   </div>
                 )
