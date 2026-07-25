@@ -1,9 +1,10 @@
 'use client'
 
-import { Printer } from 'lucide-react'
 import type { MonthlyAggregate } from '@/lib/relatorios-utils'
 import { formatCurrency } from '@/lib/utils'
 import { useEspacos } from '@/contexts/EspacosContext'
+import { downloadWorkbook, type ExportSheet } from '@/lib/xlsx-export'
+import ExportarRelatorioButton from './ExportarRelatorioButton'
 
 interface SummaryTableProps {
   data: MonthlyAggregate[]
@@ -22,17 +23,23 @@ export default function SummaryTable({ data, selectedSpaces }: SummaryTableProps
     ocupacao: data.length > 0 ? Math.round(data.reduce((s, m) => s + m.taxaOcupacaoMedia, 0) / data.length) : 0,
   }
 
+  function handleExportExcel() {
+    const sheet: ExportSheet = {
+      name: 'Tabela Resumo',
+      rows: [
+        ['Mês', 'Receita', 'Eventos', 'Ocupação (%)', ...spaces.map(e => e.nome)],
+        ...data.map(m => [m.label, m.receita, m.totalEventos, m.taxaOcupacaoMedia, ...spaces.map(e => m.receitaPorEspaco[e.nome] ?? 0)]),
+        ['TOTAL', totals.receita, totals.eventos, totals.ocupacao, ...spaces.map(e => data.reduce((s, m) => s + (m.receitaPorEspaco[e.nome] ?? 0), 0))],
+      ],
+    }
+    downloadWorkbook([sheet], 'tabela-resumo-por-periodo.xlsx')
+  }
+
   return (
     <div className="rounded-xl border border-app-border bg-app-surface">
       <div className="flex items-center justify-between px-5 py-4 border-b border-app-border">
         <h3 className="text-sm font-semibold text-app-text">Tabela Resumo por Período</h3>
-        <button
-          onClick={() => window.print()}
-          className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs font-medium text-app-muted hover:bg-app-surface2 hover:text-app-text transition-colors print:hidden"
-        >
-          <Printer className="h-3.5 w-3.5" />
-          Imprimir / Exportar
-        </button>
+        <ExportarRelatorioButton onExcel={handleExportExcel} />
       </div>
 
       <div className="overflow-x-auto">

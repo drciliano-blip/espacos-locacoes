@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
-import { FileDown, Wallet, PiggyBank, TrendingUp, Plus, X, Pencil, Check } from 'lucide-react'
+import { Wallet, PiggyBank, TrendingUp, Plus, X, Pencil, Check } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
@@ -12,6 +12,8 @@ import { useRepasses } from '@/contexts/RepassesContext'
 import { useCurrentUser } from '@/contexts/UserContext'
 import { formatCurrency, parseCurrencyBR } from '@/lib/utils'
 import { gerarMesesDoPeriodo, aggregateFluxoCaixa, projecaoProximoMes, type FluxoCaixaMes, type DivisaoSocioMes } from '@/lib/fluxo-caixa-utils'
+import { downloadWorkbook, type ExportSheet } from '@/lib/xlsx-export'
+import ExportarRelatorioButton from './ExportarRelatorioButton'
 
 const AVATAR_COLORS = ['#6366f1', '#ef4444', '#10b981', '#f59e0b', '#0ea5e9', '#a855f7']
 
@@ -74,6 +76,48 @@ export default function FluxoCaixaEspaco() {
 
   if (espacosConfig.length === 0) return null
 
+  function handleExportExcel() {
+    const resumoSheet: ExportSheet = {
+      name: 'Resumo Mensal',
+      rows: [
+        ['Mês', 'Total Entradas', 'Total Saídas', 'Saldo do Mês', 'Partilha Repassada', 'Saldo Após Partilha'],
+        ...fluxo.map(m => [m.label, m.totalEntradas, m.totalSaidas, m.saldoDoMes, m.partilhaRepassada, m.saldoAposPartilha]),
+      ],
+    }
+    const receitasSheet: ExportSheet = {
+      name: 'Receitas',
+      rows: [
+        ['Mês', 'Descrição', 'Cliente', 'Data', 'Valor', 'Status'],
+        ...fluxo.flatMap(m => m.entradas.map(r => [m.label, r.descricao, r.cliente ?? '', r.data, r.valor, r.status])),
+      ],
+    }
+    const despesasSheet: ExportSheet = {
+      name: 'Despesas',
+      rows: [
+        ['Mês', 'Descrição', 'Categoria', 'Data', 'Valor', 'Status'],
+        ...fluxo.flatMap(m => m.saidas.map(c => [m.label, c.descricao, c.categoria ?? '', c.data, c.valor, c.status])),
+      ],
+    }
+    const categoriaSheet: ExportSheet = {
+      name: 'Despesas por Categoria',
+      rows: [
+        ['Mês', 'Categoria', 'Valor'],
+        ...fluxo.flatMap(m => m.despesasPorCategoria.map(c => [m.label, c.categoria, c.valor])),
+      ],
+    }
+    const lucrosSheet: ExportSheet = {
+      name: 'Divisão de Lucros',
+      rows: [
+        ['Mês', 'Sócio', 'Percentual (%)', 'Valor Devido', 'Valor Repassado', 'Valor Pendente', 'Situação'],
+        ...fluxo.flatMap(m => m.divisaoLucros.map(s => [m.label, s.nome, s.percentual, s.valorDevido, s.valorRepassado, s.valorPendente, s.situacao])),
+      ],
+    }
+    downloadWorkbook(
+      [resumoSheet, receitasSheet, despesasSheet, categoriaSheet, lucrosSheet],
+      `fluxo-de-caixa-${espacoSelecionado}-${inicio}-a-${fim}.xlsx`,
+    )
+  }
+
   return (
     <div className="rounded-2xl border border-app-border bg-app-surface p-5 space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3 print-hidden">
@@ -81,13 +125,7 @@ export default function FluxoCaixaEspaco() {
           <h3 className="text-sm font-semibold text-app-text">Fluxo de Caixa por Espaço</h3>
           <p className="text-xs text-app-subtle">Extrato mensal completo, com divisão de lucros e controle de repasses.</p>
         </div>
-        <button
-          onClick={() => window.print()}
-          className="flex items-center gap-1.5 rounded-lg border border-app-border2 bg-app-surface px-3 py-1.5 text-xs font-medium text-app-muted hover:bg-app-surface2 hover:text-app-text transition-colors"
-        >
-          <FileDown className="h-3.5 w-3.5" />
-          Exportar PDF
-        </button>
+        <ExportarRelatorioButton onExcel={handleExportExcel} />
       </div>
 
       {/* Controles */}

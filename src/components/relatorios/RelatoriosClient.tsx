@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { FileDown } from 'lucide-react'
 import FilterBar, { type RelatorioFilters, type Periodo } from './FilterBar'
 import KPISummary from './KPISummary'
 import RevenueLineChart from './RevenueLineChart'
@@ -14,9 +13,14 @@ import SummaryTable from './SummaryTable'
 import { aggregateMonthly, calcularProjecoes, getPeriodRange } from '@/lib/relatorios-utils'
 import { useEventos } from '@/contexts/EventosContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
+import { useContasPagar } from '@/contexts/ContasPagarContext'
+import { useEspacos } from '@/contexts/EspacosContext'
+import { DIVISAO_SOCIOS } from '@/lib/socios-config'
+import { downloadWorkbook, type ExportSheet } from '@/lib/xlsx-export'
 import DespesasSection from './DespesasSection'
 import RelatorioMensalSection from './RelatorioMensalSection'
 import FluxoCaixaEspaco from './FluxoCaixaEspaco'
+import ExportarRelatorioButton from './ExportarRelatorioButton'
 
 function getDefaultFilters(): RelatorioFilters {
   const { inicio, fim } = getPeriodRange('anual')
@@ -39,6 +43,8 @@ const PERIODO_LABELS: Record<string, string> = {
 export default function RelatoriosClient() {
   const { eventos } = useEventos()
   const { receitas } = useReceitas()
+  const { contas: contasPagar } = useContasPagar()
+  const { espacosConfig } = useEspacos()
   const [filters, setFilters] = useState<RelatorioFilters>(getDefaultFilters)
 
   // As listas discriminadas (receita/despesa item a item) ficam recolhidas na tela
@@ -87,6 +93,76 @@ export default function RelatoriosClient() {
 
   const periodoLabel = PERIODO_LABELS[filters.periodo] ?? filters.periodo
 
+  function handleExportExcel() {
+    const selectedSpaces = filters.espacos.length > 0 ? filters.espacos : undefined
+    const espacosParaTabela = selectedSpaces
+      ? espacosConfig.filter(e => selectedSpaces.includes(e.nome))
+      : espacosConfig
+
+    const resumoMensal: ExportSheet = {
+      name: 'Resumo Mensal',
+      rows: [
+        ['Mês', 'Receita', 'Eventos', 'Ocupação (%)', ...espacosParaTabela.map(e => e.nome)],
+        ...aggregates.map(m => [
+          m.label, m.receita, m.totalEventos, m.taxaOcupacaoMedia,
+          ...espacosParaTabela.map(e => m.receitaPorEspaco[e.nome] ?? 0),
+        ]),
+      ],
+    }
+
+    const entradas = receitas.filter(r => {
+      const matchEspaco = !selectedSpaces || (r.espaco && selectedSpaces.includes(r.espaco))
+      const matchInicio = !filters.dataInicio || r.data >= filters.dataInicio
+      const matchFim = !filters.dataFim || r.data <= filters.dataFim
+      return matchEspaco && matchInicio && matchFim
+    })
+    const receitasSheet: ExportSheet = {
+      name: 'Receitas',
+      rows: [
+        ['Descrição', 'Cliente', 'Espaço', 'Categoria', 'Data', 'Valor', 'Status'],
+        ...entradas.map(r => [r.descricao, r.cliente ?? '', r.espaco ?? '', r.categoriaNome, r.data, r.valor, r.status]),
+      ],
+    }
+
+    const saidas = contasPagar.filter(c => {
+      const matchEspaco = !selectedSpaces || selectedSpaces.includes(c.espaco)
+      const matchInicio = !filters.dataInicio || c.dataVencimento >= filters.dataInicio
+      const matchFim = !filters.dataFim || c.dataVencimento <= filters.dataFim
+      return matchEspaco && matchInicio && matchFim
+    })
+    const despesasSheet: ExportSheet = {
+      name: 'Despesas',
+      rows: [
+        ['Descrição', 'Beneficiário', 'Espaço', 'Categoria', 'Subcategoria', 'Vencimento', 'Valor', 'Status'],
+        ...saidas.map(c => [c.descricao, c.fornecedor ?? '', c.espaco, c.categoria, c.subcategoria, c.dataVencimento, c.valor, c.status]),
+      ],
+    }
+
+    const divisaoRows: (string | number)[][] = [['Espaço', 'Receita', 'Despesa', 'Lucro', 'Sócio', 'Percentual (%)', 'Valor do Sócio']]
+    for (const e of espacosParaTabela) {
+      const receitaTotal = entradas.filter(r => r.status === 'pago' && r.espaco === e.nome).reduce((s, r) => s + r.valor, 0)
+      const despesaTotal = saidas.filter(c => c.status === 'pago' && c.espaco === e.nome).reduce((s, c) => s + c.valor, 0)
+      const lucro = receitaTotal - despesaTotal
+      const socios = DIVISAO_SOCIOS[e.nome] ?? []
+      if (socios.length === 0) {
+        divisaoRows.push([e.nome, receitaTotal, despesaTotal, lucro, '', '', ''])
+      } else {
+        socios.forEach((s, i) => {
+          divisaoRows.push([
+            i === 0 ? e.nome : '', i === 0 ? receitaTotal : '', i === 0 ? despesaTotal : '', i === 0 ? lucro : '',
+            s.nome, s.percentual, lucro * (s.percentual / 100),
+          ])
+        })
+      }
+    }
+    const divisaoSheet: ExportSheet = { name: 'Divisão de Lucro', rows: divisaoRows }
+
+    downloadWorkbook(
+      [resumoMensal, receitasSheet, despesasSheet, divisaoSheet],
+      `relatorio-${filters.dataInicio}-a-${filters.dataFim}.xlsx`,
+    )
+  }
+
   return (
     <div className="max-w-7xl mx-auto space-y-5">
       {/* Print header — hidden on screen, visible when printing */}
@@ -102,13 +178,7 @@ export default function RelatoriosClient() {
 
       <div className="flex items-center justify-between print-hidden">
         <div />
-        <button
-          onClick={() => window.print()}
-          className="flex items-center gap-2 rounded-lg border border-app-border2 bg-app-surface px-4 py-2 text-sm font-medium text-app-muted hover:bg-app-surface2 hover:text-app-text transition-colors"
-        >
-          <FileDown className="h-4 w-4" />
-          Exportar PDF
-        </button>
+        <ExportarRelatorioButton onExcel={handleExportExcel} />
       </div>
 
       <FilterBar filters={filters} onChange={handleFiltersChange} />
