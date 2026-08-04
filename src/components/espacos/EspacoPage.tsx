@@ -382,7 +382,6 @@ export default function EspacoPage({ config }: EspacoPageProps) {
             {config.id ? (
               <>
                 <div className="flex flex-wrap gap-2 mb-4">
-                  <FileAttachButton module="espacos" entityId={config.id} entityName={config.nome} categoria="contrato" label="Anexar contrato" />
                   <FileAttachButton module="espacos" entityId={config.id} entityName={config.nome} categoria="alvara" label="Anexar alvará" />
                   <FileAttachButton module="espacos" entityId={config.id} entityName={config.nome} categoria="outro" label="Outros documentos" />
                 </div>

@@ -467,7 +467,6 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
                   onBlur={e => { e.currentTarget.style.borderColor = '' }}
                 >
                   <option value="locacao">Locação (valor fixo)</option>
-                  <option value="locacao_bilheteria">Locação bilheteria (valor fixo + repasse)</option>
                   <option value="parceria">Parceria (% sobre faturamento)</option>
                 </select>
               </div>

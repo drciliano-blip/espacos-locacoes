@@ -40,12 +40,10 @@ const tipoEventoBadge: Record<TipoEvento, string> = {
 
 const TIPOS_CONTRATO: { value: TipoMinuta; label: string }[] = [
   { value: 'locacao', label: 'Locação' },
-  { value: 'locacao_bilheteria', label: 'Locação bilheteria' },
   { value: 'parceria', label: 'Parceria' },
 ]
 const tipoContratoLabel: Record<TipoMinuta, string> = {
   locacao: 'Locação',
-  locacao_bilheteria: 'Locação bilheteria',
   parceria: 'Parceria',
 }
 

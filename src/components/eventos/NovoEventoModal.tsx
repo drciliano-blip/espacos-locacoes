@@ -27,7 +27,6 @@ const FORMAS_PAGAMENTO: FormaPagamento[] = [
 // não precisa selecionar o contrato de novo na hora de gerar o documento.
 const TIPOS_CONTRATO: { value: TipoMinuta; label: string }[] = [
   { value: 'locacao', label: 'Locação' },
-  { value: 'locacao_bilheteria', label: 'Locação bilheteria' },
   { value: 'parceria', label: 'Parceria' },
 ]
 
@@ -607,7 +606,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
                 <label className="text-xs text-app-subtle mb-1 block">
                   Qual é o tipo do evento?<span className="text-red-400 ml-0.5">*</span>
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {TIPOS_CONTRATO.map(t => (
                     <button
                       key={t.value}

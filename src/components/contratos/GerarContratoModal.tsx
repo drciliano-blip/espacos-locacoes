@@ -41,7 +41,6 @@ const DARK_GREEN = '#128C7E'
 
 const TIPO_MINUTA_LABEL: Record<TipoMinuta, string> = {
   locacao: 'Locação',
-  locacao_bilheteria: 'Locação Bilheteria',
   parceria: 'Parceria',
 }
 
@@ -305,7 +304,6 @@ export default function GerarContratoModal({ origem, onClose }: Props) {
                   onBlur={e => { e.currentTarget.style.borderColor = '' }}
                 >
                   <option value="locacao">Locação (valor fixo)</option>
-                  <option value="locacao_bilheteria">Locação bilheteria (valor fixo + repasse)</option>
                   <option value="parceria">Parceria (% sobre faturamento)</option>
                 </select>
               </div>

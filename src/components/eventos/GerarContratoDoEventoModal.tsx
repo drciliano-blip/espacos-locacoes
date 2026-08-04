@@ -93,7 +93,6 @@ export default function GerarContratoDoEventoModal({ evento, onClose, onSave, on
               onBlur={e => { e.currentTarget.style.borderColor = '' }}
             >
               <option value="locacao">Locação (valor fixo)</option>
-              <option value="locacao_bilheteria">Locação bilheteria (valor fixo + repasse)</option>
               <option value="parceria">Parceria (% sobre faturamento)</option>
             </select>
             {evento.tipoContrato && (

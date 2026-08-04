@@ -97,7 +97,7 @@ export interface Pagamento {
   descricao: string
 }
 
-export type TipoMinuta = 'locacao' | 'locacao_bilheteria' | 'parceria'
+export type TipoMinuta = 'locacao' | 'parceria'
 
 export interface Contrato {
   id: string
