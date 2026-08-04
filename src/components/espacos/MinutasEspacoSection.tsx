@@ -102,7 +102,7 @@ export default function MinutasEspacoSection({ espacoId, espacoNome }: Props) {
                   {enviando === categoria ? 'Enviando…' : atual ? 'Substituir' : 'Anexar'}
                   <input
                     type="file"
-                    accept="application/pdf"
+                    accept="application/pdf,.pdf"
                     className="hidden"
                     disabled={enviando === categoria}
                     onChange={e => handleUpload(categoria, e.target.files?.[0] ?? null)}
