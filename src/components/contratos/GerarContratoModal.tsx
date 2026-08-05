@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { X, FileSignature, Sparkles, Download, Copy, Check, Paperclip, FileCheck2, AlertTriangle } from 'lucide-react'
+import { X, FileSignature, Sparkles, Download, FileType, Copy, Check, Paperclip, FileCheck2, AlertTriangle } from 'lucide-react'
 import { getModeloPorTipo } from '@/lib/contract-templates'
 import type { TipoMinuta } from '@/lib/contract-templates'
 import { useEspacos } from '@/contexts/EspacosContext'
@@ -34,6 +34,19 @@ async function gerarPdfFile(texto: string, nomeArquivo: string): Promise<File> {
 
   const blob = doc.output('blob')
   return new File([blob], nomeArquivo, { type: 'application/pdf' })
+}
+
+// Versão .docx do contrato — permite que o funcionário corrija algo direto no
+// Word antes de reenviar pro cliente assinar, sem precisar mexer no PDF.
+async function gerarDocxBlob(texto: string): Promise<Blob> {
+  const { Document, Packer, Paragraph, TextRun } = await import('docx')
+  const doc = new Document({
+    sections: [{
+      properties: {},
+      children: texto.split('\n').map(linha => new Paragraph({ children: [new TextRun(linha)] })),
+    }],
+  })
+  return Packer.toBlob(doc)
 }
 
 const GREEN = '#25D366'
@@ -169,6 +182,7 @@ export default function GerarContratoModal({ origem, onClose }: Props) {
   const [erro, setErro] = useState<string | null>(null)
   const [contractText, setContractText] = useState<string | null>(null)
   const [copiado, setCopiado] = useState(false)
+  const [baixandoDoc, setBaixandoDoc] = useState(false)
   const [anexando, setAnexando] = useState(false)
   const [anexado, setAnexado] = useState(false)
   const [minutaReal, setMinutaReal] = useState<StoredFile | null>(null)
@@ -273,6 +287,24 @@ export default function GerarContratoModal({ origem, onClose }: Props) {
     win.document.close()
     win.focus()
     setTimeout(() => win.print(), 300)
+  }
+
+  async function handleBaixarDOC() {
+    if (!contractText) return
+    setBaixandoDoc(true)
+    try {
+      const blob = await gerarDocxBlob(contractText)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `contrato-${modelo.tipoMinuta}-${Date.now()}.docx`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      setErro('Não foi possível gerar o arquivo .docx. Tente novamente.')
+    } finally {
+      setBaixandoDoc(false)
+    }
   }
 
   return (
@@ -399,6 +431,15 @@ export default function GerarContratoModal({ origem, onClose }: Props) {
                 >
                   <Download className="h-3.5 w-3.5" />
                   Baixar como PDF
+                </button>
+                <button
+                  onClick={handleBaixarDOC}
+                  disabled={baixandoDoc}
+                  title="Baixe em .docx pra corrigir algo no Word antes de reenviar pro cliente assinar"
+                  className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-4 py-2 text-sm text-app-muted hover:bg-app-surface2 transition-colors disabled:opacity-60"
+                >
+                  <FileType className="h-3.5 w-3.5" />
+                  {baixandoDoc ? 'Gerando…' : 'Baixar como DOC'}
                 </button>
                 <button
                   onClick={handleCopiar}

@@ -89,8 +89,14 @@ body {
 
   body { background: #fff; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
-  table { border-collapse: collapse; }
-  th, td { border: 1px solid #e2e8f0; padding: 4px 8px; color: #0f172a !important; }
+  table { border-collapse: collapse; font-size: 9px; table-layout: auto; width: 100%; }
+  th, td { border: 1px solid #e2e8f0; padding: 3px 5px; color: #0f172a !important; white-space: normal !important; word-break: break-word; }
+
+  /* As tabelas de lançamentos (Relatório Mensal, Fluxo de Caixa) rolam na horizontal
+     na tela pra caber a tela — na impressão isso cortaria colunas fora da área
+     visível, então força tudo visível e deixa o texto quebrar linha em vez de
+     manter uma única linha larga. */
+  .overflow-x-auto { overflow: visible !important; }
 
   .recharts-surface { overflow: visible; }
   .recharts-wrapper { page-break-inside: avoid; }
