@@ -15,8 +15,11 @@ import { useEventos } from '@/contexts/EventosContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { useEspacos } from '@/contexts/EspacosContext'
+import { useRepasses } from '@/contexts/RepassesContext'
 import { DIVISAO_SOCIOS } from '@/lib/socios-config'
 import { downloadWorkbook, type ExportSheet } from '@/lib/xlsx-export'
+import { gerarMesesDoPeriodo, aggregateFluxoCaixa } from '@/lib/fluxo-caixa-utils'
+import { SUBCATEGORIA_LABEL } from './LancamentosTables'
 import DespesasSection from './DespesasSection'
 import RelatorioMensalSection from './RelatorioMensalSection'
 import FluxoCaixaEspaco from './FluxoCaixaEspaco'
@@ -45,6 +48,7 @@ export default function RelatoriosClient() {
   const { receitas } = useReceitas()
   const { contas: contasPagar } = useContasPagar()
   const { espacosConfig } = useEspacos()
+  const { repasses } = useRepasses()
   const [filters, setFilters] = useState<RelatorioFilters>(getDefaultFilters)
 
   // As listas discriminadas (receita/despesa item a item) ficam recolhidas na tela
@@ -181,8 +185,138 @@ export default function RelatoriosClient() {
     }
     const divisaoSheet: ExportSheet = { name: 'Divisão de Lucro', rows: divisaoRows }
 
+    // Resumo (mesmos KPIs do topo da tela — cálculo replicado de KPISummary)
+    const totalReceitaKpi = aggregates.reduce((s, m) => s + m.receita, 0)
+    const totalEventosKpi = aggregates.reduce((s, m) => s + m.totalEventos, 0)
+    const avgOcupacao = aggregates.length > 0
+      ? Math.round(aggregates.reduce((s, m) => s + m.taxaOcupacaoMedia, 0) / aggregates.length) : 0
+    const receitaMedia = aggregates.length > 0 ? Math.round(totalReceitaKpi / aggregates.length) : 0
+    const prevHalf = aggregates.slice(0, Math.floor(aggregates.length / 2))
+    const currHalf = aggregates.slice(Math.floor(aggregates.length / 2))
+    const prevAvg = prevHalf.length ? prevHalf.reduce((s, m) => s + m.receita, 0) / prevHalf.length : 0
+    const currAvg = currHalf.length ? currHalf.reduce((s, m) => s + m.receita, 0) / currHalf.length : 0
+    const growthPct = prevAvg > 0 ? Math.round(((currAvg - prevAvg) / prevAvg) * 100) : 0
+    const resumoSheet: ExportSheet = {
+      name: 'Resumo',
+      rows: [
+        ['Período', `${filters.dataInicio} a ${filters.dataFim}`],
+        ['Espaços filtrados', espacosLabel],
+        ['Receita Total', totalReceitaKpi],
+        ['Receita Média Mensal', receitaMedia],
+        ['Total de Eventos', totalEventosKpi],
+        ['Crescimento (1ª vs. 2ª metade do período)', `${growthPct >= 0 ? '+' : ''}${growthPct}%`],
+        ['Ocupação Média', `${avgOcupacao}%`],
+      ],
+    }
+
+    // Eventos por espaço / por categoria, mês a mês (fonte dos gráficos de barra/pizza da tela)
+    const espacoNomesEventos = Array.from(new Set(aggregates.flatMap(m => Object.keys(m.eventosPorEspaco))))
+    const eventosPorEspacoSheet: ExportSheet = {
+      name: 'Eventos por Espaço (mensal)',
+      rows: [
+        ['Mês', ...espacoNomesEventos],
+        ...aggregates.map(m => [m.label, ...espacoNomesEventos.map(nome => m.eventosPorEspaco[nome] ?? 0)]),
+      ],
+    }
+    const categoriaNomesEventos = Array.from(new Set(aggregates.flatMap(m => Object.keys(m.eventosPorCategoria))))
+    const eventosPorCategoriaSheet: ExportSheet = {
+      name: 'Eventos por Categoria (mensal)',
+      rows: [
+        ['Mês', ...categoriaNomesEventos],
+        ...aggregates.map(m => [m.label, ...categoriaNomesEventos.map(cat => m.eventosPorCategoria[cat] ?? 0)]),
+      ],
+    }
+
+    // Receita por categoria (mesmo cálculo do gráfico de pizza — considera todas as
+    // receitas do período/espaço filtrado, independente do status)
+    const catReceitaMap: Record<string, number> = {}
+    for (const r of entradas) catReceitaMap[r.categoriaNome] = (catReceitaMap[r.categoriaNome] ?? 0) + r.valor
+    const totalReceitaCategoria = Object.values(catReceitaMap).reduce((s, v) => s + v, 0)
+    const receitaPorCategoriaSheet: ExportSheet = {
+      name: 'Receita por Categoria',
+      rows: [
+        ['Categoria', 'Valor', '% do Total'],
+        ...Object.entries(catReceitaMap)
+          .sort((a, b) => b[1] - a[1])
+          .map(([nome, valor]) => [nome, valor, totalReceitaCategoria > 0 ? Math.round((valor / totalReceitaCategoria) * 100) : 0]),
+      ],
+    }
+
+    // Projeção dos próximos meses (mesma regressão linear do gráfico de Projeção)
+    const projecaoSheet: ExportSheet = {
+      name: 'Projeção',
+      rows: [
+        ['Mês', 'Receita Projetada (Realista)', 'Cenário Pessimista', 'Cenário Otimista'],
+        ...projecoes.map(p => [p.label, p.realista, p.pessimista, p.otimista]),
+      ],
+    }
+
+    // Despesas por categoria/subcategoria (mesmos totais dos cards e do gráfico de
+    // barras da seção "Despesas — Operacional, Obra e Financeiro")
+    const CATEGORIAS_DESPESA = ['operacional', 'obra', 'financeiro'] as const
+    const totalDespesasCategoria = saidas.reduce((s, c) => s + c.valor, 0)
+    const despesasPorCategoriaSheet: ExportSheet = {
+      name: 'Despesas por Categoria',
+      rows: [
+        ['Categoria', 'Total', 'Pagas', '% do Total'],
+        ...CATEGORIAS_DESPESA.map(cat => {
+          const rows = saidas.filter(c => c.categoria === cat)
+          const total = rows.reduce((s, c) => s + c.valor, 0)
+          const pagas = rows.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0)
+          return [
+            cat === 'operacional' ? 'Operacional' : cat === 'obra' ? 'Obra' : 'Financeiro',
+            total, pagas, totalDespesasCategoria > 0 ? Math.round((total / totalDespesasCategoria) * 100) : 0,
+          ]
+        }),
+      ],
+    }
+    const subMap: Record<string, Record<string, number>> = {}
+    for (const c of saidas) {
+      if (!subMap[c.subcategoria]) subMap[c.subcategoria] = { operacional: 0, obra: 0, financeiro: 0 }
+      subMap[c.subcategoria][c.categoria] += c.valor
+    }
+    const despesasPorSubcategoriaSheet: ExportSheet = {
+      name: 'Despesas por Subcategoria',
+      rows: [
+        ['Subcategoria', 'Operacional', 'Obra', 'Financeiro'],
+        ...Object.entries(subMap).map(([sub, vals]) => [
+          SUBCATEGORIA_LABEL[sub] ?? sub, vals.operacional, vals.obra, vals.financeiro,
+        ]),
+      ],
+    }
+
+    // Fluxo de caixa e divisão de lucros mês a mês, por espaço — mesmos dados da
+    // seção "Fluxo de Caixa por Espaço", só que para TODOS os espaços filtrados de
+    // uma vez (a tela só mostra um espaço por vez no seletor daquela seção).
+    const mesesFluxo = gerarMesesDoPeriodo(filters.dataInicio, filters.dataFim)
+    const fluxoRows: (string | number)[][] = [
+      ['Espaço', 'Mês', 'Saldo Inicial de Caixa', 'Total Entradas', 'Total Saídas', 'Saldo do Mês', 'Partilha Repassada', 'Saldo Após Partilha'],
+    ]
+    const divisaoLucrosMensalRows: (string | number)[][] = [
+      ['Espaço', 'Mês', 'Sócio', 'Percentual (%)', 'Valor Devido', 'Valor Repassado', 'Valor Pendente', 'Situação'],
+    ]
+    for (const e of espacosParaTabela) {
+      const fluxo = aggregateFluxoCaixa(e.nome, mesesFluxo, receitas, contasPagar, repasses)
+      fluxo.forEach((m, i) => {
+        fluxoRows.push([
+          e.nome, m.label, i === 0 ? (e.saldoInicialCaixa ?? 0) : '',
+          m.totalEntradas, m.totalSaidas, m.saldoDoMes, m.partilhaRepassada, m.saldoAposPartilha,
+        ])
+        m.divisaoLucros.forEach(s => {
+          divisaoLucrosMensalRows.push([e.nome, m.label, s.nome, s.percentual, s.valorDevido, s.valorRepassado, s.valorPendente, s.situacao])
+        })
+      })
+    }
+    const fluxoSheet: ExportSheet = { name: 'Fluxo de Caixa (mensal)', rows: fluxoRows }
+    const divisaoLucrosMensalSheet: ExportSheet = { name: 'Divisão de Lucros (mensal)', rows: divisaoLucrosMensalRows }
+
     downloadWorkbook(
-      [totaisSheet, resumoMensal, receitasSheet, despesasSheet, divisaoSheet],
+      [
+        resumoSheet, totaisSheet, divisaoSheet, resumoMensal,
+        eventosPorEspacoSheet, eventosPorCategoriaSheet, receitaPorCategoriaSheet, projecaoSheet,
+        receitasSheet, despesasSheet, despesasPorCategoriaSheet, despesasPorSubcategoriaSheet,
+        fluxoSheet, divisaoLucrosMensalSheet,
+      ],
       `relatorio-${filters.dataInicio}-a-${filters.dataFim}.xlsx`,
     )
   }
