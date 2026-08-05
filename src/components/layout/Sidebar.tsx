@@ -39,6 +39,7 @@ const roleLabels: Record<NivelAcesso, string> = {
   financeiro:  'Financeiro',
   operacional: 'Operacional',
   visualizador:'Visualizador',
+  socio:       'Sócio',
 }
 
 const roleBadgeColors: Record<NivelAcesso, string> = {
@@ -46,6 +47,7 @@ const roleBadgeColors: Record<NivelAcesso, string> = {
   financeiro:  'bg-sky-500/15 text-sky-600',
   operacional: 'bg-emerald-500/15 text-emerald-600',
   visualizador:'bg-zinc-500/15 text-zinc-500',
+  socio:       'bg-violet-500/15 text-violet-600',
 }
 
 interface SidebarProps {

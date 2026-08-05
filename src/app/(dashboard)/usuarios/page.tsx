@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Users, Plus, Edit2, ShieldCheck, Eye, Briefcase, DollarSign, CheckCircle2, XCircle, X, Save, Info, RefreshCw } from 'lucide-react'
+import { Users, Plus, Edit2, ShieldCheck, Eye, Briefcase, DollarSign, CheckCircle2, XCircle, X, Save, Info, RefreshCw, Handshake } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { useEspacos } from '@/contexts/EspacosContext'
 import type { NivelAcesso } from '@/types'
 
 interface Profile {
@@ -32,6 +33,10 @@ const roleConfig: Record<NivelAcesso, { label: string; color: string; icon: Reac
     label: 'Visualizador', color: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/20',
     icon: Eye, desc: 'Somente Dashboard (leitura)',
   },
+  socio: {
+    label: 'Sócio', color: 'bg-violet-500/15 text-violet-400 border-violet-500/20',
+    icon: Handshake, desc: 'Dashboard, Agenda, Eventos, Relatórios, Espaços — somente leitura, restrito aos espaços vinculados',
+  },
 }
 
 const permissionsMatrix: Record<NivelAcesso, string[]> = {
@@ -39,11 +44,13 @@ const permissionsMatrix: Record<NivelAcesso, string[]> = {
   financeiro: ['Dashboard', 'Pagamentos', 'Eventos', 'Relatórios', 'Contas a Pagar'],
   operacional: ['Dashboard', 'Agenda', 'Eventos', 'Espaços'],
   visualizador: ['Dashboard'],
+  socio: ['Dashboard', 'Agenda', 'Eventos', 'Relatórios', 'Espaços'],
 }
 
 const allPages = ['Dashboard', 'Agenda', 'Pagamentos', 'Eventos', 'Relatórios', 'Contas a Pagar', 'Usuários', 'Espaços']
 
 export default function UsuariosPage() {
+  const { espacosConfig } = useEspacos()
   const [lista, setLista] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
@@ -51,6 +58,9 @@ export default function UsuariosPage() {
   const [draft, setDraft] = useState<{ nome: string; role: NivelAcesso; ativo: boolean }>({
     nome: '', role: 'operacional', ativo: true,
   })
+  const [espacosSelecionados, setEspacosSelecionados] = useState<string[]>([])
+  const [carregandoEspacos, setCarregandoEspacos] = useState(false)
+  const [salvando, setSalvando] = useState(false)
   const [novoUsuarioOpen, setNovoUsuarioOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'usuarios' | 'permissoes'>('usuarios')
 
@@ -64,21 +74,46 @@ export default function UsuariosPage() {
 
   useEffect(() => { loadUsuarios() }, [loadUsuarios])
 
-  function openEdit(user: Profile) {
+  async function openEdit(user: Profile) {
     setEditingUser(user)
     setDraft({ nome: user.nome, role: user.role, ativo: user.ativo })
+    setEspacosSelecionados([])
     setModalOpen(true)
+    setCarregandoEspacos(true)
+    const supabase = createClient()
+    const { data } = await supabase.from('usuario_espacos').select('espaco_id').eq('usuario_id', user.id)
+    setEspacosSelecionados((data ?? []).map(r => r.espaco_id as string))
+    setCarregandoEspacos(false)
+  }
+
+  function toggleEspacoSelecionado(espacoId: string) {
+    setEspacosSelecionados(prev => prev.includes(espacoId) ? prev.filter(id => id !== espacoId) : [...prev, espacoId])
   }
 
   async function handleSave() {
     if (!editingUser || !draft.nome) return
+    setSalvando(true)
     const supabase = createClient()
-    await supabase
-      .from('profiles')
-      .update({ nome: draft.nome, role: draft.role, ativo: draft.ativo })
-      .eq('id', editingUser.id)
-    setModalOpen(false)
-    loadUsuarios()
+    try {
+      await supabase
+        .from('profiles')
+        .update({ nome: draft.nome, role: draft.role, ativo: draft.ativo })
+        .eq('id', editingUser.id)
+
+      // Vínculo de espaços só importa pro papel "sócio", mas sincroniza sempre
+      // que o modal foi usado — evita deixar vínculo velho de uma troca de papel.
+      await supabase.from('usuario_espacos').delete().eq('usuario_id', editingUser.id)
+      if (draft.role === 'socio' && espacosSelecionados.length > 0) {
+        await supabase.from('usuario_espacos').insert(
+          espacosSelecionados.map(espacoId => ({ usuario_id: editingUser.id, espaco_id: espacoId }))
+        )
+      }
+
+      setModalOpen(false)
+      loadUsuarios()
+    } finally {
+      setSalvando(false)
+    }
   }
 
   async function toggleAtivo(user: Profile) {
@@ -345,6 +380,33 @@ export default function UsuariosPage() {
                   })}
                 </div>
               </div>
+              {draft.role === 'socio' && (
+                <div>
+                  <label className="block text-xs font-medium text-app-text2 mb-2">
+                    Espaços que esse sócio pode ver<span className="text-red-400 ml-0.5">*</span>
+                  </label>
+                  {carregandoEspacos ? (
+                    <p className="text-xs text-app-subtle">Carregando…</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {espacosConfig.map(e => (
+                        <label key={e.id ?? e.slug} className="flex items-center gap-2 rounded-lg border border-app-border2 p-2 text-xs text-app-text2 cursor-pointer hover:border-app-border">
+                          <input
+                            type="checkbox"
+                            checked={!!e.id && espacosSelecionados.includes(e.id)}
+                            onChange={() => e.id && toggleEspacoSelecionado(e.id)}
+                            className="cursor-pointer"
+                          />
+                          {e.nome}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  {espacosSelecionados.length === 0 && !carregandoEspacos && (
+                    <p className="text-xs text-red-400 mt-1">Sem nenhum espaço marcado, esse sócio não vai enxergar nada no sistema.</p>
+                  )}
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -366,11 +428,11 @@ export default function UsuariosPage() {
               </button>
               <button
                 onClick={handleSave}
-                disabled={!draft.nome}
+                disabled={!draft.nome || salvando}
                 className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 <Save className="h-3.5 w-3.5" />
-                Salvar alterações
+                {salvando ? 'Salvando…' : 'Salvar alterações'}
               </button>
             </div>
           </div>

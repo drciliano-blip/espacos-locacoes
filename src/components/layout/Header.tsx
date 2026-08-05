@@ -40,6 +40,7 @@ export default function Header({ userName, userRole }: HeaderProps) {
     financeiro: 'Financeiro',
     operacional: 'Operacional',
     visualizador: 'Visualizador',
+    socio: 'Sócio',
   }
 
   return (

@@ -8,6 +8,7 @@ import FileList from '@/components/shared/FileList'
 import FileAttachButton from '@/components/shared/FileAttachButton'
 import GerarContratoModal from '@/components/contratos/GerarContratoModal'
 import { useEventos } from '@/contexts/EventosContext'
+import { useCurrentUser } from '@/contexts/UserContext'
 
 const statusBadge: Record<string, string> = {
   confirmado: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
@@ -33,6 +34,7 @@ interface ContractCardProps {
 
 export default function ContractCard({ contrato: c }: ContractCardProps) {
   const { eventos } = useEventos()
+  const { role } = useCurrentUser()
   const [expanded, setExpanded] = useState(false)
   const [obs, setObs] = useState(c.observacoes)
   const [editing, setEditing] = useState(false)
@@ -101,13 +103,15 @@ export default function ContractCard({ contrato: c }: ContractCardProps) {
             </span>
             {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
           </button>
-          <button
-            onClick={() => setGerarContratoOpen(true)}
-            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#25D366]/30 bg-[#25D366]/10 px-3 py-1.5 text-xs font-medium text-[#128C7E] hover:bg-[#25D366]/20 transition-colors"
-          >
-            <FileSignature className="h-3 w-3" />
-            Gerar Contrato
-          </button>
+          {role !== 'socio' && (
+            <button
+              onClick={() => setGerarContratoOpen(true)}
+              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#25D366]/30 bg-[#25D366]/10 px-3 py-1.5 text-xs font-medium text-[#128C7E] hover:bg-[#25D366]/20 transition-colors"
+            >
+              <FileSignature className="h-3 w-3" />
+              Gerar Contrato
+            </button>
+          )}
         </div>
       </div>
 
@@ -150,10 +154,12 @@ export default function ContractCard({ contrato: c }: ContractCardProps) {
                 Observações
               </p>
               {!editing ? (
-                <button onClick={() => { setEditing(true); setDraft(obs) }}
-                  className="text-xs text-[#25D366] hover:text-[#128C7E] transition-colors">
-                  Editar
-                </button>
+                role !== 'socio' && (
+                  <button onClick={() => { setEditing(true); setDraft(obs) }}
+                    className="text-xs text-[#25D366] hover:text-[#128C7E] transition-colors">
+                    Editar
+                  </button>
+                )
               ) : (
                 <div className="flex gap-2">
                   <button onClick={() => { setObs(draft); setEditing(false) }}
@@ -187,24 +193,26 @@ export default function ContractCard({ contrato: c }: ContractCardProps) {
               <Paperclip className="h-3 w-3" />
               Documentos anexados
             </p>
-            <div className="flex flex-wrap gap-2 mb-3">
-              <FileAttachButton
-                module="contratos"
-                entityId={c.id}
-                entityName={`${c.cliente} — ${c.numeroContrato}`}
-                espaco={c.espaco}
-                categoria="contrato"
-                label="Anexar contrato"
-              />
-              <FileAttachButton
-                module="contratos"
-                entityId={c.id}
-                entityName={`${c.cliente} — ${c.numeroContrato}`}
-                espaco={c.espaco}
-                categoria="comprovante_sinal"
-                label="Anexar comprovante de sinal"
-              />
-            </div>
+            {role !== 'socio' && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                <FileAttachButton
+                  module="contratos"
+                  entityId={c.id}
+                  entityName={`${c.cliente} — ${c.numeroContrato}`}
+                  espaco={c.espaco}
+                  categoria="contrato"
+                  label="Anexar contrato"
+                />
+                <FileAttachButton
+                  module="contratos"
+                  entityId={c.id}
+                  entityName={`${c.cliente} — ${c.numeroContrato}`}
+                  espaco={c.espaco}
+                  categoria="comprovante_sinal"
+                  label="Anexar comprovante de sinal"
+                />
+              </div>
+            )}
             <FileList
               module="contratos"
               entityId={c.id}

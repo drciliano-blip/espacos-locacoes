@@ -4,11 +4,13 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Plus, Users, Building2 } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
+import { useCurrentUser } from '@/contexts/UserContext'
 import NovoEspacoModal from '@/components/espacos/NovoEspacoModal'
 import EspacoLogo from '@/components/espacos/EspacoLogo'
 
 export default function EspacosIndexPage() {
   const { espacosConfig, customEspacos } = useEspacos()
+  const { role } = useCurrentUser()
   const [novoOpen, setNovoOpen] = useState(false)
 
   const customSlugs = new Set(customEspacos.map(c => c.slug))
@@ -20,16 +22,18 @@ export default function EspacosIndexPage() {
           <p className="text-sm font-semibold text-app-text">{espacosConfig.length} espaços cadastrados</p>
           <p className="text-xs text-app-muted">Gerencie os espaços disponíveis para locação</p>
         </div>
-        <button
-          onClick={() => setNovoOpen(true)}
-          className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-white transition-colors"
-          style={{ backgroundColor: '#25D366' }}
-          onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#128C7E' }}
-          onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#25D366' }}
-        >
-          <Plus className="h-4 w-4" />
-          Novo Espaço
-        </button>
+        {role !== 'socio' && (
+          <button
+            onClick={() => setNovoOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-white transition-colors"
+            style={{ backgroundColor: '#25D366' }}
+            onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#128C7E' }}
+            onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#25D366' }}
+          >
+            <Plus className="h-4 w-4" />
+            Novo Espaço
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

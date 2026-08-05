@@ -8,6 +8,7 @@ import GoogleCalendarView from '@/components/agenda/GoogleCalendarView'
 import EventoDrawer from '@/components/eventos/EventoDrawer'
 import NovoEventoModal from '@/components/eventos/NovoEventoModal'
 import { useEventos } from '@/contexts/EventosContext'
+import { useCurrentUser } from '@/contexts/UserContext'
 import type { Evento, Espaco } from '@/types'
 
 const ESPACOS_LISTA: Espaco[] = ['Usine', 'Fabrique', 'House Pacaembu', 'Complexo Jussara', 'Espaço Solon']
@@ -22,6 +23,7 @@ const espacoDotColors: Record<Espaco, string> = {
 
 export default function AgendaPage() {
   const { eventos, addEvento, updateEvento, deleteEvento } = useEventos()
+  const { role } = useCurrentUser()
 
   const [selectedDate, setSelectedDate]     = useState<Date | null>(null)
   const [selectedEvento, setSelectedEvento] = useState<Evento | null>(null)
@@ -94,16 +96,18 @@ export default function AgendaPage() {
         )}
 
         {/* Botão Novo Evento */}
-        <button
-          onClick={() => setNovoEventoOpen(true)}
-          className="ml-auto flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white shrink-0 transition-opacity"
-          style={{ backgroundColor: '#25D366' }}
-          onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#128C7E' }}
-          onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#25D366' }}
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Novo Evento
-        </button>
+        {role !== 'socio' && (
+          <button
+            onClick={() => setNovoEventoOpen(true)}
+            className="ml-auto flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white shrink-0 transition-opacity"
+            style={{ backgroundColor: '#25D366' }}
+            onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#128C7E' }}
+            onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#25D366' }}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Novo Evento
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4 items-start">

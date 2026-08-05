@@ -250,37 +250,41 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   )}
-                  <button
-                    onClick={() => contratoExistente ? setContratoParaGerar(contratoExistente) : setGerarContratoDoEventoOpen(true)}
-                    className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs font-medium text-app-muted hover:bg-app-surface2 transition-colors"
-                  >
-                    <FileSignature className="h-3.5 w-3.5" />
-                    {contratoExistente ? 'Gerar documento do contrato' : 'Gerar Contrato'}
-                  </button>
-                  {evento.status === 'confirmado' ? (
-                    <button
-                      onClick={() => setCancelConfirm(true)}
-                      className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors"
-                    >
-                      <Ban className="h-3.5 w-3.5" />
-                      Cancelar evento
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setCancelConfirm(true)}
-                      className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs font-medium text-app-muted hover:bg-app-surface2 transition-colors"
-                    >
-                      <RotateCcw className="h-3.5 w-3.5" />
-                      Reativar evento
-                    </button>
+                  {role !== 'socio' && (
+                    <>
+                      <button
+                        onClick={() => contratoExistente ? setContratoParaGerar(contratoExistente) : setGerarContratoDoEventoOpen(true)}
+                        className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs font-medium text-app-muted hover:bg-app-surface2 transition-colors"
+                      >
+                        <FileSignature className="h-3.5 w-3.5" />
+                        {contratoExistente ? 'Gerar documento do contrato' : 'Gerar Contrato'}
+                      </button>
+                      {evento.status === 'confirmado' ? (
+                        <button
+                          onClick={() => setCancelConfirm(true)}
+                          className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors"
+                        >
+                          <Ban className="h-3.5 w-3.5" />
+                          Cancelar evento
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setCancelConfirm(true)}
+                          className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs font-medium text-app-muted hover:bg-app-surface2 transition-colors"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          Reativar evento
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setEditing(true)}
+                        className="flex items-center gap-1.5 rounded-lg border border-[#25D366]/30 bg-[#25D366]/10 px-3 py-1.5 text-xs font-medium text-[#128C7E] hover:bg-[#25D366]/20 transition-colors"
+                      >
+                        <Edit3 className="h-3.5 w-3.5" />
+                        Editar
+                      </button>
+                    </>
                   )}
-                  <button
-                    onClick={() => setEditing(true)}
-                    className="flex items-center gap-1.5 rounded-lg border border-[#25D366]/30 bg-[#25D366]/10 px-3 py-1.5 text-xs font-medium text-[#128C7E] hover:bg-[#25D366]/20 transition-colors"
-                  >
-                    <Edit3 className="h-3.5 w-3.5" />
-                    Editar
-                  </button>
                 </>
               )}
               {editing && (

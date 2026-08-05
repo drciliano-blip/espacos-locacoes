@@ -15,7 +15,7 @@ export type StatusVistoria = 'pendente' | 'aprovada' | 'aprovada com ressalvas' 
 export type TipoEvento = 'Festivo' | 'Corporativo' | 'Audiovisual'
 
 // Feature 2: Níveis de acesso
-export type NivelAcesso = 'admin' | 'financeiro' | 'operacional' | 'visualizador'
+export type NivelAcesso = 'admin' | 'financeiro' | 'operacional' | 'visualizador' | 'socio'
 
 // Feature 1: Contas a Pagar
 export type CategoriaContaPagar = 'operacional' | 'obra' | 'financeiro'

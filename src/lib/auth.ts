@@ -5,6 +5,9 @@ export const ROLE_PERMISSIONS: Record<NivelAcesso, string[]> = {
   financeiro: ['dashboard', 'pagamentos', 'eventos', 'relatorios', 'contas-a-pagar'],
   operacional: ['dashboard', 'agenda', 'eventos', 'espacos'],
   visualizador: ['dashboard'],
+  // Somente leitura, e restrito aos espaços vinculados a ele via RLS —
+  // o filtro de dados por espaço acontece no banco, isso aqui só libera as páginas.
+  socio: ['dashboard', 'agenda', 'eventos', 'relatorios', 'espacos'],
 }
 
 export function canAccess(role: NivelAcesso, page: string): boolean {

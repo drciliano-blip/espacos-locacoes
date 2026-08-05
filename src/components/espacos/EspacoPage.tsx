@@ -28,6 +28,7 @@ import { useEventos } from '@/contexts/EventosContext'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
 import { useAtividades, type TipoAtividade } from '@/contexts/AtividadesContext'
+import { useCurrentUser } from '@/contexts/UserContext'
 import { saveFile } from '@/lib/file-storage'
 
 // ─── local types ─────────────────────────────────────────────────────────────
@@ -85,6 +86,8 @@ export default function EspacoPage({ config }: EspacoPageProps) {
   const { updateEspacoFoto } = useEspacos()
   const { atividades: todasAtividades } = useAtividades()
   const { receitas: todasReceitas } = useReceitas()
+  const { role } = useCurrentUser()
+  const podeEditar = role !== 'socio'
 
   const [tab, setTab]                       = useState<SpaceTab>('eventos')
   const [selectedEvento, setSelectedEvento] = useState<Evento | null>(null)
@@ -200,15 +203,19 @@ export default function EspacoPage({ config }: EspacoPageProps) {
               borderClass={config.borderClass}
               size="lg"
             />
-            <input ref={fotoInputRef} type="file" accept="image/*" className="hidden" onChange={e => handleFotoChange(e.target.files?.[0] ?? null)} />
-            <button
-              onClick={() => fotoInputRef.current?.click()}
-              disabled={uploadingFoto || !config.id}
-              title="Trocar foto"
-              className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/60 text-white text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity disabled:cursor-not-allowed"
-            >
-              {uploadingFoto ? '…' : 'Trocar'}
-            </button>
+            {podeEditar && (
+              <>
+                <input ref={fotoInputRef} type="file" accept="image/*" className="hidden" onChange={e => handleFotoChange(e.target.files?.[0] ?? null)} />
+                <button
+                  onClick={() => fotoInputRef.current?.click()}
+                  disabled={uploadingFoto || !config.id}
+                  title="Trocar foto"
+                  className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/60 text-white text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity disabled:cursor-not-allowed"
+                >
+                  {uploadingFoto ? '…' : 'Trocar'}
+                </button>
+              </>
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <h2 className={`text-xl font-bold ${config.colorClass}`}>{config.nome}</h2>
@@ -228,13 +235,15 @@ export default function EspacoPage({ config }: EspacoPageProps) {
               </span>
             </div>
           </div>
-          <button
-            onClick={() => setNovoEventoOpen(true)}
-            className="flex shrink-0 items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-xs font-medium text-white hover:bg-violet-500 transition-colors"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Novo Evento
-          </button>
+          {podeEditar && (
+            <button
+              onClick={() => setNovoEventoOpen(true)}
+              className="flex shrink-0 items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-xs font-medium text-white hover:bg-violet-500 transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Novo Evento
+            </button>
+          )}
         </div>
       </div>
 
@@ -381,14 +390,18 @@ export default function EspacoPage({ config }: EspacoPageProps) {
           <div className="p-5">
             {config.id ? (
               <>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <FileAttachButton module="espacos" entityId={config.id} entityName={config.nome} categoria="alvara" label="Anexar alvará" />
-                  <FileAttachButton module="espacos" entityId={config.id} entityName={config.nome} categoria="outro" label="Outros documentos" />
-                </div>
+                {podeEditar && (
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    <FileAttachButton module="espacos" entityId={config.id} entityName={config.nome} categoria="alvara" label="Anexar alvará" />
+                    <FileAttachButton module="espacos" entityId={config.id} entityName={config.nome} categoria="outro" label="Outros documentos" />
+                  </div>
+                )}
                 <FileList module="espacos" entityId={config.id} entityName={config.nome} showAttach={false} />
-                <div className="mt-6">
-                  <MinutasEspacoSection espacoId={config.id} espacoNome={config.nome} />
-                </div>
+                {podeEditar && (
+                  <div className="mt-6">
+                    <MinutasEspacoSection espacoId={config.id} espacoNome={config.nome} />
+                  </div>
+                )}
                 <div className="mt-6">
                   <DadosLegaisSection espacoId={config.id} dadosLegais={config.dadosLegais} />
                 </div>

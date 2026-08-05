@@ -9,6 +9,7 @@ import DocumentosSection from '@/components/eventos/DocumentosSection'
 import ReceitasEventoSection from '@/components/eventos/ReceitasEventoSection'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useContratos } from '@/contexts/ContratosContext'
+import { useCurrentUser } from '@/contexts/UserContext'
 import type { StatusEvento } from '@/types'
 
 type Tab = 'contratos' | 'documentos' | 'receitas'
@@ -22,6 +23,7 @@ const TABS: { key: Tab; label: string; Icon: typeof FileText }[] = [
 export default function EventosPage() {
   const { espacosNomes } = useEspacos()
   const { contratos, addContrato } = useContratos()
+  const { role } = useCurrentUser()
   const [tab, setTab] = useState<Tab>('contratos')
   const [search, setSearch]           = useState('')
   const [espacoFilter, setEspacoFilter] = useState<string>('todos')
@@ -69,16 +71,18 @@ export default function EventosPage() {
               <FolderOpen className="h-4 w-4 text-[#25D366]" />
               Ver documentos
             </button>
-            <button
-              onClick={() => setNovoOpen(true)}
-              className="ml-auto flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-white transition-colors"
-              style={{ backgroundColor: '#25D366' }}
-              onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#128C7E' }}
-              onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#25D366' }}
-            >
-              <Plus className="h-4 w-4" />
-              Novo Contrato
-            </button>
+            {role !== 'socio' && (
+              <button
+                onClick={() => setNovoOpen(true)}
+                className="ml-auto flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-white transition-colors"
+                style={{ backgroundColor: '#25D366' }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#128C7E' }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#25D366' }}
+              >
+                <Plus className="h-4 w-4" />
+                Novo Contrato
+              </button>
+            )}
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3">
