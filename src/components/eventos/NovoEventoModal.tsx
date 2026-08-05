@@ -261,6 +261,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
   const [fileCount, setFileCount] = useState(0)
   const fichaFileRef = useRef<HTMLInputElement>(null)
   const fichaCameraRef = useRef<HTMLInputElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const [extraindoFicha, setExtraindoFicha] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -282,6 +283,16 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
   }
 
   const hasErrors = Object.values(errors).some(Boolean)
+
+  const ERROR_LABELS: Partial<Record<keyof Draft, string>> = {
+    cliente: 'Nome do Cliente',
+    espaco: 'Espaço',
+    data: 'Data',
+    horaInicio: 'Hora início',
+    horaFim: 'Hora fim',
+    valor: 'Valor (R$)',
+    tipoContrato: 'Qual é o tipo do evento?',
+  }
 
   function set(key: keyof Draft, value: string) {
     setDraft(d => ({ ...d, [key]: value }))
@@ -412,7 +423,12 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
   async function handleSave() {
     setSubmitted(true)
     setSaveError(null)
-    if (hasErrors) return
+    if (hasErrors) {
+      const faltando = (Object.keys(errors) as (keyof Draft)[]).filter(k => errors[k]).map(k => ERROR_LABELS[k]).filter(Boolean)
+      showToast(`Preencha os campos obrigatórios: ${faltando.join(', ')}`)
+      scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
 
     const endereco = enderecoParaSalvar(draft.endereco)
     const enderecoEmpresa = draft.pessoaJuridica ? enderecoParaSalvar(draft.enderecoEmpresa) : undefined
@@ -492,6 +508,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-end" onClick={onClose}>
       <div
+        ref={scrollRef}
         className="relative h-full w-full max-w-xl overflow-y-auto bg-app-bg border-l border-app-border shadow-2xl"
         onClick={e => e.stopPropagation()}
       >

@@ -20,7 +20,6 @@ export default function GerarContratoDoEventoModal({ evento, onClose, onSave, on
   // selecionar de novo, só confere/troca se necessário.
   const [tipoMinuta, setTipoMinuta] = useState<TipoMinuta>(evento.tipoContrato ?? 'locacao')
   const [valorNegociado, setValorNegociado] = useState(String(evento.valor))
-  const [observacaoNegociacao, setObservacaoNegociacao] = useState('')
   // Já vem preenchido com o que foi descrito no cadastro do evento — a cláusula
   // de condições comerciais do contrato usa esse texto automaticamente.
   const [observacaoParceria, setObservacaoParceria] = useState(evento.condicoesParceria ?? '')
@@ -51,7 +50,6 @@ export default function GerarContratoDoEventoModal({ evento, onClose, onSave, on
         tipo: evento.tipo,
         tipoMinuta,
         valorNegociado: valorNegociado ? parseCurrencyBR(valorNegociado) : undefined,
-        observacaoNegociacao: observacaoNegociacao.trim() || undefined,
         observacaoParceria: tipoMinuta === 'parceria' ? (observacaoParceria.trim() || undefined) : undefined,
         eventoId: evento.id,
       }
@@ -107,19 +105,6 @@ export default function GerarContratoDoEventoModal({ evento, onClose, onSave, on
               value={valorNegociado}
               onChange={e => setValorNegociado(e.target.value)}
               className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
-              onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
-              onBlur={e => { e.currentTarget.style.borderColor = '' }}
-            />
-          </div>
-
-          <div>
-            <label className="text-xs text-app-subtle mb-0.5 block">Observação sobre a negociação</label>
-            <textarea
-              value={observacaoNegociacao}
-              onChange={e => setObservacaoNegociacao(e.target.value)}
-              rows={2}
-              placeholder="Ex: desconto combinado, condições específicas do acordo…"
-              className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none resize-none"
               onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
               onBlur={e => { e.currentTarget.style.borderColor = '' }}
             />
