@@ -793,10 +793,10 @@ function ContaRow({ conta, onDarBaixa, onEditar, onExcluir }: ContaRowProps) {
 
   return (
     <div className="rounded-lg border border-app-border2/50 bg-app-surface2/40 overflow-hidden">
-      <div className="flex items-center justify-between gap-4 px-4 py-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 px-4 py-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-medium text-app-text truncate">{conta.descricao}</p>
+            <p className="text-sm font-medium text-app-text break-words">{conta.descricao}</p>
             <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${categoriaBadge[conta.categoria]}`}>
               {categoriaLabel[conta.categoria]}
             </span>
@@ -804,38 +804,38 @@ function ContaRow({ conta, onDarBaixa, onEditar, onExcluir }: ContaRowProps) {
               {subcategoriaLabel[conta.subcategoria]}
             </span>
           </div>
-          <div className="flex items-center gap-3 mt-0.5">
+          <div className="flex items-center gap-3 mt-0.5 flex-wrap">
             <span className="text-xs text-app-subtle">{conta.espaco}</span>
             {conta.fornecedor && <span className="text-xs text-app-subtle">· {conta.fornecedor}</span>}
             <span className="text-xs text-app-subtle">· Venc. {conta.dataVencimento.split('-').reverse().join('/')}</span>
             {conta.dataPagamento && <span className="text-xs text-emerald-600">· Pago {conta.dataPagamento.split('-').reverse().join('/')}</span>}
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${statusBadge[status]}`}>
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap sm:shrink-0">
+          <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${statusBadge[status]}`}>
             {statusLabel[status]}
           </span>
-          <span className="text-sm font-bold text-app-text w-24 text-right">{formatCurrency(conta.valor)}</span>
+          <span className="shrink-0 text-sm font-bold text-app-text sm:w-24 sm:text-right">{formatCurrency(conta.valor)}</span>
           {status !== 'pago' && (
             <button onClick={onDarBaixa}
-              className="flex items-center gap-1.5 rounded-md border border-app-border2 px-2.5 py-1 text-xs font-medium text-app-muted hover:border-[#25D366] hover:text-[#128C7E] transition-colors"
+              className="flex shrink-0 items-center gap-1.5 rounded-md border border-app-border2 px-2.5 py-1 text-xs font-medium text-app-muted hover:border-[#25D366] hover:text-[#128C7E] transition-colors"
               title="Dar baixa">
               <Banknote className="h-3.5 w-3.5" />
               Dar baixa
             </button>
           )}
           <button onClick={onEditar}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-app-subtle hover:bg-app-surface2 hover:text-app-text transition-colors"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-app-subtle hover:bg-app-surface2 hover:text-app-text transition-colors"
             title="Editar">
             <Pencil className="h-3.5 w-3.5" />
           </button>
           <button onClick={onExcluir}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-app-subtle hover:bg-red-500/10 hover:text-red-500 transition-colors"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-app-subtle hover:bg-red-500/10 hover:text-red-500 transition-colors"
             title="Excluir">
             <Trash2 className="h-3.5 w-3.5" />
           </button>
           <button onClick={() => setExpanded(v => !v)}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-app-subtle hover:bg-app-surface2 transition-colors"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-app-subtle hover:bg-app-surface2 transition-colors"
             title="Documentos">
             {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
           </button>

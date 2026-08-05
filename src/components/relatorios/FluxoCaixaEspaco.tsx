@@ -33,7 +33,13 @@ function defaultRange(): { inicio: string; fim: string } {
   return { inicio, fim }
 }
 
-export default function FluxoCaixaEspaco() {
+interface FluxoCaixaEspacoProps {
+  selectedSpaces?: string[]
+  dataInicio?: string
+  dataFim?: string
+}
+
+export default function FluxoCaixaEspaco({ selectedSpaces, dataInicio, dataFim }: FluxoCaixaEspacoProps) {
   const { espacosConfig, updateSaldoInicial } = useEspacos()
   const { receitas } = useReceitas()
   const { contas: contasPagar } = useContasPagar()
@@ -50,9 +56,25 @@ export default function FluxoCaixaEspaco() {
     if (!espacoSelecionado && espacosConfig.length > 0) setEspacoSelecionado(espacosConfig[0].nome)
   }, [espacoSelecionado, espacosConfig])
 
+  // Segue o filtro de espaço do topo da tela de Relatórios quando só um espaço está
+  // selecionado ali — sem isso, esta seção ficava com o próprio espaço "preso" no
+  // primeiro da lista, misturando sócios/dados de um espaço diferente do filtrado
+  // (inclusive na exportação/impressão do relatório).
+  useEffect(() => {
+    if (selectedSpaces && selectedSpaces.length === 1) setEspacoSelecionado(selectedSpaces[0])
+  }, [selectedSpaces])
+
   const range = defaultRange()
   const [inicio, setInicio] = useState(range.inicio)
   const [fim, setFim] = useState(range.fim)
+
+  // Segue o período selecionado no topo da tela de Relatórios pelo mesmo motivo —
+  // do contrário o relatório impresso trazia sempre os últimos 3 meses aqui,
+  // mesmo quando o filtro geral pedia "Anual" ou outro período.
+  useEffect(() => {
+    if (dataInicio) setInicio(dataInicio.slice(0, 7))
+    if (dataFim) setFim(dataFim.slice(0, 7))
+  }, [dataInicio, dataFim])
   const [repasseAlvo, setRepasseAlvo] = useState<{ socio: string; yearMonth: string; mesLabel: string } | null>(null)
   const [editandoSaldo, setEditandoSaldo] = useState(false)
 

@@ -243,7 +243,11 @@ export default function RelatoriosClient() {
         dataFim={filters.dataFim}
       />
 
-      <FluxoCaixaEspaco />
+      <FluxoCaixaEspaco
+        selectedSpaces={filters.espacos.length > 0 ? filters.espacos : undefined}
+        dataInicio={filters.dataInicio}
+        dataFim={filters.dataFim}
+      />
     </div>
   )
 }
