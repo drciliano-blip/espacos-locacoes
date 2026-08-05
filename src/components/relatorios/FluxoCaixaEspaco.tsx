@@ -14,7 +14,7 @@ import { useCurrentUser } from '@/contexts/UserContext'
 import { formatCurrency, parseCurrencyBR } from '@/lib/utils'
 import { gerarMesesDoPeriodo, aggregateFluxoCaixa, projecaoProximoMes, type FluxoCaixaMes, type DivisaoSocioMes } from '@/lib/fluxo-caixa-utils'
 import { downloadWorkbook, type ExportSheet } from '@/lib/xlsx-export'
-import { ReceitasTable, DespesasTable, SUBCATEGORIA_LABEL } from './LancamentosTables'
+import { ReceitasTable, DespesasTable, SUBCATEGORIA_LABEL, CATEGORIA_CONTA_LABEL } from './LancamentosTables'
 import ExportarRelatorioButton from './ExportarRelatorioButton'
 import type { Evento } from '@/types'
 
@@ -108,7 +108,7 @@ export default function FluxoCaixaEspaco() {
       rows: [
         ['Mês', 'Descrição', 'Categoria', 'Subcategoria', 'Fornecedor/Beneficiário', 'Data Vencimento', 'Data Pagamento', 'Valor', 'Status', 'Observações'],
         ...fluxo.flatMap(m => m.saidas.map(c => [
-          m.label, c.descricao, c.categoria === 'fixa' ? 'Fixa' : 'Variável', SUBCATEGORIA_LABEL[c.subcategoria] ?? c.subcategoria,
+          m.label, c.descricao, CATEGORIA_CONTA_LABEL[c.categoria] ?? c.categoria, SUBCATEGORIA_LABEL[c.subcategoria] ?? c.subcategoria,
           c.fornecedor ?? '', c.dataVencimento, c.dataPagamento ?? '', c.valor, c.status, c.observacoes ?? '',
         ])),
       ],

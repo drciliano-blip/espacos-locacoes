@@ -15,6 +15,10 @@ export const SUBCATEGORIA_LABEL: Record<string, string> = {
   manutenção: 'Manutenção', fornecedores: 'Fornecedores', extras: 'Extras', outros: 'Outros',
 }
 
+export const CATEGORIA_CONTA_LABEL: Record<string, string> = {
+  operacional: 'Operacional', obra: 'Obra', financeiro: 'Financeiro',
+}
+
 // Tabelas completas de lançamentos (receita/despesa) — usadas em todo o módulo de
 // Relatórios (Relatório Mensal e Fluxo de Caixa por Espaço) para que nenhum campo
 // cadastrado fique de fora da visualização, seja na tela ou nas exportações.
@@ -73,7 +77,7 @@ export function DespesasTable({ despesas }: { despesas: ContaPagar[] }) {
           {despesas.map(c => (
             <tr key={c.id} className="hover:bg-app-surface2/30 transition-colors align-top">
               <td className="px-3 py-2 text-app-text max-w-[180px] truncate">{c.descricao}</td>
-              <td className="px-3 py-2 text-app-muted whitespace-nowrap">{c.categoria === 'fixa' ? 'Fixa' : 'Variável'}</td>
+              <td className="px-3 py-2 text-app-muted whitespace-nowrap">{CATEGORIA_CONTA_LABEL[c.categoria] ?? c.categoria}</td>
               <td className="px-3 py-2 text-app-muted whitespace-nowrap">{SUBCATEGORIA_LABEL[c.subcategoria] ?? c.subcategoria}</td>
               <td className="px-3 py-2 text-app-muted whitespace-nowrap">{c.fornecedor ?? '—'}</td>
               <td className="px-3 py-2 text-app-muted whitespace-nowrap">{c.dataVencimento.split('-').reverse().join('/')}</td>

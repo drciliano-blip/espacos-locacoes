@@ -40,6 +40,8 @@ interface ContasPagarContextValue {
   contas: ContaPagar[]
   loading: boolean
   addConta: (c: ContaPagar) => Promise<void>
+  updateConta: (c: ContaPagar) => Promise<void>
+  deleteConta: (id: string) => Promise<void>
   darBaixa: (id: string, dataPagamento: string) => Promise<void>
 }
 
@@ -98,6 +100,57 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function updateConta(c: ContaPagar) {
+    const supabase = createClient()
+    let espacoId: string | null = null
+    if (c.espaco && c.espaco !== 'Todos') {
+      const { data: espacoRow } = await supabase.from('espacos').select('id').eq('nome', c.espaco).single()
+      espacoId = espacoRow?.id ?? null
+    }
+
+    const { data, error } = await supabase
+      .from('contas_pagar')
+      .update({
+        descricao: c.descricao,
+        espaco_id: espacoId,
+        categoria: c.categoria,
+        subcategoria: c.subcategoria,
+        valor: c.valor,
+        status: c.status,
+        data_vencimento: c.dataVencimento,
+        data_pagamento: c.dataPagamento ?? null,
+        fornecedor: c.fornecedor ?? null,
+        observacoes: c.observacoes ?? null,
+      })
+      .eq('id', c.id)
+      .select(SELECT)
+      .single()
+
+    if (error) throw error
+    const atualizada = fromRow(data as unknown as ContaPagarRow)
+    setContas(prev => prev.map(x => x.id === c.id ? atualizada : x))
+    try {
+      await logAtividade({ tipo: 'financeiro', acao: 'Conta a pagar editada', detalhes: atualizada.descricao, espaco: atualizada.espaco !== 'Todos' ? atualizada.espaco : undefined })
+    } catch {
+      // log é secundário, não deve impedir a edição da conta
+    }
+  }
+
+  async function deleteConta(id: string) {
+    const alvo = contas.find(c => c.id === id)
+    const supabase = createClient()
+    const { error } = await supabase.from('contas_pagar').delete().eq('id', id)
+    if (error) throw error
+    setContas(prev => prev.filter(c => c.id !== id))
+    if (alvo) {
+      try {
+        await logAtividade({ tipo: 'financeiro', acao: 'Conta a pagar excluída', detalhes: alvo.descricao, espaco: alvo.espaco !== 'Todos' ? alvo.espaco : undefined })
+      } catch {
+        // log é secundário, não deve impedir a exclusão já concluída
+      }
+    }
+  }
+
   async function darBaixa(id: string, dataPagamento: string) {
     const supabase = createClient()
     const { data, error } = await supabase
@@ -118,7 +171,7 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <ContasPagarContext.Provider value={{ contas, loading, addConta, darBaixa }}>
+    <ContasPagarContext.Provider value={{ contas, loading, addConta, updateConta, deleteConta, darBaixa }}>
       {children}
     </ContasPagarContext.Provider>
   )

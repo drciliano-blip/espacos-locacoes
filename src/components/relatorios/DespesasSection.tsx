@@ -1,22 +1,19 @@
 'use client'
 
 import { useMemo } from 'react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { formatCurrency } from '@/lib/utils'
+import { DespesasTable, SUBCATEGORIA_LABEL } from './LancamentosTables'
+import type { CategoriaContaPagar } from '@/types'
 
-const SUB_LABELS: Record<string, string> = {
-  aluguel:       'Aluguel',
-  energia:       'Energia',
-  internet:      'Internet',
-  funcionários:  'Funcionários',
-  manutenção:    'Manutenção',
-  fornecedores:  'Fornecedores',
-  extras:        'Extras',
+const CATEGORIAS: CategoriaContaPagar[] = ['operacional', 'obra', 'financeiro']
+const CATEGORIA_LABEL: Record<CategoriaContaPagar, string> = {
+  operacional: 'Operacional', obra: 'Obra', financeiro: 'Financeiro',
 }
-
-const FIXAS_COLOR   = '#25D366'
-const VARIAVEIS_COLOR = '#667781'
+const CATEGORIA_COLOR: Record<CategoriaContaPagar, string> = {
+  operacional: '#0ea5e9', obra: '#f97316', financeiro: '#25D366',
+}
 
 interface Props {
   selectedSpaces?: string[]
@@ -35,82 +32,71 @@ export default function DespesasSection({ selectedSpaces, dataInicio, dataFim }:
     })
   }, [contasPagar, selectedSpaces, dataInicio, dataFim])
 
-  const totais = useMemo(() => {
-    const fixas    = contas.filter(c => c.categoria === 'fixa')
-    const variaveis = contas.filter(c => c.categoria === 'variavel')
+  const total = contas.reduce((s, c) => s + c.valor, 0)
+
+  const porCategoria = useMemo(() => CATEGORIAS.map(cat => {
+    const rows = contas.filter(c => c.categoria === cat)
     return {
-      fixas:    fixas.reduce((s, c) => s + c.valor, 0),
-      variaveis: variaveis.reduce((s, c) => s + c.valor, 0),
-      total:    contas.reduce((s, c) => s + c.valor, 0),
-      fixasPagas:    fixas.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0),
-      variaveisPagas: variaveis.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0),
+      categoria: cat,
+      total: rows.reduce((s, c) => s + c.valor, 0),
+      pagas: rows.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0),
+      pct: total > 0 ? Math.round((rows.reduce((s, c) => s + c.valor, 0) / total) * 100) : 0,
     }
-  }, [contas])
+  }), [contas, total])
 
   const porSubcategoria = useMemo(() => {
-    const map: Record<string, { fixa: number; variavel: number }> = {}
+    const map: Record<string, Record<CategoriaContaPagar, number>> = {}
     for (const c of contas) {
       const sub = c.subcategoria
-      if (!map[sub]) map[sub] = { fixa: 0, variavel: 0 }
-      if (c.categoria === 'fixa') map[sub].fixa += c.valor
-      else map[sub].variavel += c.valor
+      if (!map[sub]) map[sub] = { operacional: 0, obra: 0, financeiro: 0 }
+      map[sub][c.categoria] += c.valor
     }
     return Object.entries(map).map(([sub, vals]) => ({
-      name: SUB_LABELS[sub] ?? sub,
-      Fixas: vals.fixa,
-      Variáveis: vals.variavel,
-    })).sort((a, b) => (b.Fixas + b.Variáveis) - (a.Fixas + a.Variáveis))
+      name: SUBCATEGORIA_LABEL[sub] ?? sub,
+      Operacional: vals.operacional,
+      Obra: vals.obra,
+      Financeiro: vals.financeiro,
+    })).sort((a, b) => (b.Operacional + b.Obra + b.Financeiro) - (a.Operacional + a.Obra + a.Financeiro))
   }, [contas])
-
-  const total = totais.total
-  const pctFixas = total > 0 ? Math.round((totais.fixas / total) * 100) : 0
-  const pctVariaveis = 100 - pctFixas
 
   return (
     <div className="rounded-2xl border border-app-border bg-app-surface p-5 space-y-5">
-      <h3 className="text-sm font-semibold text-app-text">Despesas — Fixas vs. Variáveis</h3>
+      <h3 className="text-sm font-semibold text-app-text">Despesas — Operacional, Obra e Financeiro</h3>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
         <div className="min-w-0 rounded-xl border border-app-border2 bg-app-bg p-4">
           <p className="text-xs text-app-subtle mb-1">Total Despesas</p>
           <p className="text-lg font-bold text-app-text break-words">{formatCurrency(total)}</p>
           <p className="text-xs text-app-subtle mt-1">{contas.length} lançamentos</p>
         </div>
-        <div className="min-w-0 rounded-xl border border-[#25D366]/25 bg-[#25D366]/5 p-4">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <p className="text-xs text-[#128C7E] font-medium">Despesas Fixas</p>
-            <span className="text-xs font-semibold text-[#128C7E] shrink-0">{pctFixas}%</span>
+        {porCategoria.map(c => (
+          <div key={c.categoria} className="min-w-0 rounded-xl border border-app-border2 bg-app-bg p-4">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <p className="text-xs font-medium" style={{ color: CATEGORIA_COLOR[c.categoria] }}>{CATEGORIA_LABEL[c.categoria]}</p>
+              <span className="text-xs font-semibold shrink-0" style={{ color: CATEGORIA_COLOR[c.categoria] }}>{c.pct}%</span>
+            </div>
+            <p className="text-lg font-bold text-app-text break-words">{formatCurrency(c.total)}</p>
+            <p className="text-xs text-app-subtle mt-1 break-words">Pagas: {formatCurrency(c.pagas)}</p>
           </div>
-          <p className="text-lg font-bold text-[#128C7E] break-words">{formatCurrency(totais.fixas)}</p>
-          <p className="text-xs text-app-subtle mt-1 break-words">Pagas: {formatCurrency(totais.fixasPagas)}</p>
-        </div>
-        <div className="min-w-0 rounded-xl border border-app-border2 bg-app-bg p-4">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <p className="text-xs text-app-text2 font-medium">Despesas Variáveis</p>
-            <span className="text-xs font-semibold text-app-text2 shrink-0">{pctVariaveis}%</span>
-          </div>
-          <p className="text-lg font-bold text-app-text2 break-words">{formatCurrency(totais.variaveis)}</p>
-          <p className="text-xs text-app-subtle mt-1 break-words">Pagas: {formatCurrency(totais.variaveisPagas)}</p>
-        </div>
+        ))}
       </div>
 
       {/* Proportion bar */}
       {total > 0 && (
         <div>
           <div className="flex rounded-full overflow-hidden h-3">
-            <div style={{ width: `${pctFixas}%`, backgroundColor: '#25D366' }} />
-            <div style={{ width: `${pctVariaveis}%`, backgroundColor: '#8696A0' }} />
+            {porCategoria.map(c => (
+              <div key={c.categoria} style={{ width: `${c.pct}%`, backgroundColor: CATEGORIA_COLOR[c.categoria] }} />
+            ))}
           </div>
           <div className="flex gap-4 mt-2">
-            <span className="flex items-center gap-1.5 text-xs text-app-muted">
-              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: '#25D366' }} />
-              Fixas {pctFixas}%
-            </span>
-            <span className="flex items-center gap-1.5 text-xs text-app-muted">
-              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: '#8696A0' }} />
-              Variáveis {pctVariaveis}%
-            </span>
+            {porCategoria.map(c => (
+              <span key={c.categoria} className="flex items-center gap-1.5 text-xs text-app-muted">
+                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: CATEGORIA_COLOR[c.categoria] }} />
+                {CATEGORIA_LABEL[c.categoria]} {c.pct}%
+              </span>
+            ))}
           </div>
         </div>
       )}
@@ -129,8 +115,9 @@ export default function DespesasSection({ selectedSpaces, dataInicio, dataFim }:
                 contentStyle={{ background: '#FFFFFF', border: '1px solid #E9EDEF', borderRadius: 8, color: '#111B21', fontSize: 12 }}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="Fixas" fill={FIXAS_COLOR} radius={[3, 3, 0, 0]} maxBarSize={32} />
-              <Bar dataKey="Variáveis" fill={VARIAVEIS_COLOR} radius={[3, 3, 0, 0]} maxBarSize={32} />
+              <Bar dataKey="Operacional" fill={CATEGORIA_COLOR.operacional} radius={[3, 3, 0, 0]} maxBarSize={32} />
+              <Bar dataKey="Obra" fill={CATEGORIA_COLOR.obra} radius={[3, 3, 0, 0]} maxBarSize={32} />
+              <Bar dataKey="Financeiro" fill={CATEGORIA_COLOR.financeiro} radius={[3, 3, 0, 0]} maxBarSize={32} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -144,51 +131,7 @@ export default function DespesasSection({ selectedSpaces, dataInicio, dataFim }:
             <span className="hidden group-open:inline">▼</span>
             Ver lançamentos ({contas.length})
           </summary>
-          <div className="mt-3 overflow-x-auto rounded-lg border border-app-border2">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-app-border bg-app-surface2">
-                  {['Descrição', 'Espaço', 'Categoria', 'Subcategoria', 'Fornecedor/Beneficiário', 'Vencimento', 'Pagamento', 'Valor', 'Status', 'Observações'].map(h => (
-                    <th key={h} className="px-3 py-2 text-left text-app-subtle font-medium whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-app-border/40">
-                {contas.map(c => (
-                  <tr key={c.id} className="hover:bg-app-surface2/30 transition-colors">
-                    <td className="px-3 py-2 text-app-text max-w-[200px] truncate">{c.descricao}</td>
-                    <td className="px-3 py-2 text-app-muted whitespace-nowrap">{c.espaco}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        c.categoria === 'fixa'
-                          ? 'bg-[#25D366]/10 text-[#128C7E]'
-                          : 'bg-app-surface3 text-app-text2'
-                      }`}>
-                        {c.categoria === 'fixa' ? 'Fixa' : 'Variável'}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-app-muted whitespace-nowrap capitalize">{SUB_LABELS[c.subcategoria] ?? c.subcategoria}</td>
-                    <td className="px-3 py-2 text-app-muted whitespace-nowrap">{c.fornecedor ?? '—'}</td>
-                    <td className="px-3 py-2 text-app-muted whitespace-nowrap">{c.dataVencimento.split('-').reverse().join('/')}</td>
-                    <td className="px-3 py-2 text-app-muted whitespace-nowrap">{c.dataPagamento ? c.dataPagamento.split('-').reverse().join('/') : '—'}</td>
-                    <td className="px-3 py-2 font-semibold text-app-text whitespace-nowrap">{formatCurrency(c.valor)}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium border ${
-                        c.status === 'pago'
-                          ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-                          : c.status === 'atrasado'
-                            ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                            : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                      }`}>
-                        {c.status}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-app-muted max-w-[200px] truncate">{c.observacoes ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DespesasTable despesas={contas} />
         </details>
       )}
     </div>

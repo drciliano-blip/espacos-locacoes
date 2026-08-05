@@ -18,9 +18,8 @@ export type TipoEvento = 'Festivo' | 'Corporativo' | 'Audiovisual'
 export type NivelAcesso = 'admin' | 'financeiro' | 'operacional' | 'visualizador'
 
 // Feature 1: Contas a Pagar
-export type CategoriaContaPagar = 'fixa' | 'variavel'
-export type SubcategoriaContaFixa = 'aluguel' | 'energia' | 'internet' | 'funcionários' | 'outros'
-export type SubcategoriaContaVariavel = 'manutenção' | 'fornecedores' | 'extras' | 'outros'
+export type CategoriaContaPagar = 'operacional' | 'obra' | 'financeiro'
+export type SubcategoriaContaPagar = 'aluguel' | 'energia' | 'internet' | 'funcionários' | 'manutenção' | 'fornecedores' | 'extras' | 'outros'
 export type StatusContaPagar = 'pendente' | 'pago' | 'atrasado'
 
 // Feature 6: Documentos por evento
@@ -128,7 +127,7 @@ export interface ContaPagar {
   descricao: string
   espaco: Espaco | 'Todos'
   categoria: CategoriaContaPagar
-  subcategoria: SubcategoriaContaFixa | SubcategoriaContaVariavel
+  subcategoria: SubcategoriaContaPagar
   valor: number
   status: StatusContaPagar
   dataVencimento: string
