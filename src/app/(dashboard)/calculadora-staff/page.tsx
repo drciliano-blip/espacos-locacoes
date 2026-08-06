@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Calculator, Plus, Trash2, RotateCcw } from 'lucide-react'
+import { Calculator, Plus, Trash2, RotateCcw, FileDown } from 'lucide-react'
 import { formatCurrency, parseCurrencyBR } from '@/lib/utils'
 
 // Funções fixas — sempre visíveis, a operadora só preenche a quantidade de cada
@@ -96,17 +96,79 @@ export default function CalculadoraStaffPage() {
   const totalExtras = extras.reduce((s, l) => s + subtotalDe(l.quantidade, l.valorUnitario, l.horasExtras), 0)
   const total = totalFixas + totalExtras
 
+  // Linhas com pelo menos 1 pessoa — só isso entra no PDF exportado pro cliente,
+  // sem poluir com as funções que ficaram zeradas.
+  const linhasPreenchidas = [
+    ...FUNCOES_FIXAS.map(funcao => ({ funcao, ...fixas[funcao] })),
+    ...extras.filter(l => l.funcao.trim()).map(l => ({ funcao: l.funcao, quantidade: l.quantidade, valorUnitario: l.valorUnitario, horasExtras: l.horasExtras })),
+  ].filter(l => (Number(l.quantidade) || 0) > 0)
+
   return (
     <div className="max-w-6xl mx-auto space-y-4">
-      <div>
-        <h1 className="text-lg font-bold text-app-text flex items-center gap-2">
-          <Calculator className="h-5 w-5 text-[#25D366]" />
-          Calculadora de Staff
-        </h1>
-        <p className="text-sm text-app-muted mt-0.5">Preencha a quantidade de cada função e veja o custo total na hora — nada aqui é salvo.</p>
+      {/* Cabeçalho impresso — some na tela, aparece só no PDF exportado */}
+      <div className="hidden print:block mb-6 border-b pb-4">
+        <p className="text-xs text-gray-500 mb-1">Espaços &amp; Locações</p>
+        <h1 className="text-xl font-bold text-gray-900">Calculadora de Staff</h1>
+        {(contexto.pessoas || contexto.duracao) && (
+          <p className="text-sm text-gray-600 mt-1">
+            Staff para {contexto.pessoas ? `${contexto.pessoas} pessoas` : 'o evento'}{contexto.duracao ? ` (${contexto.duracao})` : ''}
+          </p>
+        )}
+        <p className="text-xs text-gray-400 mt-0.5">
+          Gerado em {new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+        </p>
       </div>
 
-      <div className="rounded-xl border border-app-border bg-app-surface p-4 flex flex-wrap gap-4">
+      {/* Tabela limpa, só pro PDF — a tabela editável (inputs) não imprime bem */}
+      <div className="hidden print:block rounded-xl border border-app-border bg-app-surface p-4">
+        {linhasPreenchidas.length === 0 ? (
+          <p className="text-sm text-app-subtle">Nenhuma função com quantidade preenchida.</p>
+        ) : (
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-app-border">
+                {['Função', 'Quantidade', 'Valor Unitário', 'Valor Hora Extra', 'Qtd. Horas Extras', 'Subtotal'].map(h => (
+                  <th key={h} className="px-2 py-1.5 text-left font-medium text-app-subtle uppercase tracking-wide whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-app-border/50">
+              {linhasPreenchidas.map((l, i) => (
+                <tr key={i}>
+                  <td className="px-2 py-1.5 font-medium text-app-text whitespace-nowrap">{l.funcao}</td>
+                  <td className="px-2 py-1.5 text-app-text2">{l.quantidade}</td>
+                  <td className="px-2 py-1.5 text-app-text2">{formatCurrency(l.valorUnitario ? parseCurrencyBR(l.valorUnitario) : 0)}</td>
+                  <td className="px-2 py-1.5 text-app-text2">{formatCurrency(valorHoraExtraDe(l.valorUnitario))}</td>
+                  <td className="px-2 py-1.5 text-app-text2">{l.horasExtras || 0}</td>
+                  <td className="px-2 py-1.5 font-semibold text-app-text">{formatCurrency(subtotalDe(l.quantidade, l.valorUnitario, l.horasExtras))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="print-hidden flex items-center justify-between gap-2 flex-wrap">
+        <div>
+          <h1 className="text-lg font-bold text-app-text flex items-center gap-2">
+            <Calculator className="h-5 w-5 text-[#25D366]" />
+            Calculadora de Staff
+          </h1>
+          <p className="text-sm text-app-muted mt-0.5">Preencha a quantidade de cada função e veja o custo total na hora — nada aqui é salvo.</p>
+        </div>
+        <button
+          onClick={() => window.print()}
+          className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors shrink-0"
+          style={{ backgroundColor: '#25D366' }}
+          onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#128C7E' }}
+          onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#25D366' }}
+        >
+          <FileDown className="h-4 w-4" />
+          Exportar PDF
+        </button>
+      </div>
+
+      <div className="print-hidden rounded-xl border border-app-border bg-app-surface p-4 flex flex-wrap gap-4">
         <div>
           <label className="text-xs text-app-subtle mb-1 block">Número de pessoas (opcional)</label>
           <input
@@ -128,7 +190,7 @@ export default function CalculadoraStaffPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-app-border bg-app-surface overflow-hidden">
+      <div className="print-hidden rounded-xl border border-app-border bg-app-surface overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
