@@ -22,6 +22,7 @@ const VALOR_PADRAO: Record<string, number> = {
 interface LinhaFixa {
   quantidade: string
   valorUnitario: string
+  horasExtras: string
 }
 
 interface LinhaExtra {
@@ -29,24 +30,39 @@ interface LinhaExtra {
   funcao: string
   quantidade: string
   valorUnitario: string
+  horasExtras: string
 }
 
 function linhasFixasIniciais(): Record<string, LinhaFixa> {
   const out: Record<string, LinhaFixa> = {}
   for (const funcao of FUNCOES_FIXAS) {
-    out[funcao] = { quantidade: '', valorUnitario: VALOR_PADRAO[funcao] !== undefined ? String(VALOR_PADRAO[funcao]) : '' }
+    out[funcao] = { quantidade: '', valorUnitario: VALOR_PADRAO[funcao] !== undefined ? String(VALOR_PADRAO[funcao]) : '', horasExtras: '' }
   }
   return out
 }
 
 function novaLinhaExtra(): LinhaExtra {
-  return { id: crypto.randomUUID(), funcao: '', quantidade: '', valorUnitario: '' }
+  return { id: crypto.randomUUID(), funcao: '', quantidade: '', valorUnitario: '', horasExtras: '' }
 }
 
-function subtotalDe(quantidade: string, valorUnitario: string): number {
-  const qtd = Number(quantidade) || 0
+// Valor Unitário remunera até 8h de evento — a hora extra é 1/8 desse valor,
+// recalculada sempre que o Valor Unitário muda.
+function valorHoraExtraDe(valorUnitario: string): number {
   const valor = valorUnitario ? parseCurrencyBR(valorUnitario) : 0
-  return qtd * valor
+  return valor / 8
+}
+
+// Valor Total por profissional = Valor Unitário + (Valor Hora Extra × Qtd. Horas Extras).
+// Sem horas extras, o valor total fica igual ao Valor Unitário.
+function valorTotalDe(valorUnitario: string, horasExtras: string): number {
+  const valor = valorUnitario ? parseCurrencyBR(valorUnitario) : 0
+  const qtdHoras = Number(horasExtras) || 0
+  return valor + valorHoraExtraDe(valorUnitario) * qtdHoras
+}
+
+function subtotalDe(quantidade: string, valorUnitario: string, horasExtras: string): number {
+  const qtd = Number(quantidade) || 0
+  return qtd * valorTotalDe(valorUnitario, horasExtras)
 }
 
 export default function CalculadoraStaffPage() {
@@ -76,12 +92,12 @@ export default function CalculadoraStaffPage() {
     setExtras([])
   }
 
-  const totalFixas = FUNCOES_FIXAS.reduce((s, f) => s + subtotalDe(fixas[f].quantidade, fixas[f].valorUnitario), 0)
-  const totalExtras = extras.reduce((s, l) => s + subtotalDe(l.quantidade, l.valorUnitario), 0)
+  const totalFixas = FUNCOES_FIXAS.reduce((s, f) => s + subtotalDe(fixas[f].quantidade, fixas[f].valorUnitario, fixas[f].horasExtras), 0)
+  const totalExtras = extras.reduce((s, l) => s + subtotalDe(l.quantidade, l.valorUnitario, l.horasExtras), 0)
   const total = totalFixas + totalExtras
 
   return (
-    <div className="max-w-4xl mx-auto space-y-4">
+    <div className="max-w-6xl mx-auto space-y-4">
       <div>
         <h1 className="text-lg font-bold text-app-text flex items-center gap-2">
           <Calculator className="h-5 w-5 text-[#25D366]" />
@@ -118,15 +134,18 @@ export default function CalculadoraStaffPage() {
             <thead>
               <tr className="border-b border-app-border bg-app-surface2/40">
                 <th className="px-3 py-2.5 text-left text-xs font-medium text-app-subtle uppercase tracking-wide">Função</th>
-                <th className="px-3 py-2.5 text-left text-xs font-medium text-app-subtle uppercase tracking-wide w-28">Quantidade</th>
-                <th className="px-3 py-2.5 text-left text-xs font-medium text-app-subtle uppercase tracking-wide w-36">Valor Unitário (R$)</th>
+                <th className="px-3 py-2.5 text-left text-xs font-medium text-app-subtle uppercase tracking-wide w-24">Quantidade</th>
+                <th className="px-3 py-2.5 text-left text-xs font-medium text-app-subtle uppercase tracking-wide w-32">Valor Unitário (R$)</th>
+                <th className="px-3 py-2.5 text-left text-xs font-medium text-app-subtle uppercase tracking-wide w-32">Valor Hora Extra (R$)</th>
+                <th className="px-3 py-2.5 text-left text-xs font-medium text-app-subtle uppercase tracking-wide w-28">Qtd. Horas Extras</th>
                 <th className="px-3 py-2.5 text-right text-xs font-medium text-app-subtle uppercase tracking-wide w-32">Subtotal</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-app-border/50">
               {FUNCOES_FIXAS.map(funcao => {
                 const linha = fixas[funcao]
-                const subtotal = subtotalDe(linha.quantidade, linha.valorUnitario)
+                const horaExtra = valorHoraExtraDe(linha.valorUnitario)
+                const subtotal = subtotalDe(linha.quantidade, linha.valorUnitario, linha.horasExtras)
                 return (
                   <tr key={funcao}>
                     <td className="px-3 py-2 font-medium text-app-text whitespace-nowrap">{funcao}</td>
@@ -148,32 +167,52 @@ export default function CalculadoraStaffPage() {
                         className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-sm text-app-text focus:outline-none"
                       />
                     </td>
+                    <td className="px-3 py-2 text-app-muted whitespace-nowrap">{formatCurrency(horaExtra)}</td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="number" min="0" inputMode="numeric"
+                        value={linha.horasExtras}
+                        onChange={e => atualizarFixa(funcao, { horasExtras: e.target.value })}
+                        placeholder="0"
+                        className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-sm text-app-text focus:outline-none"
+                      />
+                    </td>
                     <td className="px-3 py-2 text-right font-semibold text-app-text whitespace-nowrap">{formatCurrency(subtotal)}</td>
                   </tr>
                 )
               })}
 
-              {extras.map(l => (
-                <tr key={l.id} className="bg-app-surface2/20">
-                  <td className="px-3 py-2">
-                    <input
-                      value={l.funcao}
-                      onChange={e => atualizarExtra(l.id, { funcao: e.target.value })}
-                      placeholder="Nome da função"
-                      className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-sm text-app-text focus:outline-none"
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="number" min="0" inputMode="numeric"
-                      value={l.quantidade}
-                      onChange={e => atualizarExtra(l.id, { quantidade: e.target.value })}
-                      placeholder="0"
-                      className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-sm text-app-text focus:outline-none"
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex items-center gap-1.5">
+              {extras.map(l => {
+                const horaExtra = valorHoraExtraDe(l.valorUnitario)
+                return (
+                  <tr key={l.id} className="bg-app-surface2/20">
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          value={l.funcao}
+                          onChange={e => atualizarExtra(l.id, { funcao: e.target.value })}
+                          placeholder="Nome da função"
+                          className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-sm text-app-text focus:outline-none"
+                        />
+                        <button
+                          onClick={() => removerExtra(l.id)}
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-app-subtle hover:bg-red-500/10 hover:text-red-500 transition-colors"
+                          title="Remover"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="number" min="0" inputMode="numeric"
+                        value={l.quantidade}
+                        onChange={e => atualizarExtra(l.id, { quantidade: e.target.value })}
+                        placeholder="0"
+                        className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-sm text-app-text focus:outline-none"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
                       <input
                         type="text" inputMode="decimal"
                         value={l.valorUnitario}
@@ -181,18 +220,21 @@ export default function CalculadoraStaffPage() {
                         placeholder="0,00"
                         className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-sm text-app-text focus:outline-none"
                       />
-                      <button
-                        onClick={() => removerExtra(l.id)}
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-app-subtle hover:bg-red-500/10 hover:text-red-500 transition-colors"
-                        title="Remover"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 text-right font-semibold text-app-text whitespace-nowrap">{formatCurrency(subtotalDe(l.quantidade, l.valorUnitario))}</td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-3 py-2 text-app-muted whitespace-nowrap">{formatCurrency(horaExtra)}</td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="number" min="0" inputMode="numeric"
+                        value={l.horasExtras}
+                        onChange={e => atualizarExtra(l.id, { horasExtras: e.target.value })}
+                        placeholder="0"
+                        className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-sm text-app-text focus:outline-none"
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-right font-semibold text-app-text whitespace-nowrap">{formatCurrency(subtotalDe(l.quantidade, l.valorUnitario, l.horasExtras))}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
