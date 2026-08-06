@@ -78,8 +78,20 @@ export default function DashboardPage() {
     .filter((p) => p.status === 'atrasado')
     .reduce((s, p) => s + p.valor, 0)
 
+  // Um evento do próprio dia só deixa de ser "próximo" depois que o horário de
+  // término dele já passou — mesmo critério usado na Agenda.
+  const hojeSemHora = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate())
   const proximosEventos = eventosFiltrados
-    .filter((e) => e.status === 'confirmado')
+    .filter((e) => {
+      if (e.status !== 'confirmado') return false
+      const [y, m, d] = e.data.split('-').map(Number)
+      const dataEvento = new Date(y, m - 1, d)
+      if (dataEvento.getTime() !== hojeSemHora.getTime()) return dataEvento.getTime() > hojeSemHora.getTime()
+      if (!e.horaFim) return true
+      const [hh, mm] = e.horaFim.split(':').map(Number)
+      const fimEvento = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), hh || 0, mm || 0)
+      return hoje.getTime() <= fimEvento.getTime()
+    })
     .sort((a, b) => a.data.localeCompare(b.data))
     .slice(0, 5)
 
