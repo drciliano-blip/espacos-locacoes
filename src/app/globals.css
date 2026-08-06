@@ -89,6 +89,15 @@ body {
 
   body { background: #fff; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
+  /* O shell do dashboard é uma janela de altura fixa com scroll (h-screen +
+     overflow-hidden/overflow-y-auto) — sem isso, a impressão só captura o que
+     está visível na tela no momento do print e corta o resto do relatório,
+     sempre saindo "Página 1 de 1" mesmo com muito mais conteúdo abaixo. */
+  html, body, #app-shell, #app-shell-inner, #app-main {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
   table { border-collapse: collapse; font-size: 9px; table-layout: auto; width: 100%; }
   th, td { border: 1px solid #e2e8f0; padding: 3px 5px; color: #0f172a !important; white-space: normal !important; word-break: break-word; }
 
