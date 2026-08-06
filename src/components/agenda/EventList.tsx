@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { Clock, MapPin } from 'lucide-react'
 import type { Evento, TipoEvento } from '@/types'
 import { formatDate, formatCurrency } from '@/lib/utils'
@@ -28,6 +29,19 @@ const tipoEventoColors: Record<TipoEvento, string> = {
   'Audiovisual': 'bg-orange-500/10 text-orange-400',
 }
 
+// Um evento do próprio dia só vira "passado" depois que o horário de término dele já
+// passou — antes disso, mesmo sendo hoje, ainda conta como "próximo".
+function isEventoPassado(evento: Evento, agora: Date): boolean {
+  const [y, m, d] = evento.data.split('-').map(Number)
+  const dataEvento = new Date(y, m - 1, d)
+  const hoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate())
+  if (dataEvento.getTime() !== hoje.getTime()) return dataEvento.getTime() < hoje.getTime()
+  if (!evento.horaFim) return false
+  const [hh, mm] = evento.horaFim.split(':').map(Number)
+  const fimEvento = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), hh || 0, mm || 0)
+  return agora.getTime() > fimEvento.getTime()
+}
+
 interface EventListProps {
   eventos: Evento[]
   selectedDate?: Date | null
@@ -35,6 +49,8 @@ interface EventListProps {
 }
 
 export default function EventList({ eventos, selectedDate, onEventoClick }: EventListProps) {
+  const [aba, setAba] = useState<'proximos' | 'passados'>('proximos')
+
   const filtered = selectedDate
     ? eventos.filter((e) => {
         const [y, m, d] = e.data.split('-').map(Number)
@@ -45,17 +61,42 @@ export default function EventList({ eventos, selectedDate, onEventoClick }: Even
           date.getDate() === selectedDate.getDate()
         )
       })
-    : [...eventos].sort((a, b) => a.data.localeCompare(b.data))
+    : (() => {
+        const agora = new Date()
+        const proximos = eventos.filter(e => !isEventoPassado(e, agora)).sort((a, b) => a.data.localeCompare(b.data))
+        const passados = eventos.filter(e => isEventoPassado(e, agora)).sort((a, b) => b.data.localeCompare(a.data))
+        return aba === 'proximos' ? proximos : passados
+      })()
 
   return (
     <div className="rounded-xl border border-app-border bg-app-surface p-5">
-      <h3 className="text-sm font-semibold text-app-text mb-4">
-        {selectedDate ? `Eventos em ${formatDate(selectedDate.toISOString().split('T')[0])}` : 'Próximos Eventos'}
-        <span className="ml-2 text-xs font-normal text-app-muted">({filtered.length})</span>
-      </h3>
+      {selectedDate ? (
+        <h3 className="text-sm font-semibold text-app-text mb-4">
+          {`Eventos em ${formatDate(selectedDate.toISOString().split('T')[0])}`}
+          <span className="ml-2 text-xs font-normal text-app-muted">({filtered.length})</span>
+        </h3>
+      ) : (
+        <div className="flex items-center gap-1 mb-4">
+          {(['proximos', 'passados'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setAba(tab)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                aba === tab ? 'text-white' : 'bg-[#F0F2F5] text-[#667781] hover:bg-[#E9EDEF]'
+              }`}
+              style={aba === tab ? { backgroundColor: '#25D366' } : undefined}
+            >
+              {tab === 'proximos' ? 'Próximos Eventos' : 'Eventos Passados'}
+            </button>
+          ))}
+          <span className="ml-2 text-xs font-normal text-app-muted">({filtered.length})</span>
+        </div>
+      )}
 
       {filtered.length === 0 ? (
-        <p className="text-sm text-app-subtle py-6 text-center">Nenhum evento nesta data.</p>
+        <p className="text-sm text-app-subtle py-6 text-center">
+          {selectedDate ? 'Nenhum evento nesta data.' : aba === 'proximos' ? 'Nenhum evento próximo.' : 'Nenhum evento passado.'}
+        </p>
       ) : (
         <div className="space-y-2">
           {filtered.map((evento) => (
