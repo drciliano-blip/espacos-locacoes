@@ -4,76 +4,81 @@ import { useState } from 'react'
 import { Calculator, Plus, Trash2, RotateCcw } from 'lucide-react'
 import { formatCurrency, parseCurrencyBR } from '@/lib/utils'
 
-const FUNCOES = [
+// Funções fixas — sempre visíveis, a operadora só preenche a quantidade de cada
+// uma pra agilizar o preenchimento (não precisa selecionar função por função).
+const FUNCOES_FIXAS = [
   'Barman', 'Chefe de Bar', 'Atendente de Bar', 'Segurança', 'Bombeiro', 'Policial',
   'Técnico de Som', 'Técnico de Luz', 'Hostess', 'Recepção', 'Caixa', 'Limpeza', 'Chapelaria',
 ] as const
 
-// Valores de referência — só preenchem o campo automaticamente ao escolher a função,
-// continuam 100% editáveis linha a linha depois.
+// Valores de referência — só preenchem o campo automaticamente, continuam 100%
+// editáveis (o valor pode mudar de evento pra evento).
 const VALOR_PADRAO: Record<string, number> = {
   'Técnico de Som': 400, 'Técnico de Luz': 400, 'Segurança': 200, 'Bombeiro': 210,
   'Policial': 500, 'Limpeza': 230, 'Recepção': 150, 'Caixa': 150, 'Chapelaria': 150,
   'Chefe de Bar': 160, 'Atendente de Bar': 140,
 }
 
-const OUTRA = 'Outra categoria'
-
-interface Linha {
-  id: string
-  funcao: string
-  funcaoCustom: string
+interface LinhaFixa {
   quantidade: string
   valorUnitario: string
 }
 
-function novaLinha(): Linha {
-  const funcao = FUNCOES[0]
-  return {
-    id: crypto.randomUUID(),
-    funcao,
-    funcaoCustom: '',
-    quantidade: '1',
-    valorUnitario: VALOR_PADRAO[funcao] !== undefined ? String(VALOR_PADRAO[funcao]) : '',
+interface LinhaExtra {
+  id: string
+  funcao: string
+  quantidade: string
+  valorUnitario: string
+}
+
+function linhasFixasIniciais(): Record<string, LinhaFixa> {
+  const out: Record<string, LinhaFixa> = {}
+  for (const funcao of FUNCOES_FIXAS) {
+    out[funcao] = { quantidade: '', valorUnitario: VALOR_PADRAO[funcao] !== undefined ? String(VALOR_PADRAO[funcao]) : '' }
   }
+  return out
+}
+
+function novaLinhaExtra(): LinhaExtra {
+  return { id: crypto.randomUUID(), funcao: '', quantidade: '', valorUnitario: '' }
+}
+
+function subtotalDe(quantidade: string, valorUnitario: string): number {
+  const qtd = Number(quantidade) || 0
+  const valor = valorUnitario ? parseCurrencyBR(valorUnitario) : 0
+  return qtd * valor
 }
 
 export default function CalculadoraStaffPage() {
   const [contexto, setContexto] = useState({ pessoas: '', duracao: '' })
-  const [linhas, setLinhas] = useState<Linha[]>([novaLinha()])
+  const [fixas, setFixas] = useState<Record<string, LinhaFixa>>(linhasFixasIniciais)
+  const [extras, setExtras] = useState<LinhaExtra[]>([])
 
-  function atualizarLinha(id: string, patch: Partial<Linha>) {
-    setLinhas(prev => prev.map(l => (l.id === id ? { ...l, ...patch } : l)))
+  function atualizarFixa(funcao: string, patch: Partial<LinhaFixa>) {
+    setFixas(prev => ({ ...prev, [funcao]: { ...prev[funcao], ...patch } }))
   }
 
-  function trocarFuncao(id: string, funcao: string) {
-    setLinhas(prev => prev.map(l => {
-      if (l.id !== id) return l
-      const valorPadrao = VALOR_PADRAO[funcao]
-      return { ...l, funcao, valorUnitario: valorPadrao !== undefined ? String(valorPadrao) : l.valorUnitario }
-    }))
+  function atualizarExtra(id: string, patch: Partial<LinhaExtra>) {
+    setExtras(prev => prev.map(l => (l.id === id ? { ...l, ...patch } : l)))
   }
 
-  function adicionarLinha() {
-    setLinhas(prev => [...prev, novaLinha()])
+  function adicionarExtra() {
+    setExtras(prev => [...prev, novaLinhaExtra()])
   }
 
-  function removerLinha(id: string) {
-    setLinhas(prev => (prev.length > 1 ? prev.filter(l => l.id !== id) : prev))
+  function removerExtra(id: string) {
+    setExtras(prev => prev.filter(l => l.id !== id))
   }
 
   function limparTudo() {
     setContexto({ pessoas: '', duracao: '' })
-    setLinhas([novaLinha()])
+    setFixas(linhasFixasIniciais())
+    setExtras([])
   }
 
-  const linhasComSubtotal = linhas.map(l => {
-    const quantidadeNum = Number(l.quantidade) || 0
-    const valorNum = l.valorUnitario ? parseCurrencyBR(l.valorUnitario) : 0
-    return { ...l, subtotal: quantidadeNum * valorNum }
-  })
-
-  const total = linhasComSubtotal.reduce((s, l) => s + l.subtotal, 0)
+  const totalFixas = FUNCOES_FIXAS.reduce((s, f) => s + subtotalDe(fixas[f].quantidade, fixas[f].valorUnitario), 0)
+  const totalExtras = extras.reduce((s, l) => s + subtotalDe(l.quantidade, l.valorUnitario), 0)
+  const total = totalFixas + totalExtras
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">
@@ -82,7 +87,7 @@ export default function CalculadoraStaffPage() {
           <Calculator className="h-5 w-5 text-[#25D366]" />
           Calculadora de Staff
         </h1>
-        <p className="text-sm text-app-muted mt-0.5">Monte a equipe do evento e veja o custo total na hora — nada aqui é salvo.</p>
+        <p className="text-sm text-app-muted mt-0.5">Preencha a quantidade de cada função e veja o custo total na hora — nada aqui é salvo.</p>
       </div>
 
       <div className="rounded-xl border border-app-border bg-app-surface p-4 flex flex-wrap gap-4">
@@ -116,58 +121,76 @@ export default function CalculadoraStaffPage() {
                 <th className="px-3 py-2.5 text-left text-xs font-medium text-app-subtle uppercase tracking-wide w-28">Quantidade</th>
                 <th className="px-3 py-2.5 text-left text-xs font-medium text-app-subtle uppercase tracking-wide w-36">Valor Unitário (R$)</th>
                 <th className="px-3 py-2.5 text-right text-xs font-medium text-app-subtle uppercase tracking-wide w-32">Subtotal</th>
-                <th className="w-10" />
               </tr>
             </thead>
             <tbody className="divide-y divide-app-border/50">
-              {linhasComSubtotal.map(l => (
-                <tr key={l.id}>
-                  <td className="px-3 py-2 align-top">
-                    <select
-                      value={l.funcao}
-                      onChange={e => trocarFuncao(l.id, e.target.value)}
-                      className="w-full cursor-pointer rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-sm text-app-text focus:outline-none"
-                    >
-                      {FUNCOES.map(f => <option key={f} value={f}>{f}</option>)}
-                      <option value={OUTRA}>{OUTRA}</option>
-                    </select>
-                    {l.funcao === OUTRA && (
+              {FUNCOES_FIXAS.map(funcao => {
+                const linha = fixas[funcao]
+                const subtotal = subtotalDe(linha.quantidade, linha.valorUnitario)
+                return (
+                  <tr key={funcao}>
+                    <td className="px-3 py-2 font-medium text-app-text whitespace-nowrap">{funcao}</td>
+                    <td className="px-3 py-2">
                       <input
-                        value={l.funcaoCustom}
-                        onChange={e => atualizarLinha(l.id, { funcaoCustom: e.target.value })}
-                        placeholder="Nome da função"
-                        className="mt-1.5 w-full rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-sm text-app-text focus:outline-none"
+                        type="number" min="0" inputMode="numeric"
+                        value={linha.quantidade}
+                        onChange={e => atualizarFixa(funcao, { quantidade: e.target.value })}
+                        placeholder="0"
+                        className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-sm text-app-text focus:outline-none"
                       />
-                    )}
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="text" inputMode="decimal"
+                        value={linha.valorUnitario}
+                        onChange={e => atualizarFixa(funcao, { valorUnitario: e.target.value })}
+                        placeholder="0,00"
+                        className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-sm text-app-text focus:outline-none"
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-right font-semibold text-app-text whitespace-nowrap">{formatCurrency(subtotal)}</td>
+                  </tr>
+                )
+              })}
+
+              {extras.map(l => (
+                <tr key={l.id} className="bg-app-surface2/20">
+                  <td className="px-3 py-2">
+                    <input
+                      value={l.funcao}
+                      onChange={e => atualizarExtra(l.id, { funcao: e.target.value })}
+                      placeholder="Nome da função"
+                      className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-sm text-app-text focus:outline-none"
+                    />
                   </td>
-                  <td className="px-3 py-2 align-top">
+                  <td className="px-3 py-2">
                     <input
                       type="number" min="0" inputMode="numeric"
                       value={l.quantidade}
-                      onChange={e => atualizarLinha(l.id, { quantidade: e.target.value })}
+                      onChange={e => atualizarExtra(l.id, { quantidade: e.target.value })}
+                      placeholder="0"
                       className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-sm text-app-text focus:outline-none"
                     />
                   </td>
-                  <td className="px-3 py-2 align-top">
-                    <input
-                      type="text" inputMode="decimal"
-                      value={l.valorUnitario}
-                      onChange={e => atualizarLinha(l.id, { valorUnitario: e.target.value })}
-                      placeholder="0,00"
-                      className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-sm text-app-text focus:outline-none"
-                    />
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text" inputMode="decimal"
+                        value={l.valorUnitario}
+                        onChange={e => atualizarExtra(l.id, { valorUnitario: e.target.value })}
+                        placeholder="0,00"
+                        className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-sm text-app-text focus:outline-none"
+                      />
+                      <button
+                        onClick={() => removerExtra(l.id)}
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-app-subtle hover:bg-red-500/10 hover:text-red-500 transition-colors"
+                        title="Remover"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </td>
-                  <td className="px-3 py-2 align-top text-right font-semibold text-app-text whitespace-nowrap">{formatCurrency(l.subtotal)}</td>
-                  <td className="px-3 py-2 align-top text-center">
-                    <button
-                      onClick={() => removerLinha(l.id)}
-                      disabled={linhas.length === 1}
-                      className="flex h-7 w-7 items-center justify-center rounded-md text-app-subtle hover:bg-red-500/10 hover:text-red-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                      title="Remover"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </td>
+                  <td className="px-3 py-2 text-right font-semibold text-app-text whitespace-nowrap">{formatCurrency(subtotalDe(l.quantidade, l.valorUnitario))}</td>
                 </tr>
               ))}
             </tbody>
@@ -176,11 +199,11 @@ export default function CalculadoraStaffPage() {
 
         <div className="flex items-center justify-between px-3 py-3 border-t border-app-border">
           <button
-            onClick={adicionarLinha}
+            onClick={adicionarExtra}
             className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs font-medium text-app-muted hover:bg-app-surface2 hover:text-app-text transition-colors"
           >
             <Plus className="h-3.5 w-3.5" />
-            Adicionar função
+            Adicionar outra função
           </button>
           <button
             onClick={limparTudo}
