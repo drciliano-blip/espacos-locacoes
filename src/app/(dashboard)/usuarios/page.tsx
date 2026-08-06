@@ -40,14 +40,14 @@ const roleConfig: Record<NivelAcesso, { label: string; color: string; icon: Reac
 }
 
 const permissionsMatrix: Record<NivelAcesso, string[]> = {
-  admin: ['Dashboard', 'Agenda', 'Pagamentos', 'Eventos', 'Relatórios', 'Contas a Pagar', 'Usuários', 'Espaços'],
+  admin: ['Dashboard', 'Agenda', 'Pagamentos', 'Eventos', 'Relatórios', 'Contas a Pagar', 'Usuários', 'Espaços', 'Calculadora de Staff'],
   financeiro: ['Dashboard', 'Pagamentos', 'Eventos', 'Relatórios', 'Contas a Pagar'],
-  operacional: ['Dashboard', 'Agenda', 'Eventos', 'Espaços'],
+  operacional: ['Dashboard', 'Agenda', 'Eventos', 'Espaços', 'Calculadora de Staff'],
   visualizador: ['Dashboard'],
   socio: ['Dashboard', 'Agenda', 'Eventos', 'Relatórios', 'Espaços'],
 }
 
-const allPages = ['Dashboard', 'Agenda', 'Pagamentos', 'Eventos', 'Relatórios', 'Contas a Pagar', 'Usuários', 'Espaços']
+const allPages = ['Dashboard', 'Agenda', 'Pagamentos', 'Eventos', 'Relatórios', 'Contas a Pagar', 'Usuários', 'Espaços', 'Calculadora de Staff']
 
 export default function UsuariosPage() {
   const { espacosConfig } = useEspacos()

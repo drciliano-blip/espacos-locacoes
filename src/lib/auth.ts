@@ -1,9 +1,9 @@
 import type { NivelAcesso } from '@/types'
 
 export const ROLE_PERMISSIONS: Record<NivelAcesso, string[]> = {
-  admin: ['dashboard', 'agenda', 'pagamentos', 'eventos', 'relatorios', 'espacos', 'contas-a-pagar', 'usuarios'],
+  admin: ['dashboard', 'agenda', 'pagamentos', 'eventos', 'relatorios', 'espacos', 'contas-a-pagar', 'usuarios', 'calculadora-staff'],
   financeiro: ['dashboard', 'pagamentos', 'eventos', 'relatorios', 'contas-a-pagar'],
-  operacional: ['dashboard', 'agenda', 'eventos', 'espacos'],
+  operacional: ['dashboard', 'agenda', 'eventos', 'espacos', 'calculadora-staff'],
   visualizador: ['dashboard'],
   // Somente leitura, e restrito aos espaços vinculados a ele via RLS —
   // o filtro de dados por espaço acontece no banco, isso aqui só libera as páginas.
