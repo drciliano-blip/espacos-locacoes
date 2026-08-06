@@ -5,12 +5,11 @@ import { ArrowUpCircle, ArrowDownCircle, Wallet } from 'lucide-react'
 import { useReceitas } from '@/contexts/ReceitasContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { useEspacos } from '@/contexts/EspacosContext'
-import { useEventos } from '@/contexts/EventosContext'
 import { formatCurrency } from '@/lib/utils'
 import { DIVISAO_SOCIOS } from '@/lib/socios-config'
-import { ReceitasTable, DespesasTable } from './LancamentosTables'
+import { DespesasTable } from './LancamentosTables'
 import type { Receita } from '@/contexts/ReceitasContext'
-import type { ContaPagar, Evento } from '@/types'
+import type { ContaPagar } from '@/types'
 
 interface Props {
   selectedSpaces?: string[]
@@ -22,8 +21,6 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
   const { receitas } = useReceitas()
   const { contas: contasPagar } = useContasPagar()
   const { espacosConfig } = useEspacos()
-  const { eventos } = useEventos()
-  const eventosPorId = useMemo(() => new Map(eventos.map(e => [e.id, e])), [eventos])
 
   const entradas = useMemo(() => receitas.filter(r => {
     const matchEspaco = !selectedSpaces?.length || (r.espaco && selectedSpaces.includes(r.espaco))
@@ -89,7 +86,7 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
       {/* Relatório por espaço */}
       <div className="space-y-4">
         {porEspaco.map(e => (
-          <EspacoReportCard key={e.nome} {...e} eventosPorId={eventosPorId} />
+          <EspacoReportCard key={e.nome} {...e} />
         ))}
         {espacos.length === 0 && (
           <p className="text-sm text-app-subtle text-center py-4">Nenhum espaço cadastrado.</p>
@@ -124,47 +121,26 @@ interface EspacoReportCardProps {
   despesaTotal: number
   lucro: number
   socios: { nome: string; percentual: number; valor: number }[]
-  eventosPorId: Map<string, Evento>
 }
 
-function EspacoReportCard({ nome, entradasEspaco, saidasEspaco, receitaTotal, despesaTotal, lucro, socios, eventosPorId }: EspacoReportCardProps) {
+function EspacoReportCard({ nome, entradasEspaco, saidasEspaco, receitaTotal, despesaTotal, lucro, socios }: EspacoReportCardProps) {
   return (
     <div className="rounded-lg border border-app-border2/60 bg-app-bg p-4 space-y-3">
-      <p className="text-sm font-semibold text-app-text">{nome}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-app-text">{nome}</p>
+        <p className="text-xs text-app-subtle">{entradasEspaco.length} receita(s) · {saidasEspaco.length} despesa(s)</p>
+      </div>
 
-      {/* Receita discriminada */}
-      <details className="group">
-        <summary className="cursor-pointer text-xs font-medium text-app-muted hover:text-app-text transition-colors list-none flex items-center justify-between gap-1">
-          <span className="flex items-center gap-1">
-            <span className="group-open:hidden">▶</span>
-            <span className="hidden group-open:inline">▼</span>
-            Receita discriminada ({entradasEspaco.length})
-          </span>
-          <span className="font-semibold text-emerald-600">Total: {formatCurrency(receitaTotal)}</span>
-        </summary>
-        {entradasEspaco.length === 0 ? (
-          <p className="text-xs italic text-app-subtle mt-2">Nenhum lançamento no período.</p>
-        ) : (
-          <ReceitasTable receitas={entradasEspaco} eventosPorId={eventosPorId} />
-        )}
-      </details>
-
-      {/* Despesa discriminada */}
-      <details className="group">
-        <summary className="cursor-pointer text-xs font-medium text-app-muted hover:text-app-text transition-colors list-none flex items-center justify-between gap-1">
-          <span className="flex items-center gap-1">
-            <span className="group-open:hidden">▶</span>
-            <span className="hidden group-open:inline">▼</span>
-            Despesa discriminada ({saidasEspaco.length})
-          </span>
-          <span className="font-semibold text-red-500">Total: {formatCurrency(despesaTotal)}</span>
-        </summary>
-        {saidasEspaco.length === 0 ? (
-          <p className="text-xs italic text-app-subtle mt-2">Nenhum lançamento no período.</p>
-        ) : (
-          <DespesasTable despesas={saidasEspaco} />
-        )}
-      </details>
+      <div className="grid grid-cols-2 gap-3 text-xs">
+        <div>
+          <p className="text-app-subtle">Total de Entradas</p>
+          <p className="font-semibold text-emerald-600">{formatCurrency(receitaTotal)}</p>
+        </div>
+        <div>
+          <p className="text-app-subtle">Total de Saídas</p>
+          <p className="font-semibold text-red-500">{formatCurrency(despesaTotal)}</p>
+        </div>
+      </div>
 
       <div className="flex items-center justify-between pt-1 border-t border-app-border/50">
         <span className="text-xs font-medium text-app-muted">Lucro</span>
