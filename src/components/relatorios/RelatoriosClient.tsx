@@ -11,6 +11,7 @@ import OccupancyAreaChart from './OccupancyAreaChart'
 import ProjectionChart from './ProjectionChart'
 import SummaryTable from './SummaryTable'
 import { aggregateMonthly, calcularProjecoes, getPeriodRange } from '@/lib/relatorios-utils'
+import { formatCurrency } from '@/lib/utils'
 import { useEventos } from '@/contexts/EventosContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
@@ -97,12 +98,89 @@ export default function RelatoriosClient() {
 
   const periodoLabel = PERIODO_LABELS[filters.periodo] ?? filters.periodo
 
-  function handleExportExcel() {
-    const selectedSpaces = filters.espacos.length > 0 ? filters.espacos : undefined
-    const espacosParaTabela = selectedSpaces
-      ? espacosConfig.filter(e => selectedSpaces.includes(e.nome))
-      : espacosConfig
+  const selectedSpaces = filters.espacos.length > 0 ? filters.espacos : undefined
+  const espacosParaTabela = useMemo(
+    () => selectedSpaces ? espacosConfig.filter(e => selectedSpaces.includes(e.nome)) : espacosConfig,
+    [espacosConfig, selectedSpaces],
+  )
 
+  const eventosPorId = useMemo(() => new Map(eventos.map(e => [e.id, e])), [eventos])
+
+  // Mesmo filtro de espaço/período usado em todo o resto da tela (RelatorioMensalSection,
+  // DespesasSection) — fonte única tanto pra exportação quanto pras tabelas de detalhamento
+  // exibidas na própria tela (garante que tela, PDF e Excel mostrem sempre os mesmos números).
+  const entradas = useMemo(() => receitas.filter(r => {
+    const matchEspaco = !selectedSpaces || (r.espaco && selectedSpaces.includes(r.espaco))
+    const matchInicio = !filters.dataInicio || r.data >= filters.dataInicio
+    const matchFim = !filters.dataFim || r.data <= filters.dataFim
+    return matchEspaco && matchInicio && matchFim
+  }), [receitas, selectedSpaces, filters.dataInicio, filters.dataFim])
+
+  const saidas = useMemo(() => contasPagar.filter(c => {
+    const matchEspaco = !selectedSpaces || selectedSpaces.includes(c.espaco)
+    const matchInicio = !filters.dataInicio || c.dataVencimento >= filters.dataInicio
+    const matchFim = !filters.dataFim || c.dataVencimento <= filters.dataFim
+    return matchEspaco && matchInicio && matchFim
+  }), [contasPagar, selectedSpaces, filters.dataInicio, filters.dataFim])
+
+  const eventosPorEspacoRows = useMemo(() => {
+    const nomes = Array.from(new Set(aggregates.flatMap(m => Object.keys(m.eventosPorEspaco))))
+    return { nomes, linhas: aggregates.map(m => ({ label: m.label, valores: nomes.map(nome => m.eventosPorEspaco[nome] ?? 0) })) }
+  }, [aggregates])
+
+  const eventosPorCategoriaRows = useMemo(() => {
+    const nomes = Array.from(new Set(aggregates.flatMap(m => Object.keys(m.eventosPorCategoria))))
+    return { nomes, linhas: aggregates.map(m => ({ label: m.label, valores: nomes.map(cat => m.eventosPorCategoria[cat] ?? 0) })) }
+  }, [aggregates])
+
+  // Receita por categoria (mesmo cálculo do gráfico de pizza — considera todas as
+  // receitas do período/espaço filtrado, independente do status)
+  const receitaPorCategoriaRows = useMemo(() => {
+    const catMap: Record<string, number> = {}
+    for (const r of entradas) catMap[r.categoriaNome] = (catMap[r.categoriaNome] ?? 0) + r.valor
+    const total = Object.values(catMap).reduce((s, v) => s + v, 0)
+    return Object.entries(catMap)
+      .sort((a, b) => b[1] - a[1])
+      .map(([nome, valor]) => ({ nome, valor, pct: total > 0 ? Math.round((valor / total) * 100) : 0 }))
+  }, [entradas])
+
+  // Despesas por categoria/subcategoria (mesmos totais dos cards e do gráfico de
+  // barras da seção "Despesas — Operacional, Obra e Financeiro")
+  const CATEGORIAS_DESPESA = ['operacional', 'obra', 'financeiro'] as const
+  const CATEGORIA_DESPESA_LABEL: Record<string, string> = { operacional: 'Operacional', obra: 'Obra', financeiro: 'Financeiro' }
+  const despesasPorCategoriaRows = useMemo(() => {
+    const totalGeral = saidas.reduce((s, c) => s + c.valor, 0)
+    return CATEGORIAS_DESPESA.map(cat => {
+      const rows = saidas.filter(c => c.categoria === cat)
+      const total = rows.reduce((s, c) => s + c.valor, 0)
+      const pagas = rows.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0)
+      return { categoria: CATEGORIA_DESPESA_LABEL[cat], total, pagas, pct: totalGeral > 0 ? Math.round((total / totalGeral) * 100) : 0 }
+    })
+  }, [saidas])
+
+  const despesasPorSubcategoriaRows = useMemo(() => {
+    const map: Record<string, Record<string, number>> = {}
+    for (const c of saidas) {
+      if (!map[c.subcategoria]) map[c.subcategoria] = { operacional: 0, obra: 0, financeiro: 0 }
+      map[c.subcategoria][c.categoria] += c.valor
+    }
+    return Object.entries(map).map(([sub, vals]) => ({
+      nome: SUBCATEGORIA_LABEL[sub] ?? sub, operacional: vals.operacional, obra: vals.obra, financeiro: vals.financeiro,
+    }))
+  }, [saidas])
+
+  // Fluxo de caixa e divisão de lucros mês a mês, por espaço — mesmos dados da seção
+  // "Fluxo de Caixa por Espaço", só que para TODOS os espaços filtrados de uma vez (a
+  // seção interativa só mostra um espaço por vez no seletor dela).
+  const fluxoPorEspaco = useMemo(() => {
+    const meses = gerarMesesDoPeriodo(filters.dataInicio, filters.dataFim)
+    return espacosParaTabela.map(e => ({
+      espaco: e,
+      meses: aggregateFluxoCaixa(e.nome, meses, receitas, contasPagar, repasses),
+    }))
+  }, [espacosParaTabela, filters.dataInicio, filters.dataFim, receitas, contasPagar, repasses])
+
+  function handleExportExcel() {
     const resumoMensal: ExportSheet = {
       name: 'Resumo Mensal',
       rows: [
@@ -114,13 +192,6 @@ export default function RelatoriosClient() {
       ],
     }
 
-    const eventosPorId = new Map(eventos.map(e => [e.id, e]))
-    const entradas = receitas.filter(r => {
-      const matchEspaco = !selectedSpaces || (r.espaco && selectedSpaces.includes(r.espaco))
-      const matchInicio = !filters.dataInicio || r.data >= filters.dataInicio
-      const matchFim = !filters.dataFim || r.data <= filters.dataFim
-      return matchEspaco && matchInicio && matchFim
-    })
     // Mesmas colunas exibidas na tela (Relatório Mensal) — nenhum lançamento ou
     // campo cadastrado fica de fora da exportação.
     const receitasSheet: ExportSheet = {
@@ -139,12 +210,6 @@ export default function RelatoriosClient() {
       ],
     }
 
-    const saidas = contasPagar.filter(c => {
-      const matchEspaco = !selectedSpaces || selectedSpaces.includes(c.espaco)
-      const matchInicio = !filters.dataInicio || c.dataVencimento >= filters.dataInicio
-      const matchFim = !filters.dataFim || c.dataVencimento <= filters.dataFim
-      return matchEspaco && matchInicio && matchFim
-    })
     const despesasSheet: ExportSheet = {
       name: 'Despesas',
       rows: [
@@ -209,40 +274,24 @@ export default function RelatoriosClient() {
       ],
     }
 
-    // Eventos por espaço / por categoria, mês a mês (fonte dos gráficos de barra/pizza da tela)
-    const espacoNomesEventos = Array.from(new Set(aggregates.flatMap(m => Object.keys(m.eventosPorEspaco))))
     const eventosPorEspacoSheet: ExportSheet = {
       name: 'Eventos por Espaço (mensal)',
       rows: [
-        ['Mês', ...espacoNomesEventos],
-        ...aggregates.map(m => [m.label, ...espacoNomesEventos.map(nome => m.eventosPorEspaco[nome] ?? 0)]),
+        ['Mês', ...eventosPorEspacoRows.nomes],
+        ...eventosPorEspacoRows.linhas.map(l => [l.label, ...l.valores]),
       ],
     }
-    const categoriaNomesEventos = Array.from(new Set(aggregates.flatMap(m => Object.keys(m.eventosPorCategoria))))
     const eventosPorCategoriaSheet: ExportSheet = {
       name: 'Eventos por Categoria (mensal)',
       rows: [
-        ['Mês', ...categoriaNomesEventos],
-        ...aggregates.map(m => [m.label, ...categoriaNomesEventos.map(cat => m.eventosPorCategoria[cat] ?? 0)]),
+        ['Mês', ...eventosPorCategoriaRows.nomes],
+        ...eventosPorCategoriaRows.linhas.map(l => [l.label, ...l.valores]),
       ],
     }
-
-    // Receita por categoria (mesmo cálculo do gráfico de pizza — considera todas as
-    // receitas do período/espaço filtrado, independente do status)
-    const catReceitaMap: Record<string, number> = {}
-    for (const r of entradas) catReceitaMap[r.categoriaNome] = (catReceitaMap[r.categoriaNome] ?? 0) + r.valor
-    const totalReceitaCategoria = Object.values(catReceitaMap).reduce((s, v) => s + v, 0)
     const receitaPorCategoriaSheet: ExportSheet = {
       name: 'Receita por Categoria',
-      rows: [
-        ['Categoria', 'Valor', '% do Total'],
-        ...Object.entries(catReceitaMap)
-          .sort((a, b) => b[1] - a[1])
-          .map(([nome, valor]) => [nome, valor, totalReceitaCategoria > 0 ? Math.round((valor / totalReceitaCategoria) * 100) : 0]),
-      ],
+      rows: [['Categoria', 'Valor', '% do Total'], ...receitaPorCategoriaRows.map(r => [r.nome, r.valor, r.pct])],
     }
-
-    // Projeção dos próximos meses (mesma regressão linear do gráfico de Projeção)
     const projecaoSheet: ExportSheet = {
       name: 'Projeção',
       rows: [
@@ -250,60 +299,29 @@ export default function RelatoriosClient() {
         ...projecoes.map(p => [p.label, p.realista, p.pessimista, p.otimista]),
       ],
     }
-
-    // Despesas por categoria/subcategoria (mesmos totais dos cards e do gráfico de
-    // barras da seção "Despesas — Operacional, Obra e Financeiro")
-    const CATEGORIAS_DESPESA = ['operacional', 'obra', 'financeiro'] as const
-    const totalDespesasCategoria = saidas.reduce((s, c) => s + c.valor, 0)
     const despesasPorCategoriaSheet: ExportSheet = {
       name: 'Despesas por Categoria',
-      rows: [
-        ['Categoria', 'Total', 'Pagas', '% do Total'],
-        ...CATEGORIAS_DESPESA.map(cat => {
-          const rows = saidas.filter(c => c.categoria === cat)
-          const total = rows.reduce((s, c) => s + c.valor, 0)
-          const pagas = rows.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0)
-          return [
-            cat === 'operacional' ? 'Operacional' : cat === 'obra' ? 'Obra' : 'Financeiro',
-            total, pagas, totalDespesasCategoria > 0 ? Math.round((total / totalDespesasCategoria) * 100) : 0,
-          ]
-        }),
-      ],
-    }
-    const subMap: Record<string, Record<string, number>> = {}
-    for (const c of saidas) {
-      if (!subMap[c.subcategoria]) subMap[c.subcategoria] = { operacional: 0, obra: 0, financeiro: 0 }
-      subMap[c.subcategoria][c.categoria] += c.valor
+      rows: [['Categoria', 'Total', 'Pagas', '% do Total'], ...despesasPorCategoriaRows.map(r => [r.categoria, r.total, r.pagas, r.pct])],
     }
     const despesasPorSubcategoriaSheet: ExportSheet = {
       name: 'Despesas por Subcategoria',
-      rows: [
-        ['Subcategoria', 'Operacional', 'Obra', 'Financeiro'],
-        ...Object.entries(subMap).map(([sub, vals]) => [
-          SUBCATEGORIA_LABEL[sub] ?? sub, vals.operacional, vals.obra, vals.financeiro,
-        ]),
-      ],
+      rows: [['Subcategoria', 'Operacional', 'Obra', 'Financeiro'], ...despesasPorSubcategoriaRows.map(r => [r.nome, r.operacional, r.obra, r.financeiro])],
     }
 
-    // Fluxo de caixa e divisão de lucros mês a mês, por espaço — mesmos dados da
-    // seção "Fluxo de Caixa por Espaço", só que para TODOS os espaços filtrados de
-    // uma vez (a tela só mostra um espaço por vez no seletor daquela seção).
-    const mesesFluxo = gerarMesesDoPeriodo(filters.dataInicio, filters.dataFim)
     const fluxoRows: (string | number)[][] = [
       ['Espaço', 'Mês', 'Saldo Inicial de Caixa', 'Total Entradas', 'Total Saídas', 'Saldo do Mês', 'Partilha Repassada', 'Saldo Após Partilha'],
     ]
     const divisaoLucrosMensalRows: (string | number)[][] = [
       ['Espaço', 'Mês', 'Sócio', 'Percentual (%)', 'Valor Devido', 'Valor Repassado', 'Valor Pendente', 'Situação'],
     ]
-    for (const e of espacosParaTabela) {
-      const fluxo = aggregateFluxoCaixa(e.nome, mesesFluxo, receitas, contasPagar, repasses)
-      fluxo.forEach((m, i) => {
+    for (const { espaco, meses } of fluxoPorEspaco) {
+      meses.forEach((m, i) => {
         fluxoRows.push([
-          e.nome, m.label, i === 0 ? (e.saldoInicialCaixa ?? 0) : '',
+          espaco.nome, m.label, i === 0 ? (espaco.saldoInicialCaixa ?? 0) : '',
           m.totalEntradas, m.totalSaidas, m.saldoDoMes, m.partilhaRepassada, m.saldoAposPartilha,
         ])
         m.divisaoLucros.forEach(s => {
-          divisaoLucrosMensalRows.push([e.nome, m.label, s.nome, s.percentual, s.valorDevido, s.valorRepassado, s.valorPendente, s.situacao])
+          divisaoLucrosMensalRows.push([espaco.nome, m.label, s.nome, s.percentual, s.valorDevido, s.valorRepassado, s.valorPendente, s.situacao])
         })
       })
     }
@@ -353,11 +371,21 @@ export default function RelatoriosClient() {
         <RevenueLineChart data={aggregates} />
         <SpaceBarChart data={aggregates} selectedSpaces={filters.espacos} />
       </div>
+      <DetailTable
+        titulo="Ver tabela — Eventos por Espaço (mensal)"
+        headers={['Mês', ...eventosPorEspacoRows.nomes]}
+        rows={eventosPorEspacoRows.linhas.map(l => [l.label, ...l.valores])}
+      />
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <CategoryPieChart data={aggregates} />
         <OccupancyAreaChart data={aggregates} />
       </div>
+      <DetailTable
+        titulo="Ver tabela — Eventos por Categoria (mensal)"
+        headers={['Mês', ...eventosPorCategoriaRows.nomes]}
+        rows={eventosPorCategoriaRows.linhas.map(l => [l.label, ...l.valores])}
+      />
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <RevenueByCategoryChart
@@ -366,8 +394,18 @@ export default function RelatoriosClient() {
           selectedSpaces={filters.espacos.length > 0 ? filters.espacos : undefined}
         />
       </div>
+      <DetailTable
+        titulo="Ver tabela — Receita por Categoria"
+        headers={['Categoria', 'Valor', '% do Total']}
+        rows={receitaPorCategoriaRows.map(r => [r.nome, formatCurrency(r.valor), `${r.pct}%`])}
+      />
 
       <ProjectionChart historico={aggregates} projecoes={projecoes} />
+      <DetailTable
+        titulo="Ver tabela — Projeção detalhada"
+        headers={['Mês', 'Receita Projetada (Realista)', 'Cenário Pessimista', 'Cenário Otimista']}
+        rows={projecoes.map(p => [p.label, formatCurrency(p.realista), formatCurrency(p.pessimista), formatCurrency(p.otimista)])}
+      />
 
       <SummaryTable data={aggregates} selectedSpaces={filters.espacos} />
 
@@ -376,12 +414,132 @@ export default function RelatoriosClient() {
         dataInicio={filters.dataInicio}
         dataFim={filters.dataFim}
       />
+      <DetailTable
+        titulo="Ver tabela — Despesas por Subcategoria"
+        headers={['Subcategoria', 'Operacional', 'Obra', 'Financeiro']}
+        rows={despesasPorSubcategoriaRows.map(r => [r.nome, formatCurrency(r.operacional), formatCurrency(r.obra), formatCurrency(r.financeiro)])}
+      />
 
       <FluxoCaixaEspaco
         selectedSpaces={filters.espacos.length > 0 ? filters.espacos : undefined}
         dataInicio={filters.dataInicio}
         dataFim={filters.dataFim}
       />
+
+      {/* A seção acima só mostra um espaço por vez (seletor interativo) — este bloco
+          traz o fluxo de caixa e a divisão de lucros mês a mês de TODOS os espaços
+          filtrados de uma vez, pra nenhuma informação ficar de fora do PDF/Excel. */}
+      <div className="rounded-2xl border border-app-border bg-app-surface p-5 space-y-3">
+        <h3 className="text-sm font-semibold text-app-text">Fluxo de Caixa — Todos os Espaços Filtrados (mensal)</h3>
+        {fluxoPorEspaco.map(({ espaco, meses }) => (
+          <details key={espaco.nome} className="group rounded-lg border border-app-border2/60 bg-app-bg p-4">
+            <summary className="cursor-pointer text-xs font-medium text-app-text hover:text-[#128C7E] transition-colors list-none flex items-center gap-1.5">
+              <span className="group-open:hidden">▶</span>
+              <span className="hidden group-open:inline">▼</span>
+              {espaco.nome}
+              <span className="text-app-subtle font-normal">— saldo inicial {formatCurrency(espaco.saldoInicialCaixa ?? 0)}</span>
+            </summary>
+            <div className="mt-3 space-y-4">
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-app-border">
+                      {['Mês', 'Total Entradas', 'Total Saídas', 'Saldo do Mês', 'Partilha Repassada', 'Saldo Após Partilha'].map(h => (
+                        <th key={h} className="px-2 py-1.5 text-left font-medium text-app-subtle uppercase tracking-wide whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-app-border/50">
+                    {meses.map(m => (
+                      <tr key={m.yearMonth}>
+                        <td className="px-2 py-1.5 font-medium text-app-text whitespace-nowrap">{m.label}</td>
+                        <td className="px-2 py-1.5 text-app-text2">{formatCurrency(m.totalEntradas)}</td>
+                        <td className="px-2 py-1.5 text-app-text2">{formatCurrency(m.totalSaidas)}</td>
+                        <td className="px-2 py-1.5 text-app-text2">{formatCurrency(m.saldoDoMes)}</td>
+                        <td className="px-2 py-1.5 text-app-text2">{formatCurrency(m.partilhaRepassada)}</td>
+                        <td className="px-2 py-1.5 text-app-text2">{formatCurrency(m.saldoAposPartilha)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {meses.some(m => m.divisaoLucros.length > 0) && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-app-border">
+                        {['Mês', 'Sócio', '%', 'Valor Devido', 'Valor Repassado', 'Valor Pendente', 'Situação'].map(h => (
+                          <th key={h} className="px-2 py-1.5 text-left font-medium text-app-subtle uppercase tracking-wide whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-app-border/50">
+                      {meses.flatMap(m => m.divisaoLucros.map(s => (
+                        <tr key={`${m.yearMonth}-${s.nome}`}>
+                          <td className="px-2 py-1.5 font-medium text-app-text whitespace-nowrap">{m.label}</td>
+                          <td className="px-2 py-1.5 text-app-text2">{s.nome}</td>
+                          <td className="px-2 py-1.5 text-app-text2">{s.percentual}%</td>
+                          <td className="px-2 py-1.5 text-app-text2">{formatCurrency(s.valorDevido)}</td>
+                          <td className="px-2 py-1.5 text-app-text2">{formatCurrency(s.valorRepassado)}</td>
+                          <td className="px-2 py-1.5 text-app-text2">{formatCurrency(s.valorPendente)}</td>
+                          <td className="px-2 py-1.5 text-app-text2 capitalize">{s.situacao}</td>
+                        </tr>
+                      )))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </details>
+        ))}
+        {fluxoPorEspaco.length === 0 && (
+          <p className="text-sm text-app-subtle text-center py-4">Nenhum espaço para exibir.</p>
+        )}
+      </div>
     </div>
+  )
+}
+
+interface DetailTableProps {
+  titulo: string
+  headers: string[]
+  rows: (string | number)[][]
+}
+
+// Tabela de apoio pras seções que na tela só têm gráfico (pizza/barra) — sem isso,
+// os valores exatos por mês/categoria só existiam no Excel, nunca no PDF impresso.
+// Fica recolhida por padrão (não polui a tela) mas se expande sozinha na impressão,
+// junto com os outros <details> da página.
+function DetailTable({ titulo, headers, rows }: DetailTableProps) {
+  if (rows.length === 0) return null
+  return (
+    <details className="group rounded-xl border border-app-border bg-app-surface p-4">
+      <summary className="cursor-pointer text-xs font-medium text-[#128C7E] hover:text-[#25D366] transition-colors list-none flex items-center gap-1.5">
+        <span className="group-open:hidden">▶</span>
+        <span className="hidden group-open:inline">▼</span>
+        {titulo}
+      </summary>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-xs border-collapse">
+          <thead>
+            <tr className="border-b border-app-border">
+              {headers.map(h => (
+                <th key={h} className="px-2 py-1.5 text-left font-medium text-app-subtle uppercase tracking-wide whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-app-border/50">
+            {rows.map((row, i) => (
+              <tr key={i}>
+                {row.map((cell, j) => (
+                  <td key={j} className="px-2 py-1.5 text-app-text2 whitespace-nowrap">{cell}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
   )
 }
