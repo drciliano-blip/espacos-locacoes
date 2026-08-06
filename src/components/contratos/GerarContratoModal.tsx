@@ -307,11 +307,14 @@ export default function GerarContratoModal({ origem, onClose }: Props) {
     }
   }
 
+  // Sem fechar ao tocar no fundo: no celular, o teclado abrindo/fechando enquanto o
+  // usuário preenche os campos pode deslocar o layout e fazer um toque destinado ao
+  // botão "Gerar PDF" cair fora do card — fechando essa etapa sem querer e perdendo
+  // o preenchimento. Fecha só pelo X ou pelos botões explícitos.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div
         className="w-full max-w-2xl bg-app-surface rounded-2xl border border-app-border shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto"
-        onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-app-border sticky top-0 bg-app-surface z-10">
           <div className="flex items-center gap-2">

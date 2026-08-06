@@ -62,9 +62,12 @@ export default function GerarContratoDoEventoModal({ evento, onClose, onSave, on
     }
   }
 
+  // Sem fechar ao tocar no fundo: no celular, o teclado abrindo/fechando enquanto o
+  // usuário preenche os campos pode deslocar o layout e fazer um toque destinado ao
+  // botão "Criar contrato" cair fora do card — fechando essa etapa sem querer.
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-md bg-app-surface rounded-2xl border border-app-border shadow-2xl" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="w-full max-w-md bg-app-surface rounded-2xl border border-app-border shadow-2xl">
         <div className="flex items-center justify-between px-5 py-4 border-b border-app-border">
           <h2 className="text-sm font-semibold text-app-text flex items-center gap-2">
             <FileSignature className="h-4 w-4 text-[#25D366]" />
