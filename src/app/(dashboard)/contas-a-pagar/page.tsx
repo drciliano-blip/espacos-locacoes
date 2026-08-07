@@ -142,11 +142,14 @@ interface FormState {
   fornecedor: string
   observacoes: string
   textoOrigemWhatsapp: string
+  dataPagamento: string
+  horaPagamento: string
 }
 
 const FORM_EMPTY: FormState = {
   descricao: '', valor: '', dataVencimento: '', categoria: '', subcategoria: '',
   espaco: '', fornecedor: '', observacoes: '', textoOrigemWhatsapp: '',
+  dataPagamento: '', horaPagamento: '',
 }
 
 function contaParaForm(conta: ContaPagar): FormState {
@@ -160,6 +163,8 @@ function contaParaForm(conta: ContaPagar): FormState {
     fornecedor: conta.fornecedor ?? '',
     observacoes: conta.observacoes ?? '',
     textoOrigemWhatsapp: conta.textoOrigemWhatsapp ?? '',
+    dataPagamento: conta.dataPagamento ?? '',
+    horaPagamento: conta.horaPagamento ?? '',
   }
 }
 
@@ -695,8 +700,8 @@ function ContaFormModal({ conta, onClose, onSave }: ContaFormModalProps) {
       valor:           parseCurrencyBR(form.valor),
       status:          conta?.status ?? 'pendente',
       dataVencimento:  form.dataVencimento,
-      dataPagamento:   conta?.dataPagamento,
-      horaPagamento:   conta?.horaPagamento,
+      dataPagamento:   form.dataPagamento || undefined,
+      horaPagamento:   form.horaPagamento || undefined,
       comprovanteInstituicao:   conta?.comprovanteInstituicao,
       comprovanteIdentificador: conta?.comprovanteIdentificador,
       fornecedor:      form.fornecedor || undefined,
@@ -827,7 +832,32 @@ function ContaFormModal({ conta, onClose, onSave }: ContaFormModalProps) {
             />
           </div>
 
-          {isEdit && (
+          {isEdit && conta?.status === 'pago' ? (
+            <div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-app-muted mb-1">Data do pagamento</label>
+                  <input type="date" value={form.dataPagamento} onChange={e => setForm(f => ({ ...f, dataPagamento: e.target.value }))}
+                    className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-3 py-1.5 text-sm text-app-text focus:outline-none"
+                    onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
+                    onBlur={e => { e.currentTarget.style.borderColor = '' }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-app-muted mb-1">Hora do pagamento</label>
+                  <input type="time" value={form.horaPagamento} onChange={e => setForm(f => ({ ...f, horaPagamento: e.target.value }))}
+                    className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-3 py-1.5 text-sm text-app-text focus:outline-none"
+                    onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
+                    onBlur={e => { e.currentTarget.style.borderColor = '' }}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-app-subtle italic mt-1">
+                Preenchidos automaticamente pela leitura do comprovante — corrija aqui se a leitura errou ou não identificou. Isso também reordena a conta em "Contas Pagas".
+              </p>
+              <p className="text-xs text-app-subtle italic mt-2">Status não é alterado aqui.</p>
+            </div>
+          ) : isEdit && (
             <p className="text-xs text-app-subtle italic">
               Status e data de pagamento não são alterados aqui — use "Dar baixa" na lista para marcar como paga (exige comprovante).
             </p>
