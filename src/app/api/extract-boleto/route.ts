@@ -124,7 +124,10 @@ export async function POST(request: Request) {
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 1024,
-      output_config: { effort: 'low' },
+      // 'low' às vezes deixava passar a data/hora do pagamento em comprovantes
+      // (campo pequeno, fácil de confundir com o vencimento) — 'medium' lê com
+      // mais atenção, importante já que isso decide a ordem de "Contas Pagas".
+      output_config: { effort: 'medium' },
       messages: [
         {
           role: 'user',

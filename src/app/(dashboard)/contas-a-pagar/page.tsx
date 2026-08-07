@@ -855,7 +855,7 @@ function DarBaixaModal({ conta, onClose, onConfirm }: {
       const res = await fetch('/api/extract-boleto', { method: 'POST', body })
       const data: BoletoExtracao & { error?: string } = await res.json()
       if (!res.ok || data.error) {
-        setErro('Não foi possível ler a data/hora automaticamente — preencha manualmente.')
+        setErro(data.error ? `Não foi possível ler o comprovante: ${data.error}` : 'Não foi possível ler a data/hora automaticamente — preencha manualmente.')
         return
       }
 
