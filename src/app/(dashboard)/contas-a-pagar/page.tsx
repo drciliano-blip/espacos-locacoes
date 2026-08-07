@@ -21,6 +21,7 @@ interface BoletoExtracao {
   valor: string | null
   vencimento: string | null
   dataPagamento: string | null
+  horaPagamento: string | null
   formaPagamento: string | null
   chavePagamento: string | null
   espaco: string | null
@@ -162,6 +163,14 @@ export default function ContasPagarPage() {
 
   const porCategoria = CATEGORIAS.map(cat => ({ categoria: cat, rows: filtered.filter(c => c.categoria === cat) }))
 
+  // Contas Pagas não agrupa por categoria — uma lista única, mais recente primeiro,
+  // pela data e hora reais do pagamento (não a data de cadastro da conta).
+  const pagasOrdenadas = useMemo(() => [...filtered].sort((a, b) => {
+    const chaveA = `${a.dataPagamento ?? ''}T${a.horaPagamento ?? '00:00'}`
+    const chaveB = `${b.dataPagamento ?? ''}T${b.horaPagamento ?? '00:00'}`
+    return chaveB.localeCompare(chaveA)
+  }), [filtered])
+
   const totalPago     = todasContas.filter(c => statusEfetivo(c) === 'pago').reduce((s, c) => s + c.valor, 0)
   const totalPendente = todasContas.filter(c => statusEfetivo(c) === 'pendente').reduce((s, c) => s + c.valor, 0)
   const totalAtrasado = todasContas.filter(c => statusEfetivo(c) === 'atrasado').reduce((s, c) => s + c.valor, 0)
@@ -284,25 +293,41 @@ export default function ContasPagarPage() {
 
         {/* Lista */}
         <div className="p-5 space-y-6">
-          {porCategoria.map(({ categoria, rows }) =>
-            rows.length > 0 && (
-              <section key={categoria}>
-                <div className="flex items-center gap-2 mb-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-app-subtle">{categoriaLabel[categoria]}</h3>
-                  <span className="text-xs text-app-subtle">— {formatCurrency(rows.reduce((s, c) => s + c.valor, 0))}</span>
-                </div>
-                <div className="space-y-2">
-                  {rows.map(conta => (
-                    <ContaRow
-                      key={conta.id}
-                      conta={conta}
-                      onDarBaixa={() => setContaBaixa(conta)}
-                      onEditar={() => setContaEditando(conta)}
-                      onExcluir={() => setContaExcluindo(conta)}
-                    />
-                  ))}
-                </div>
-              </section>
+          {tab === 'pagas' ? (
+            pagasOrdenadas.length > 0 && (
+              <div className="space-y-2">
+                {pagasOrdenadas.map(conta => (
+                  <ContaRow
+                    key={conta.id}
+                    conta={conta}
+                    onDarBaixa={() => setContaBaixa(conta)}
+                    onEditar={() => setContaEditando(conta)}
+                    onExcluir={() => setContaExcluindo(conta)}
+                  />
+                ))}
+              </div>
+            )
+          ) : (
+            porCategoria.map(({ categoria, rows }) =>
+              rows.length > 0 && (
+                <section key={categoria}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-app-subtle">{categoriaLabel[categoria]}</h3>
+                    <span className="text-xs text-app-subtle">— {formatCurrency(rows.reduce((s, c) => s + c.valor, 0))}</span>
+                  </div>
+                  <div className="space-y-2">
+                    {rows.map(conta => (
+                      <ContaRow
+                        key={conta.id}
+                        conta={conta}
+                        onDarBaixa={() => setContaBaixa(conta)}
+                        onEditar={() => setContaEditando(conta)}
+                        onExcluir={() => setContaExcluindo(conta)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )
             )
           )}
 
@@ -363,8 +388,8 @@ export default function ContasPagarPage() {
         <DarBaixaModal
           conta={contaBaixa}
           onClose={() => setContaBaixa(null)}
-          onConfirm={async (dataPagamento) => {
-            await darBaixa(contaBaixa.id, dataPagamento)
+          onConfirm={async (dataPagamento, horaPagamento) => {
+            await darBaixa(contaBaixa.id, dataPagamento, horaPagamento)
             setContaBaixa(null)
             showToast('Conta marcada como paga.')
           }}
@@ -545,6 +570,7 @@ function ContaFormModal({ conta, onClose, onSave }: ContaFormModalProps) {
       status:          conta?.status ?? 'pendente',
       dataVencimento:  form.dataVencimento,
       dataPagamento:   conta?.dataPagamento,
+      horaPagamento:   conta?.horaPagamento,
       fornecedor:      form.fornecedor || undefined,
       observacoes:     form.observacoes || undefined,
       textoOrigemWhatsapp: form.textoOrigemWhatsapp || undefined,
@@ -761,13 +787,53 @@ function ContaFormModal({ conta, onClose, onSave }: ContaFormModalProps) {
   )
 }
 
-function DarBaixaModal({ conta, onClose, onConfirm }: { conta: ContaPagar; onClose: () => void; onConfirm: (dataPagamento: string) => Promise<void> }) {
+function DarBaixaModal({ conta, onClose, onConfirm }: { conta: ContaPagar; onClose: () => void; onConfirm: (dataPagamento: string, horaPagamento?: string) => Promise<void> }) {
   const [dataPagamento, setDataPagamento] = useState(() => new Date().toISOString().split('T')[0])
+  const [horaPagamento, setHoraPagamento] = useState('')
   const [comprovante, setComprovante] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [extraindoIA, setExtraindoIA] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const cameraRef = useRef<HTMLInputElement>(null)
+
+  // Lê data e hora do pagamento diretamente do comprovante anexado — a data de
+  // cadastro/hoje só fica valendo se a IA não encontrar nada no documento.
+  async function handleComprovanteSelecionado(file: File | null) {
+    setComprovante(file)
+    if (!file) return
+
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    const isPdf = file.type === 'application/pdf' || ext === 'pdf'
+    const isImage = file.type.startsWith('image/')
+    if (!isPdf && !isImage) return
+
+    setErro(null)
+    setExtraindoIA(true)
+    try {
+      const body = new FormData()
+      body.append('file', file)
+      const res = await fetch('/api/extract-boleto', { method: 'POST', body })
+      const data: BoletoExtracao & { error?: string } = await res.json()
+      if (!res.ok || data.error) {
+        setErro('Não foi possível ler a data/hora automaticamente — preencha manualmente.')
+        return
+      }
+
+      if (!data.dataPagamento && !data.horaPagamento) {
+        setErro('A IA não identificou data/hora neste comprovante — preencha manualmente.')
+        return
+      }
+
+      setDataPagamento(d => (data.dataPagamento ? parseDataBR(data.dataPagamento) || d : d))
+      setHoraPagamento(h => data.horaPagamento ?? h)
+    } catch {
+      setErro('Falha ao conectar com a IA — preencha data/hora manualmente.')
+    } finally {
+      setExtraindoIA(false)
+    }
+  }
 
   async function handleConfirm() {
     setSubmitted(true)
@@ -781,7 +847,7 @@ function DarBaixaModal({ conta, onClose, onConfirm }: { conta: ContaPagar; onClo
         espaco: conta.espaco === 'Todos' ? undefined : conta.espaco,
         categoria: 'comprovante_pagamento',
       })
-      await onConfirm(dataPagamento)
+      await onConfirm(dataPagamento, horaPagamento || undefined)
     } finally {
       setSaving(false)
     }
@@ -805,11 +871,19 @@ function DarBaixaModal({ conta, onClose, onConfirm }: { conta: ContaPagar; onClo
             Valor: <span className="font-semibold text-app-text">{formatCurrency(conta.valor)}</span>
           </p>
 
-          <div>
-            <label className="block text-xs text-app-muted mb-1">Data do pagamento *</label>
-            <input type="date" value={dataPagamento} onChange={e => setDataPagamento(e.target.value)}
-              className={`w-full rounded-lg border ${submitted && !dataPagamento ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-3 py-1.5 text-sm text-app-text focus:outline-none`}
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-app-muted mb-1">Data do pagamento *</label>
+              <input type="date" value={dataPagamento} onChange={e => setDataPagamento(e.target.value)}
+                className={`w-full rounded-lg border ${submitted && !dataPagamento ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-3 py-1.5 text-sm text-app-text focus:outline-none`}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-app-muted mb-1">Hora do pagamento</label>
+              <input type="time" value={horaPagamento} onChange={e => setHoraPagamento(e.target.value)}
+                className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-3 py-1.5 text-sm text-app-text focus:outline-none"
+              />
+            </div>
           </div>
 
           <div>
@@ -817,21 +891,31 @@ function DarBaixaModal({ conta, onClose, onConfirm }: { conta: ContaPagar; onClo
               Comprovante de pagamento<span className="text-red-400 ml-0.5">*</span>
             </label>
             <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden"
-              onChange={e => setComprovante(e.target.files?.[0] ?? null)} />
+              onChange={e => handleComprovanteSelecionado(e.target.files?.[0] ?? null)} />
             <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
-              onChange={e => setComprovante(e.target.files?.[0] ?? null)} />
+              onChange={e => handleComprovanteSelecionado(e.target.files?.[0] ?? null)} />
             <div className="flex items-center gap-2 flex-wrap">
-              <button onClick={() => fileRef.current?.click()}
-                className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors">
+              <button onClick={() => fileRef.current?.click()} disabled={extraindoIA}
+                className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors disabled:opacity-60">
                 <Paperclip className="h-3.5 w-3.5" />
                 {comprovante ? comprovante.name : 'Selecionar arquivo…'}
               </button>
-              <button onClick={() => cameraRef.current?.click()}
-                className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors">
+              <button onClick={() => cameraRef.current?.click()} disabled={extraindoIA}
+                className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors disabled:opacity-60">
                 <Camera className="h-3.5 w-3.5" />
                 Tirar foto
               </button>
+              {extraindoIA && (
+                <span className="flex items-center gap-1.5 text-xs text-[#128C7E]">
+                  <Sparkles className="h-3.5 w-3.5 animate-pulse" />
+                  Lendo data/hora do comprovante…
+                </span>
+              )}
             </div>
+            {comprovante && !extraindoIA && (
+              <p className="text-xs text-app-subtle mt-1">Data e hora acima já vêm do comprovante quando identificadas — confira e corrija se precisar.</p>
+            )}
+            {erro && <p className="text-xs text-red-400 mt-1">{erro}</p>}
             {submitted && !comprovante && (
               <p className="text-xs text-red-400 mt-1">Anexe o comprovante antes de confirmar o pagamento.</p>
             )}
@@ -882,7 +966,11 @@ function ContaRow({ conta, onDarBaixa, onEditar, onExcluir }: ContaRowProps) {
             <span className="text-xs text-app-subtle">{conta.espaco}</span>
             {conta.fornecedor && <span className="text-xs text-app-subtle">· {conta.fornecedor}</span>}
             <span className="text-xs text-app-subtle">· Venc. {conta.dataVencimento.split('-').reverse().join('/')}</span>
-            {conta.dataPagamento && <span className="text-xs text-emerald-600">· Pago {conta.dataPagamento.split('-').reverse().join('/')}</span>}
+            {conta.dataPagamento && (
+              <span className="text-xs text-emerald-600">
+                · Pago {conta.dataPagamento.split('-').reverse().join('/')}{conta.horaPagamento ? ` às ${conta.horaPagamento}` : ''}
+              </span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap sm:shrink-0">

@@ -132,6 +132,7 @@ export interface ContaPagar {
   status: StatusContaPagar
   dataVencimento: string
   dataPagamento?: string
+  horaPagamento?: string
   fornecedor?: string
   observacoes?: string
   textoOrigemWhatsapp?: string

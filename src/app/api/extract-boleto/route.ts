@@ -14,6 +14,7 @@ function buildPrompt(espacosNomes: string[]): string {
   "valor": "R$ 0,00" | null,
   "vencimento": "DD/MM/AAAA" | null,
   "dataPagamento": "DD/MM/AAAA" | null,
+  "horaPagamento": "HH:MM" | null,
   "formaPagamento": string | null,
   "chavePagamento": string | null,
   "espaco": string | null,
@@ -26,6 +27,7 @@ function buildPrompt(espacosNomes: string[]): string {
 Dicas:
 - "descricao": um resumo curto do que é a despesa (ex: "Manutenção elétrica — Complexo Jussara").
 - "fornecedor": nome de quem vai receber o pagamento (pessoa ou empresa).
+- "horaPagamento": procure o horário exato em que o pagamento foi efetivado (comum em comprovantes de PIX/transferência, ex: "14:32:07" ou "14h32"). Retorne em 24h no formato HH:MM. Se o documento não mostrar hora, null.
 - "formaPagamento": ex: PIX, transferência, boleto, dinheiro.
 - "chavePagamento": chave PIX, dados bancários (banco/agência/conta) ou qualquer identificador de pagamento mencionado.
 - "espaco": só use um destes nomes exatos, se o texto claramente se referir a um deles: ${espacosLista}. Caso contrário, null.
@@ -39,6 +41,7 @@ interface BoletoExtraido {
   valor?: string | null
   vencimento?: string | null
   dataPagamento?: string | null
+  horaPagamento?: string | null
   formaPagamento?: string | null
   chavePagamento?: string | null
   espaco?: string | null
@@ -140,6 +143,7 @@ export async function POST(request: Request) {
       valor: parsed.valor ?? null,
       vencimento: parsed.vencimento ?? null,
       dataPagamento: parsed.dataPagamento ?? null,
+      horaPagamento: parsed.horaPagamento && /^\d{1,2}:\d{2}$/.test(parsed.horaPagamento) ? parsed.horaPagamento : null,
       formaPagamento: parsed.formaPagamento ?? null,
       chavePagamento: parsed.chavePagamento ?? null,
       espaco: parsed.espaco && espacosNomes.includes(parsed.espaco) ? parsed.espaco : null,
