@@ -17,6 +17,8 @@ function buildPrompt(espacosNomes: string[]): string {
   "horaPagamento": "HH:MM" | null,
   "formaPagamento": string | null,
   "chavePagamento": string | null,
+  "instituicaoFinanceira": string | null,
+  "identificadorTransacao": string | null,
   "espaco": string | null,
   "categoria": "operacional" | "obra" | "financeiro" | null,
   "subcategoria": "aluguel" | "energia" | "internet" | "funcionários" | "manutenção" | "fornecedores" | "extras" | "outros" | null,
@@ -30,6 +32,8 @@ Dicas:
 - "horaPagamento": procure o horário exato em que o pagamento foi efetivado (comum em comprovantes de PIX/transferência, ex: "14:32:07" ou "14h32"). Retorne em 24h no formato HH:MM. Se o documento não mostrar hora, null.
 - "formaPagamento": ex: PIX, transferência, boleto, dinheiro.
 - "chavePagamento": chave PIX, dados bancários (banco/agência/conta) ou qualquer identificador de pagamento mencionado.
+- "instituicaoFinanceira": banco/instituição de pagamento que emitiu ou processou o comprovante (ex: Nubank, Itaú, PicPay, Banco do Brasil, Mercado Pago).
+- "identificadorTransacao": código único da transação, se aparecer (ex: "ID da transação", "autenticação", "NSU", código E2E do PIX).
 - "espaco": só use um destes nomes exatos, se o texto claramente se referir a um deles: ${espacosLista}. Caso contrário, null.
 - "categoria" e "subcategoria": só use um dos valores exatos listados acima; se não tiver certeza, null.
 - "observacoes": qualquer informação adicional relevante que não se encaixe nos outros campos.`
@@ -44,6 +48,8 @@ interface BoletoExtraido {
   horaPagamento?: string | null
   formaPagamento?: string | null
   chavePagamento?: string | null
+  instituicaoFinanceira?: string | null
+  identificadorTransacao?: string | null
   espaco?: string | null
   categoria?: string | null
   subcategoria?: string | null
@@ -146,6 +152,8 @@ export async function POST(request: Request) {
       horaPagamento: parsed.horaPagamento && /^\d{1,2}:\d{2}$/.test(parsed.horaPagamento) ? parsed.horaPagamento : null,
       formaPagamento: parsed.formaPagamento ?? null,
       chavePagamento: parsed.chavePagamento ?? null,
+      instituicaoFinanceira: parsed.instituicaoFinanceira ?? null,
+      identificadorTransacao: parsed.identificadorTransacao ?? null,
       espaco: parsed.espaco && espacosNomes.includes(parsed.espaco) ? parsed.espaco : null,
       categoria: parsed.categoria && CATEGORIAS.includes(parsed.categoria) ? parsed.categoria : null,
       subcategoria: parsed.subcategoria && SUBCATEGORIAS.includes(parsed.subcategoria) ? parsed.subcategoria : null,

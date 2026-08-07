@@ -17,6 +17,8 @@ interface ContaPagarRow {
   data_vencimento: string
   data_pagamento: string | null
   hora_pagamento: string | null
+  comprovante_instituicao: string | null
+  comprovante_identificador: string | null
   fornecedor: string | null
   observacoes: string | null
   texto_origem_whatsapp: string | null
@@ -34,6 +36,8 @@ function fromRow(row: ContaPagarRow): ContaPagar {
     dataVencimento: row.data_vencimento,
     dataPagamento: row.data_pagamento ?? undefined,
     horaPagamento: row.hora_pagamento ?? undefined,
+    comprovanteInstituicao: row.comprovante_instituicao ?? undefined,
+    comprovanteIdentificador: row.comprovante_identificador ?? undefined,
     fornecedor: row.fornecedor ?? undefined,
     observacoes: row.observacoes ?? undefined,
     textoOrigemWhatsapp: row.texto_origem_whatsapp ?? undefined,
@@ -46,7 +50,7 @@ interface ContasPagarContextValue {
   addConta: (c: ContaPagar) => Promise<void>
   updateConta: (c: ContaPagar) => Promise<void>
   deleteConta: (id: string) => Promise<void>
-  darBaixa: (id: string, dataPagamento: string, horaPagamento?: string) => Promise<void>
+  darBaixa: (id: string, dataPagamento: string, horaPagamento?: string, comprovanteInstituicao?: string, comprovanteIdentificador?: string) => Promise<void>
 }
 
 const ContasPagarContext = createContext<ContasPagarContextValue | null>(null)
@@ -88,6 +92,8 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
         data_vencimento: c.dataVencimento,
         data_pagamento: c.dataPagamento ?? null,
         hora_pagamento: c.horaPagamento ?? null,
+        comprovante_instituicao: c.comprovanteInstituicao ?? null,
+        comprovante_identificador: c.comprovanteIdentificador ?? null,
         fornecedor: c.fornecedor ?? null,
         observacoes: c.observacoes ?? null,
         texto_origem_whatsapp: c.textoOrigemWhatsapp ?? null,
@@ -126,6 +132,8 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
         data_vencimento: c.dataVencimento,
         data_pagamento: c.dataPagamento ?? null,
         hora_pagamento: c.horaPagamento ?? null,
+        comprovante_instituicao: c.comprovanteInstituicao ?? null,
+        comprovante_identificador: c.comprovanteIdentificador ?? null,
         fornecedor: c.fornecedor ?? null,
         observacoes: c.observacoes ?? null,
         texto_origem_whatsapp: c.textoOrigemWhatsapp ?? null,
@@ -159,11 +167,17 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function darBaixa(id: string, dataPagamento: string, horaPagamento?: string) {
+  async function darBaixa(id: string, dataPagamento: string, horaPagamento?: string, comprovanteInstituicao?: string, comprovanteIdentificador?: string) {
     const supabase = createClient()
     const { data, error } = await supabase
       .from('contas_pagar')
-      .update({ status: 'pago', data_pagamento: dataPagamento, hora_pagamento: horaPagamento ?? null })
+      .update({
+        status: 'pago',
+        data_pagamento: dataPagamento,
+        hora_pagamento: horaPagamento ?? null,
+        comprovante_instituicao: comprovanteInstituicao ?? null,
+        comprovante_identificador: comprovanteIdentificador ?? null,
+      })
       .eq('id', id)
       .select(SELECT)
       .single()

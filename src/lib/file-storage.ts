@@ -12,6 +12,7 @@ export interface StoredFile {
   entityName: string
   espaco?: string
   categoria?: string
+  fileHash?: string
   uploadedAt: string
 }
 
@@ -25,8 +26,17 @@ interface FileRow {
   entity_name: string
   espaco: string | null
   categoria: string | null
+  file_hash: string | null
   storage_path: string
   uploaded_at: string
+}
+
+// SHA-256 do conteúdo do arquivo — usado pra detectar reenvio do mesmo
+// comprovante em "Dar baixa", mesmo que o nome do arquivo mude.
+export async function hashFile(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer()
+  const digest = await crypto.subtle.digest('SHA-256', buffer)
+  return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
 const BUCKET = 'arquivos'
@@ -52,13 +62,14 @@ function fromRow(row: FileRow): StoredFile {
     entityName: row.entity_name,
     espaco: row.espaco ?? undefined,
     categoria: row.categoria ?? undefined,
+    fileHash: row.file_hash ?? undefined,
     uploadedAt: row.uploaded_at,
   }
 }
 
 export async function saveFile(
   file: File,
-  ctx: { module: StoredFile['module']; entityId: string; entityName: string; espaco?: string; categoria?: string },
+  ctx: { module: StoredFile['module']; entityId: string; entityName: string; espaco?: string; categoria?: string; fileHash?: string },
 ): Promise<StoredFile> {
   const supabase = createClient()
   const path = `${ctx.module}/${ctx.entityId}/${randomId()}-${sanitizeName(file.name)}`
@@ -81,6 +92,7 @@ export async function saveFile(
       entity_name: ctx.entityName,
       espaco: ctx.espaco ?? null,
       categoria: ctx.categoria ?? null,
+      file_hash: ctx.fileHash ?? null,
       storage_path: path,
       uploaded_by: user?.id ?? null,
     })
@@ -99,12 +111,14 @@ export async function getFiles(filters?: {
   module?: StoredFile['module']
   entityId?: string
   espaco?: string
+  categoria?: string
 }): Promise<StoredFile[]> {
   const supabase = createClient()
   let query = supabase.from('files').select('*')
-  if (filters?.module)   query = query.eq('module', filters.module)
-  if (filters?.entityId) query = query.eq('entity_id', filters.entityId)
-  if (filters?.espaco)   query = query.eq('espaco', filters.espaco)
+  if (filters?.module)    query = query.eq('module', filters.module)
+  if (filters?.entityId)  query = query.eq('entity_id', filters.entityId)
+  if (filters?.espaco)    query = query.eq('espaco', filters.espaco)
+  if (filters?.categoria) query = query.eq('categoria', filters.categoria)
 
   const { data, error } = await query.order('uploaded_at', { ascending: false })
   if (error) throw error

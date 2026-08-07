@@ -9,7 +9,7 @@ import {
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { formatCurrency, parseCurrencyBR } from '@/lib/utils'
-import { saveFile } from '@/lib/file-storage'
+import { saveFile, getFiles, hashFile } from '@/lib/file-storage'
 import FileList from '@/components/shared/FileList'
 import FileSearchModal from '@/components/shared/FileSearchModal'
 import Toast from '@/components/shared/Toast'
@@ -24,6 +24,8 @@ interface BoletoExtracao {
   horaPagamento: string | null
   formaPagamento: string | null
   chavePagamento: string | null
+  instituicaoFinanceira: string | null
+  identificadorTransacao: string | null
   espaco: string | null
   categoria: string | null
   subcategoria: string | null
@@ -388,8 +390,8 @@ export default function ContasPagarPage() {
         <DarBaixaModal
           conta={contaBaixa}
           onClose={() => setContaBaixa(null)}
-          onConfirm={async (dataPagamento, horaPagamento) => {
-            await darBaixa(contaBaixa.id, dataPagamento, horaPagamento)
+          onConfirm={async (dataPagamento, horaPagamento, comprovanteInstituicao, comprovanteIdentificador) => {
+            await darBaixa(contaBaixa.id, dataPagamento, horaPagamento, comprovanteInstituicao, comprovanteIdentificador)
             setContaBaixa(null)
             showToast('Conta marcada como paga.')
           }}
@@ -571,6 +573,8 @@ function ContaFormModal({ conta, onClose, onSave }: ContaFormModalProps) {
       dataVencimento:  form.dataVencimento,
       dataPagamento:   conta?.dataPagamento,
       horaPagamento:   conta?.horaPagamento,
+      comprovanteInstituicao:   conta?.comprovanteInstituicao,
+      comprovanteIdentificador: conta?.comprovanteIdentificador,
       fornecedor:      form.fornecedor || undefined,
       observacoes:     form.observacoes || undefined,
       textoOrigemWhatsapp: form.textoOrigemWhatsapp || undefined,
@@ -787,37 +791,78 @@ function ContaFormModal({ conta, onClose, onSave }: ContaFormModalProps) {
   )
 }
 
-function DarBaixaModal({ conta, onClose, onConfirm }: { conta: ContaPagar; onClose: () => void; onConfirm: (dataPagamento: string, horaPagamento?: string) => Promise<void> }) {
+const COMPROVANTE_DUPLICADO_MSG = 'Este comprovante já foi utilizado para dar baixa em outra conta. Verifique para evitar pagamentos ou lançamentos duplicados.'
+
+function DarBaixaModal({ conta, onClose, onConfirm }: {
+  conta: ContaPagar
+  onClose: () => void
+  onConfirm: (dataPagamento: string, horaPagamento?: string, comprovanteInstituicao?: string, comprovanteIdentificador?: string) => Promise<void>
+}) {
+  const { contas: todasContas } = useContasPagar()
   const [dataPagamento, setDataPagamento] = useState(() => new Date().toISOString().split('T')[0])
   const [horaPagamento, setHoraPagamento] = useState('')
+  const [instituicao, setInstituicao] = useState('')
+  const [identificador, setIdentificador] = useState('')
   const [comprovante, setComprovante] = useState<File | null>(null)
+  const [fileHashAtual, setFileHashAtual] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [extraindoIA, setExtraindoIA] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const [duplicado, setDuplicado] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const cameraRef = useRef<HTMLInputElement>(null)
 
   // Lê data e hora do pagamento diretamente do comprovante anexado — a data de
-  // cadastro/hoje só fica valendo se a IA não encontrar nada no documento.
+  // cadastro/hoje só fica valendo se a IA não encontrar nada no documento. Também
+  // verifica se esse mesmo comprovante (por hash do arquivo, ou pelos dados da
+  // transação) já foi usado pra dar baixa em outra conta.
   async function handleComprovanteSelecionado(file: File | null) {
     setComprovante(file)
+    setFileHashAtual(null)
+    setErro(null)
+    setDuplicado(false)
     if (!file) return
 
-    const ext = file.name.split('.').pop()?.toLowerCase()
-    const isPdf = file.type === 'application/pdf' || ext === 'pdf'
-    const isImage = file.type.startsWith('image/')
-    if (!isPdf && !isImage) return
-
-    setErro(null)
     setExtraindoIA(true)
     try {
+      const hash = await hashFile(file)
+      setFileHashAtual(hash)
+
+      const outrosComprovantes = await getFiles({ module: 'contas', categoria: 'comprovante_pagamento' })
+      const jaUsado = outrosComprovantes.some(f => f.entityId !== conta.id && f.fileHash === hash)
+      if (jaUsado) {
+        setDuplicado(true)
+        setErro(COMPROVANTE_DUPLICADO_MSG)
+        return
+      }
+
+      const ext = file.name.split('.').pop()?.toLowerCase()
+      const isPdf = file.type === 'application/pdf' || ext === 'pdf'
+      const isImage = file.type.startsWith('image/')
+      if (!isPdf && !isImage) return
+
       const body = new FormData()
       body.append('file', file)
       const res = await fetch('/api/extract-boleto', { method: 'POST', body })
       const data: BoletoExtracao & { error?: string } = await res.json()
       if (!res.ok || data.error) {
         setErro('Não foi possível ler a data/hora automaticamente — preencha manualmente.')
+        return
+      }
+
+      // Duplicidade pelos dados da transação — cobre o caso do comprovante ter
+      // sido reenviado com outro nome/conteúdo (ex: reexportado), mas ainda
+      // representando o mesmo pagamento já usado em outra conta.
+      const mesmaTransacaoJaUsada = todasContas.some(c =>
+        c.id !== conta.id && c.status === 'pago' && c.valor === conta.valor && (
+          (!!data.dataPagamento && !!data.horaPagamento && c.dataPagamento === parseDataBR(data.dataPagamento) && c.horaPagamento === data.horaPagamento) ||
+          (!!data.identificadorTransacao && !!c.comprovanteIdentificador && c.comprovanteIdentificador === data.identificadorTransacao)
+        )
+      )
+      if (mesmaTransacaoJaUsada) {
+        setDuplicado(true)
+        setErro(COMPROVANTE_DUPLICADO_MSG)
         return
       }
 
@@ -828,6 +873,8 @@ function DarBaixaModal({ conta, onClose, onConfirm }: { conta: ContaPagar; onClo
 
       setDataPagamento(d => (data.dataPagamento ? parseDataBR(data.dataPagamento) || d : d))
       setHoraPagamento(h => data.horaPagamento ?? h)
+      setInstituicao(data.instituicaoFinanceira ?? '')
+      setIdentificador(data.identificadorTransacao ?? '')
     } catch {
       setErro('Falha ao conectar com a IA — preencha data/hora manualmente.')
     } finally {
@@ -837,7 +884,7 @@ function DarBaixaModal({ conta, onClose, onConfirm }: { conta: ContaPagar; onClo
 
   async function handleConfirm() {
     setSubmitted(true)
-    if (!comprovante || !dataPagamento) return
+    if (!comprovante || !dataPagamento || duplicado) return
     setSaving(true)
     try {
       await saveFile(comprovante, {
@@ -846,8 +893,9 @@ function DarBaixaModal({ conta, onClose, onConfirm }: { conta: ContaPagar; onClo
         entityName: conta.descricao,
         espaco: conta.espaco === 'Todos' ? undefined : conta.espaco,
         categoria: 'comprovante_pagamento',
+        fileHash: fileHashAtual ?? undefined,
       })
-      await onConfirm(dataPagamento, horaPagamento || undefined)
+      await onConfirm(dataPagamento, horaPagamento || undefined, instituicao || undefined, identificador || undefined)
     } finally {
       setSaving(false)
     }
@@ -908,14 +956,18 @@ function DarBaixaModal({ conta, onClose, onConfirm }: { conta: ContaPagar; onClo
               {extraindoIA && (
                 <span className="flex items-center gap-1.5 text-xs text-[#128C7E]">
                   <Sparkles className="h-3.5 w-3.5 animate-pulse" />
-                  Lendo data/hora do comprovante…
+                  Verificando comprovante…
                 </span>
               )}
             </div>
-            {comprovante && !extraindoIA && (
+            {comprovante && !extraindoIA && !duplicado && (
               <p className="text-xs text-app-subtle mt-1">Data e hora acima já vêm do comprovante quando identificadas — confira e corrija se precisar.</p>
             )}
-            {erro && <p className="text-xs text-red-400 mt-1">{erro}</p>}
+            {erro && (
+              <div className={`mt-2 rounded-lg border px-3 py-2 ${duplicado ? 'bg-red-500/10 border-red-500/30' : ''}`}>
+                <p className={`text-xs ${duplicado ? 'font-medium text-red-500' : 'text-red-400'}`}>{erro}</p>
+              </div>
+            )}
             {submitted && !comprovante && (
               <p className="text-xs text-red-400 mt-1">Anexe o comprovante antes de confirmar o pagamento.</p>
             )}
@@ -926,7 +978,7 @@ function DarBaixaModal({ conta, onClose, onConfirm }: { conta: ContaPagar; onClo
           <button onClick={onClose} className="rounded-lg border border-app-border2 px-4 py-2 text-sm text-app-muted hover:bg-app-surface2 transition-colors">
             Cancelar
           </button>
-          <button onClick={handleConfirm} disabled={saving}
+          <button onClick={handleConfirm} disabled={saving || extraindoIA || duplicado}
             className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
             style={{ backgroundColor: GREEN }}>
             <CheckCircle2 className="h-3.5 w-3.5" />
