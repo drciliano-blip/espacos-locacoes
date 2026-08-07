@@ -40,10 +40,18 @@ function parseValorBR(valor: string): string {
   return n > 0 ? String(n) : ''
 }
 
+// Tolerante a variações que a IA às vezes devolve mesmo quando o prompt pede
+// DD/MM/AAAA — dia/mês sem zero à esquerda ("5/8/2026"), ano com 2 dígitos ou
+// separador "-". Sem isso, um formato levemente diferente falhava em silêncio
+// e a data de pagamento caía pro fallback (hoje), em vez da data real do
+// comprovante.
 function parseDataBR(data: string): string {
-  const match = data.match(/(\d{2})\/(\d{2})\/(\d{4})/)
+  const match = data.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/)
   if (!match) return ''
-  const [, dd, mm, yyyy] = match
+  let [, dd, mm, yyyy] = match
+  dd = dd.padStart(2, '0')
+  mm = mm.padStart(2, '0')
+  if (yyyy.length === 2) yyyy = `20${yyyy}`
   return `${yyyy}-${mm}-${dd}`
 }
 

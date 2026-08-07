@@ -29,6 +29,7 @@ function buildPrompt(espacosNomes: string[]): string {
 Dicas:
 - "descricao": um resumo curto do que é a despesa (ex: "Manutenção elétrica — Complexo Jussara").
 - "fornecedor": nome de quem vai receber o pagamento (pessoa ou empresa).
+- "vencimento" x "dataPagamento" — são coisas DIFERENTES, não confunda: "vencimento" é a data limite pra pagar (aparece em boletos/faturas, geralmente rotulada "vencimento" ou "vence em"). "dataPagamento" é a data em que o pagamento JÁ FOI efetivado — é o dado principal de um comprovante/recibo de PIX, transferência ou pagamento realizado, geralmente rotulado "Data da transação", "Pago em", "Realizado em", "Comprovante gerado em" ou similar, sempre acompanhado de um horário. Se o documento é claramente um comprovante de pagamento (não um boleto a pagar), ele não tem vencimento — preencha "dataPagamento" com a data da transação e deixe "vencimento" como null.
 - "horaPagamento": procure o horário exato em que o pagamento foi efetivado (comum em comprovantes de PIX/transferência, ex: "14:32:07" ou "14h32"). Retorne em 24h no formato HH:MM. Se o documento não mostrar hora, null.
 - "formaPagamento": ex: PIX, transferência, boleto, dinheiro.
 - "chavePagamento": chave PIX, dados bancários (banco/agência/conta) ou qualquer identificador de pagamento mencionado.
