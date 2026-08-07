@@ -4,6 +4,7 @@ import { useState, useMemo, useRef } from 'react'
 import {
   Receipt, TrendingDown, CheckCircle2, AlertCircle, Clock,
   Filter, X, Plus, FolderOpen, Paperclip, ChevronDown, ChevronUp, Sparkles, Camera, Banknote, Pencil, Trash2,
+  MessageSquareText,
 } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
@@ -15,9 +16,17 @@ import Toast from '@/components/shared/Toast'
 import type { ContaPagar, CategoriaContaPagar, StatusContaPagar } from '@/types'
 
 interface BoletoExtracao {
-  vencimento: string | null
-  valor: string | null
+  descricao: string | null
   fornecedor: string | null
+  valor: string | null
+  vencimento: string | null
+  dataPagamento: string | null
+  formaPagamento: string | null
+  chavePagamento: string | null
+  espaco: string | null
+  categoria: string | null
+  subcategoria: string | null
+  observacoes: string | null
   cnpj: string | null
 }
 
@@ -82,11 +91,12 @@ interface FormState {
   espaco: string
   fornecedor: string
   observacoes: string
+  textoOrigemWhatsapp: string
 }
 
 const FORM_EMPTY: FormState = {
   descricao: '', valor: '', dataVencimento: '', categoria: '', subcategoria: '',
-  espaco: '', fornecedor: '', observacoes: '',
+  espaco: '', fornecedor: '', observacoes: '', textoOrigemWhatsapp: '',
 }
 
 function contaParaForm(conta: ContaPagar): FormState {
@@ -99,6 +109,7 @@ function contaParaForm(conta: ContaPagar): FormState {
     espaco: conta.espaco,
     fornecedor: conta.fornecedor ?? '',
     observacoes: conta.observacoes ?? '',
+    textoOrigemWhatsapp: conta.textoOrigemWhatsapp ?? '',
   }
 }
 
@@ -434,8 +445,59 @@ function ContaFormModal({ conta, onClose, onSave }: ContaFormModalProps) {
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [extraindoIA, setExtraindoIA] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const [colarTextoAberto, setColarTextoAberto] = useState(false)
+  const [textoWhatsapp, setTextoWhatsapp] = useState('')
 
   const subOpts = SUBCATEGORIAS
+
+  // Compartilhado entre o anexo (PDF/foto) e o texto colado do WhatsApp — os dois
+  // caem no mesmo endpoint e preenchem os mesmos campos do formulário.
+  async function processarExtracao(body: FormData, origemTexto?: string) {
+    setErro(null)
+    setExtraindoIA(true)
+    try {
+      body.append('espacos', JSON.stringify(espacosNomes))
+      const res = await fetch('/api/extract-boleto', { method: 'POST', body })
+      const data: BoletoExtracao & { error?: string } = await res.json()
+
+      if (!res.ok || data.error) {
+        setErro(data.error ?? 'Não foi possível ler o conteúdo com a IA.')
+        return
+      }
+
+      if (!data.vencimento && !data.valor && !data.fornecedor && !data.descricao) {
+        setErro('A IA não conseguiu identificar os dados. Preencha os campos manualmente.')
+        return
+      }
+
+      // Forma de pagamento / chave / data de pagamento não têm campo próprio no
+      // formulário — entram como observação, sem marcar a conta como paga
+      // automaticamente (dar baixa continua exigindo comprovante, à parte).
+      const notasExtras = [
+        data.formaPagamento ? `Forma de pagamento: ${data.formaPagamento}` : null,
+        data.chavePagamento ? `Chave/dados de pagamento: ${data.chavePagamento}` : null,
+        data.dataPagamento ? `Pagamento informado no texto: ${data.dataPagamento}` : null,
+        data.observacoes ?? null,
+      ].filter((n): n is string => !!n).join('\n')
+
+      setForm(f => ({
+        ...f,
+        descricao: data.descricao ?? f.descricao,
+        dataVencimento: data.vencimento ? parseDataBR(data.vencimento) || f.dataVencimento : f.dataVencimento,
+        valor: data.valor ? parseValorBR(data.valor) || f.valor : f.valor,
+        fornecedor: data.fornecedor ?? f.fornecedor,
+        espaco: data.espaco ?? f.espaco,
+        categoria: (data.categoria as CategoriaContaPagar | null) ?? f.categoria,
+        subcategoria: data.subcategoria ?? f.subcategoria,
+        observacoes: notasExtras ? [f.observacoes, notasExtras].filter(Boolean).join('\n') : f.observacoes,
+        textoOrigemWhatsapp: origemTexto ?? f.textoOrigemWhatsapp,
+      }))
+    } catch {
+      setErro('Falha ao conectar com a IA. Preencha os campos manualmente.')
+    } finally {
+      setExtraindoIA(false)
+    }
+  }
 
   async function handleAnexoSelecionado(file: File | null) {
     setPendingFile(file)
@@ -454,35 +516,18 @@ function ContaFormModal({ conta, onClose, onSave }: ContaFormModalProps) {
       return
     }
 
-    setErro(null)
-    setExtraindoIA(true)
-    try {
-      const body = new FormData()
-      body.append('file', file)
-      const res = await fetch('/api/extract-boleto', { method: 'POST', body })
-      const data: BoletoExtracao & { error?: string } = await res.json()
+    const body = new FormData()
+    body.append('file', file)
+    await processarExtracao(body)
+  }
 
-      if (!res.ok || data.error) {
-        setErro(data.error ?? 'Não foi possível ler o documento com a IA.')
-        return
-      }
-
-      if (!data.vencimento && !data.valor && !data.fornecedor) {
-        setErro('A IA não conseguiu identificar os dados neste documento. Preencha os campos manualmente.')
-        return
-      }
-
-      setForm(f => ({
-        ...f,
-        dataVencimento: data.vencimento ? parseDataBR(data.vencimento) || f.dataVencimento : f.dataVencimento,
-        valor: data.valor ? parseValorBR(data.valor) || f.valor : f.valor,
-        fornecedor: data.fornecedor ?? f.fornecedor,
-      }))
-    } catch {
-      setErro('Falha ao conectar com a IA. Preencha os campos manualmente.')
-    } finally {
-      setExtraindoIA(false)
-    }
+  async function handleTextoWhatsapp() {
+    if (!textoWhatsapp.trim()) return
+    const body = new FormData()
+    body.append('text', textoWhatsapp.trim())
+    await processarExtracao(body, textoWhatsapp.trim())
+    setColarTextoAberto(false)
+    setTextoWhatsapp('')
   }
 
   async function handleSalvar() {
@@ -502,6 +547,7 @@ function ContaFormModal({ conta, onClose, onSave }: ContaFormModalProps) {
       dataPagamento:   conta?.dataPagamento,
       fornecedor:      form.fornecedor || undefined,
       observacoes:     form.observacoes || undefined,
+      textoOrigemWhatsapp: form.textoOrigemWhatsapp || undefined,
     }
     try {
       if (pendingFile) {
@@ -651,6 +697,11 @@ function ContaFormModal({ conta, onClose, onSave }: ContaFormModalProps) {
                 <Camera className="h-3.5 w-3.5" />
                 Tirar foto
               </button>
+              <button onClick={() => setColarTextoAberto(v => !v)} disabled={extraindoIA}
+                className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors disabled:opacity-60">
+                <MessageSquareText className="h-3.5 w-3.5" />
+                Colar Texto WhatsApp
+              </button>
               {pendingFile && !extraindoIA && (
                 <button onClick={() => { setPendingFile(null); if (fileRef.current) fileRef.current.value = '' }}
                   className="text-xs text-red-500 hover:underline">remover</button>
@@ -662,6 +713,29 @@ function ContaFormModal({ conta, onClose, onSave }: ContaFormModalProps) {
                 </span>
               )}
             </div>
+            {colarTextoAberto && (
+              <div className="space-y-2 pt-2">
+                <textarea
+                  value={textoWhatsapp}
+                  onChange={e => setTextoWhatsapp(e.target.value)}
+                  rows={5}
+                  placeholder="Cole aqui a Ordem de Serviço/Pagamento recebida pelo WhatsApp…"
+                  className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none resize-none"
+                />
+                <button
+                  onClick={handleTextoWhatsapp}
+                  disabled={extraindoIA || !textoWhatsapp.trim()}
+                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  style={{ backgroundColor: GREEN }}
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Extrair dados do texto
+                </button>
+              </div>
+            )}
+            {form.textoOrigemWhatsapp && !colarTextoAberto && (
+              <p className="text-xs text-app-subtle italic mt-1.5">Texto do WhatsApp usado no preenchimento fica salvo com esta conta.</p>
+            )}
           </div>
 
           {erro && (
@@ -855,6 +929,19 @@ function ContaRow({ conta, onDarBaixa, onEditar, onExcluir }: ContaRowProps) {
             espaco={conta.espaco === 'Todos' ? undefined : conta.espaco}
             compact
           />
+          {conta.textoOrigemWhatsapp && (
+            <details className="group mt-2">
+              <summary className="cursor-pointer text-xs font-medium text-app-muted hover:text-app-text transition-colors list-none flex items-center gap-1.5">
+                <MessageSquareText className="h-3 w-3" />
+                <span className="group-open:hidden">▶</span>
+                <span className="hidden group-open:inline">▼</span>
+                Texto original (WhatsApp)
+              </summary>
+              <p className="mt-1.5 whitespace-pre-wrap text-xs text-app-subtle bg-app-surface2/50 rounded-lg border border-app-border2/30 p-2.5">
+                {conta.textoOrigemWhatsapp}
+              </p>
+            </details>
+          )}
         </div>
       )}
     </div>

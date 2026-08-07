@@ -134,6 +134,7 @@ export interface ContaPagar {
   dataPagamento?: string
   fornecedor?: string
   observacoes?: string
+  textoOrigemWhatsapp?: string
 }
 
 // Feature 2: Usuário do sistema
