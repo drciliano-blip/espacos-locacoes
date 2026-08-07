@@ -4,12 +4,12 @@ import { useState, useMemo, useRef } from 'react'
 import {
   Receipt, TrendingDown, CheckCircle2, AlertCircle, Clock,
   Filter, X, Plus, FolderOpen, Paperclip, ChevronDown, ChevronUp, Sparkles, Camera, Banknote, Pencil, Trash2,
-  MessageSquareText,
+  MessageSquareText, RefreshCw,
 } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { formatCurrency, parseCurrencyBR } from '@/lib/utils'
-import { saveFile, getFiles, hashFile } from '@/lib/file-storage'
+import { saveFile, getFiles, getFileUrl, hashFile } from '@/lib/file-storage'
 import FileList from '@/components/shared/FileList'
 import FileSearchModal from '@/components/shared/FileSearchModal'
 import Toast from '@/components/shared/Toast'
@@ -53,6 +53,45 @@ function parseDataBR(data: string): string {
   mm = mm.padStart(2, '0')
   if (yyyy.length === 2) yyyy = `20${yyyy}`
   return `${yyyy}-${mm}-${dd}`
+}
+
+type RelerResultado =
+  | { ok: true; dataPagamento?: string; horaPagamento?: string; instituicao?: string; identificador?: string }
+  | { ok: false; motivo: 'sem-comprovante' | 'sem-data' | 'erro' }
+
+// Baixa o comprovante já anexado a uma conta e roda a leitura por IA de novo —
+// usado tanto pelo botão individual "Reler comprovante" quanto pela correção em
+// lote, pra atualizar a data/hora real do pagamento de contas que já tiveram
+// baixa registrada (a data de registro da baixa não muda).
+async function relerComprovanteDaConta(conta: ContaPagar): Promise<RelerResultado> {
+  const arquivos = await getFiles({ module: 'contas', entityId: conta.id, categoria: 'comprovante_pagamento' })
+  if (arquivos.length === 0) return { ok: false, motivo: 'sem-comprovante' }
+  const arquivo = arquivos[0]
+  const url = await getFileUrl(arquivo.id)
+  if (!url) return { ok: false, motivo: 'erro' }
+
+  try {
+    const respArquivo = await fetch(url)
+    const blob = await respArquivo.blob()
+    const file = new File([blob], arquivo.name, { type: arquivo.mimeType || blob.type })
+
+    const body = new FormData()
+    body.append('file', file)
+    const res = await fetch('/api/extract-boleto', { method: 'POST', body })
+    const data: BoletoExtracao & { error?: string } = await res.json()
+    if (!res.ok || data.error) return { ok: false, motivo: 'erro' }
+    if (!data.dataPagamento && !data.horaPagamento) return { ok: false, motivo: 'sem-data' }
+
+    return {
+      ok: true,
+      dataPagamento: data.dataPagamento ? parseDataBR(data.dataPagamento) || undefined : undefined,
+      horaPagamento: data.horaPagamento ?? undefined,
+      instituicao: data.instituicaoFinanceira ?? undefined,
+      identificador: data.identificadorTransacao ?? undefined,
+    }
+  } catch {
+    return { ok: false, motivo: 'erro' }
+  }
 }
 
 const GREEN = '#25D366'
@@ -126,7 +165,7 @@ function contaParaForm(conta: ContaPagar): FormState {
 
 export default function ContasPagarPage() {
   const { espacosNomes } = useEspacos()
-  const { contas, addConta, updateConta, deleteConta, darBaixa } = useContasPagar()
+  const { contas, addConta, updateConta, deleteConta, darBaixa, corrigirDataPagamento } = useContasPagar()
   const [contaBaixa,        setContaBaixa]        = useState<ContaPagar | null>(null)
   const [contaEditando,     setContaEditando]     = useState<ContaPagar | null>(null)
   const [contaExcluindo,    setContaExcluindo]    = useState<ContaPagar | null>(null)
@@ -145,6 +184,9 @@ export default function ContasPagarPage() {
   const [docModalOpen,      setDocModalOpen]      = useState(false)
   const [excluindo,         setExcluindo]         = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
+  const [relendoId,    setRelendoId]    = useState<string | null>(null)
+  const [relendoTodas, setRelendoTodas] = useState(false)
+  const [resultadoRelerTodas, setResultadoRelerTodas] = useState<string | null>(null)
 
   function showToast(msg: string) {
     setToastMsg(msg)
@@ -152,6 +194,61 @@ export default function ContasPagarPage() {
   }
 
   const todasContas = contas
+
+  async function handleReler(conta: ContaPagar) {
+    setRelendoId(conta.id)
+    try {
+      const resultado = await relerComprovanteDaConta(conta)
+      if (!resultado.ok) {
+        showToast(
+          resultado.motivo === 'sem-comprovante' ? 'Essa conta não tem comprovante anexado.' :
+          resultado.motivo === 'sem-data' ? 'A IA não identificou data/hora neste comprovante.' :
+          'Não foi possível reler o comprovante.'
+        )
+        return
+      }
+      await corrigirDataPagamento(
+        conta.id,
+        resultado.dataPagamento ?? conta.dataPagamento ?? conta.dataVencimento,
+        resultado.horaPagamento,
+        resultado.instituicao,
+        resultado.identificador,
+      )
+      showToast('Data de pagamento atualizada pelo comprovante.')
+    } finally {
+      setRelendoId(null)
+    }
+  }
+
+  // Corrige em lote as contas já pagas cuja data/hora exibida foi registrada como
+  // a data da baixa em vez da data real do comprovante — relê cada comprovante
+  // já anexado e atualiza. Roda uma de cada vez (não em paralelo) pra não
+  // sobrecarregar a IA.
+  async function handleRelerTodas() {
+    setRelendoTodas(true)
+    setResultadoRelerTodas(null)
+    let corrigidas = 0, semComprovante = 0, semData = 0, erros = 0
+    const contasPagas = todasContas.filter(c => statusEfetivo(c) === 'pago')
+    for (const c of contasPagas) {
+      const resultado = await relerComprovanteDaConta(c)
+      if (!resultado.ok) {
+        if (resultado.motivo === 'sem-comprovante') semComprovante++
+        else if (resultado.motivo === 'sem-data') semData++
+        else erros++
+        continue
+      }
+      await corrigirDataPagamento(
+        c.id,
+        resultado.dataPagamento ?? c.dataPagamento ?? c.dataVencimento,
+        resultado.horaPagamento,
+        resultado.instituicao,
+        resultado.identificador,
+      )
+      corrigidas++
+    }
+    setResultadoRelerTodas(`${corrigidas} corrigida(s) · ${semComprovante} sem comprovante · ${semData} sem data identificada no comprovante · ${erros} com erro`)
+    setRelendoTodas(false)
+  }
 
   const filtered = useMemo(() => todasContas.filter(c => {
     const status = statusEfetivo(c)
@@ -303,6 +400,17 @@ export default function ContasPagarPage() {
 
         {/* Lista */}
         <div className="p-5 space-y-6">
+          {tab === 'pagas' && (
+            <div className="flex items-center justify-between gap-2 flex-wrap -mt-1">
+              <button onClick={handleRelerTodas} disabled={relendoTodas}
+                className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs font-medium text-app-muted hover:bg-app-surface2 hover:text-app-text transition-colors disabled:opacity-60">
+                <RefreshCw className={`h-3.5 w-3.5 ${relendoTodas ? 'animate-spin' : ''}`} />
+                {relendoTodas ? 'Relendo comprovantes…' : 'Recalcular datas de todas pelos comprovantes'}
+              </button>
+              {resultadoRelerTodas && <span className="text-xs text-app-subtle">{resultadoRelerTodas}</span>}
+            </div>
+          )}
+
           {tab === 'pagas' ? (
             pagasOrdenadas.length > 0 && (
               <div className="space-y-2">
@@ -313,6 +421,8 @@ export default function ContasPagarPage() {
                     onDarBaixa={() => setContaBaixa(conta)}
                     onEditar={() => setContaEditando(conta)}
                     onExcluir={() => setContaExcluindo(conta)}
+                    onReler={() => handleReler(conta)}
+                    relendo={relendoId === conta.id || relendoTodas}
                   />
                 ))}
               </div>
@@ -333,6 +443,8 @@ export default function ContasPagarPage() {
                         onDarBaixa={() => setContaBaixa(conta)}
                         onEditar={() => setContaEditando(conta)}
                         onExcluir={() => setContaExcluindo(conta)}
+                        onReler={() => handleReler(conta)}
+                        relendo={relendoId === conta.id}
                       />
                     ))}
                   </div>
@@ -1003,9 +1115,11 @@ interface ContaRowProps {
   onDarBaixa: () => void
   onEditar: () => void
   onExcluir: () => void
+  onReler: () => void
+  relendo: boolean
 }
 
-function ContaRow({ conta, onDarBaixa, onEditar, onExcluir }: ContaRowProps) {
+function ContaRow({ conta, onDarBaixa, onEditar, onExcluir, onReler, relendo }: ContaRowProps) {
   const [expanded, setExpanded] = useState(false)
   const status = statusEfetivo(conta)
 
@@ -1044,6 +1158,14 @@ function ContaRow({ conta, onDarBaixa, onEditar, onExcluir }: ContaRowProps) {
               title="Dar baixa">
               <Banknote className="h-3.5 w-3.5" />
               Dar baixa
+            </button>
+          )}
+          {status === 'pago' && (
+            <button onClick={onReler} disabled={relendo}
+              className="flex shrink-0 items-center gap-1.5 rounded-md border border-app-border2 px-2.5 py-1 text-xs font-medium text-app-muted hover:border-[#25D366] hover:text-[#128C7E] transition-colors disabled:opacity-60"
+              title="Reler a data/hora do pagamento a partir do comprovante anexado">
+              <RefreshCw className={`h-3.5 w-3.5 ${relendo ? 'animate-spin' : ''}`} />
+              {relendo ? 'Relendo…' : 'Reler comprovante'}
             </button>
           )}
           <button onClick={onEditar}

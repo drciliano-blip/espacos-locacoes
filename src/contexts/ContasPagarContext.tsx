@@ -17,6 +17,7 @@ interface ContaPagarRow {
   data_vencimento: string
   data_pagamento: string | null
   hora_pagamento: string | null
+  data_baixa: string | null
   comprovante_instituicao: string | null
   comprovante_identificador: string | null
   fornecedor: string | null
@@ -36,6 +37,7 @@ function fromRow(row: ContaPagarRow): ContaPagar {
     dataVencimento: row.data_vencimento,
     dataPagamento: row.data_pagamento ?? undefined,
     horaPagamento: row.hora_pagamento ?? undefined,
+    dataBaixa: row.data_baixa ?? undefined,
     comprovanteInstituicao: row.comprovante_instituicao ?? undefined,
     comprovanteIdentificador: row.comprovante_identificador ?? undefined,
     fornecedor: row.fornecedor ?? undefined,
@@ -51,6 +53,9 @@ interface ContasPagarContextValue {
   updateConta: (c: ContaPagar) => Promise<void>
   deleteConta: (id: string) => Promise<void>
   darBaixa: (id: string, dataPagamento: string, horaPagamento?: string, comprovanteInstituicao?: string, comprovanteIdentificador?: string) => Promise<void>
+  // Corrige a data/hora do pagamento de uma conta JÁ paga (relendo o comprovante),
+  // sem alterar o status nem a data em que a baixa foi originalmente registrada.
+  corrigirDataPagamento: (id: string, dataPagamento: string, horaPagamento?: string, comprovanteInstituicao?: string, comprovanteIdentificador?: string) => Promise<void>
 }
 
 const ContasPagarContext = createContext<ContasPagarContextValue | null>(null)
@@ -175,6 +180,7 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
         status: 'pago',
         data_pagamento: dataPagamento,
         hora_pagamento: horaPagamento ?? null,
+        data_baixa: new Date().toISOString(),
         comprovante_instituicao: comprovanteInstituicao ?? null,
         comprovante_identificador: comprovanteIdentificador ?? null,
       })
@@ -192,8 +198,27 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function corrigirDataPagamento(id: string, dataPagamento: string, horaPagamento?: string, comprovanteInstituicao?: string, comprovanteIdentificador?: string) {
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from('contas_pagar')
+      .update({
+        data_pagamento: dataPagamento,
+        hora_pagamento: horaPagamento ?? null,
+        comprovante_instituicao: comprovanteInstituicao ?? null,
+        comprovante_identificador: comprovanteIdentificador ?? null,
+      })
+      .eq('id', id)
+      .select(SELECT)
+      .single()
+
+    if (error) throw error
+    const atualizada = fromRow(data as unknown as ContaPagarRow)
+    setContas(prev => prev.map(c => c.id === id ? atualizada : c))
+  }
+
   return (
-    <ContasPagarContext.Provider value={{ contas, loading, addConta, updateConta, deleteConta, darBaixa }}>
+    <ContasPagarContext.Provider value={{ contas, loading, addConta, updateConta, deleteConta, darBaixa, corrigirDataPagamento }}>
       {children}
     </ContasPagarContext.Provider>
   )

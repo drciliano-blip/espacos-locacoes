@@ -133,6 +133,9 @@ export interface ContaPagar {
   dataVencimento: string
   dataPagamento?: string
   horaPagamento?: string
+  // Quando o usuário registrou a baixa no sistema — só uso interno/auditoria,
+  // nunca exibido como "Pago em" (isso usa dataPagamento/horaPagamento).
+  dataBaixa?: string
   comprovanteInstituicao?: string
   comprovanteIdentificador?: string
   fornecedor?: string
