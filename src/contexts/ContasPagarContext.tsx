@@ -55,7 +55,9 @@ interface ContasPagarContextValue {
   darBaixa: (id: string, dataPagamento: string, horaPagamento?: string, comprovanteInstituicao?: string, comprovanteIdentificador?: string) => Promise<void>
   // Corrige a data/hora do pagamento de uma conta JÁ paga (relendo o comprovante),
   // sem alterar o status nem a data em que a baixa foi originalmente registrada.
-  corrigirDataPagamento: (id: string, dataPagamento: string, horaPagamento?: string, comprovanteInstituicao?: string, comprovanteIdentificador?: string) => Promise<void>
+  // Só atualiza os campos que vieram com valor de verdade — nunca sobrescreve com
+  // um chute (ex: vencimento) quando a IA não conseguiu identificar algo.
+  corrigirDataPagamento: (id: string, dataPagamento?: string, horaPagamento?: string, comprovanteInstituicao?: string, comprovanteIdentificador?: string) => Promise<void>
 }
 
 const ContasPagarContext = createContext<ContasPagarContextValue | null>(null)
@@ -198,16 +200,18 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function corrigirDataPagamento(id: string, dataPagamento: string, horaPagamento?: string, comprovanteInstituicao?: string, comprovanteIdentificador?: string) {
+  async function corrigirDataPagamento(id: string, dataPagamento?: string, horaPagamento?: string, comprovanteInstituicao?: string, comprovanteIdentificador?: string) {
+    const patch: Record<string, string> = {}
+    if (dataPagamento !== undefined) patch.data_pagamento = dataPagamento
+    if (horaPagamento !== undefined) patch.hora_pagamento = horaPagamento
+    if (comprovanteInstituicao !== undefined) patch.comprovante_instituicao = comprovanteInstituicao
+    if (comprovanteIdentificador !== undefined) patch.comprovante_identificador = comprovanteIdentificador
+    if (Object.keys(patch).length === 0) return
+
     const supabase = createClient()
     const { data, error } = await supabase
       .from('contas_pagar')
-      .update({
-        data_pagamento: dataPagamento,
-        hora_pagamento: horaPagamento ?? null,
-        comprovante_instituicao: comprovanteInstituicao ?? null,
-        comprovante_identificador: comprovanteIdentificador ?? null,
-      })
+      .update(patch)
       .eq('id', id)
       .select(SELECT)
       .single()

@@ -207,14 +207,16 @@ export default function ContasPagarPage() {
         )
         return
       }
+      // Só atualiza a data se a IA realmente identificou uma no comprovante —
+      // nunca cai pro vencimento ou pra qualquer outra data como substituto.
       await corrigirDataPagamento(
         conta.id,
-        resultado.dataPagamento ?? conta.dataPagamento ?? conta.dataVencimento,
+        resultado.dataPagamento,
         resultado.horaPagamento,
         resultado.instituicao,
         resultado.identificador,
       )
-      showToast('Data de pagamento atualizada pelo comprovante.')
+      showToast(resultado.dataPagamento ? 'Data de pagamento atualizada pelo comprovante.' : 'Comprovante lido, mas sem data identificada com segurança.')
     } finally {
       setRelendoId(null)
     }
@@ -237,9 +239,11 @@ export default function ContasPagarPage() {
         else erros++
         continue
       }
+      // Idem — nunca substitui por vencimento ou outra data quando a IA não
+      // identificou a data real do pagamento no comprovante.
       await corrigirDataPagamento(
         c.id,
-        resultado.dataPagamento ?? c.dataPagamento ?? c.dataVencimento,
+        resultado.dataPagamento,
         resultado.horaPagamento,
         resultado.instituicao,
         resultado.identificador,
@@ -919,7 +923,9 @@ function DarBaixaModal({ conta, onClose, onConfirm }: {
   onConfirm: (dataPagamento: string, horaPagamento?: string, comprovanteInstituicao?: string, comprovanteIdentificador?: string) => Promise<void>
 }) {
   const { contas: todasContas } = useContasPagar()
-  const [dataPagamento, setDataPagamento] = useState(() => new Date().toISOString().split('T')[0])
+  // Sem valor padrão de propósito: a Data de Pagamento só pode vir do comprovante
+  // (ou do preenchimento manual do usuário) — nunca da data de hoje/da baixa.
+  const [dataPagamento, setDataPagamento] = useState('')
   const [horaPagamento, setHoraPagamento] = useState('')
   const [instituicao, setInstituicao] = useState('')
   const [identificador, setIdentificador] = useState('')
@@ -933,10 +939,11 @@ function DarBaixaModal({ conta, onClose, onConfirm }: {
   const fileRef = useRef<HTMLInputElement>(null)
   const cameraRef = useRef<HTMLInputElement>(null)
 
-  // Lê data e hora do pagamento diretamente do comprovante anexado — a data de
-  // cadastro/hoje só fica valendo se a IA não encontrar nada no documento. Também
-  // verifica se esse mesmo comprovante (por hash do arquivo, ou pelos dados da
-  // transação) já foi usado pra dar baixa em outra conta.
+  // Lê data e hora do pagamento diretamente do comprovante anexado — se a IA não
+  // identificar, o campo fica em branco pro usuário preencher manualmente (nunca
+  // cai pra data de hoje, de cadastro ou de vencimento). Também verifica se esse
+  // mesmo comprovante (por hash do arquivo, ou pelos dados da transação) já foi
+  // usado pra dar baixa em outra conta.
   async function handleComprovanteSelecionado(file: File | null) {
     setComprovante(file)
     setFileHashAtual(null)
