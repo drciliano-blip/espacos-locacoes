@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 
-const CATEGORIAS = ['operacional', 'obra', 'financeiro']
+const CATEGORIAS = ['operacional', 'obra', 'financeiro', 'retirada_socio']
 const SUBCATEGORIAS = ['aluguel', 'energia', 'internet', 'funcionários', 'manutenção', 'fornecedores', 'extras', 'outros']
 
 function buildPrompt(espacosNomes: string[]): string {
@@ -20,7 +20,7 @@ function buildPrompt(espacosNomes: string[]): string {
   "instituicaoFinanceira": string | null,
   "identificadorTransacao": string | null,
   "espaco": string | null,
-  "categoria": "operacional" | "obra" | "financeiro" | null,
+  "categoria": "operacional" | "obra" | "financeiro" | "retirada_socio" | null,
   "subcategoria": "aluguel" | "energia" | "internet" | "funcionários" | "manutenção" | "fornecedores" | "extras" | "outros" | null,
   "observacoes": string | null,
   "cnpj": "XX.XXX.XXX/XXXX-XX" | null
@@ -36,7 +36,7 @@ Dicas:
 - "instituicaoFinanceira": banco/instituição de pagamento que emitiu ou processou o comprovante (ex: Nubank, Itaú, PicPay, Banco do Brasil, Mercado Pago).
 - "identificadorTransacao": código único da transação, se aparecer (ex: "ID da transação", "autenticação", "NSU", código E2E do PIX).
 - "espaco": só use um destes nomes exatos, se o texto claramente se referir a um deles: ${espacosLista}. Caso contrário, null.
-- "categoria" e "subcategoria": só use um dos valores exatos listados acima; se não tiver certeza, null.
+- "categoria" e "subcategoria": só use um dos valores exatos listados acima; se não tiver certeza, null. Dentro de "categoria": "retirada_socio" é especificamente um repasse/retirada de lucro para um sócio do negócio (ex: "retirada", "pró-labore", "distribuição de lucro", pagamento a um sócio nominal) — diferente de "financeiro", que é despesa financeira do negócio em si (juros, taxas bancárias, etc.).
 - "observacoes": qualquer informação adicional relevante que não se encaixe nos outros campos.`
 }
 

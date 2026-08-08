@@ -112,12 +112,13 @@ function statusEfetivo(conta: ContaPagar): StatusContaPagar {
   return conta.dataVencimento < hoje ? 'atrasado' : 'pendente'
 }
 
-const CATEGORIAS: CategoriaContaPagar[] = ['operacional', 'obra', 'financeiro']
+const CATEGORIAS: CategoriaContaPagar[] = ['operacional', 'obra', 'financeiro', 'retirada_socio']
 const categoriaLabel: Record<CategoriaContaPagar, string> = {
-  operacional: 'Operacional', obra: 'Obra', financeiro: 'Financeiro',
+  operacional: 'Operacional', obra: 'Obra', financeiro: 'Financeiro', retirada_socio: 'Retirada Sócio',
 }
 const categoriaBadge: Record<CategoriaContaPagar, string> = {
   operacional: 'bg-sky-500/10 text-sky-600', obra: 'bg-orange-500/10 text-orange-600', financeiro: 'bg-emerald-500/10 text-emerald-600',
+  retirada_socio: 'bg-violet-500/10 text-violet-600',
 }
 
 const SUBCATEGORIAS: string[] = ['aluguel', 'energia', 'internet', 'funcionários', 'manutenção', 'fornecedores', 'extras', 'outros']
