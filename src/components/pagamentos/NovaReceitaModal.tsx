@@ -20,6 +20,7 @@ const TIPO_ENTRADA_LABEL: Record<TipoEntrada, string> = {
   evento: 'Receita de Evento',
   aporte_societario: 'Aporte Societário',
   outras_entradas: 'Outras Entradas',
+  retorno_fundo_caixa: 'Retorno do Fundo de Caixa',
 }
 
 interface Props {
@@ -82,11 +83,19 @@ export default function NovaReceitaModal({
   }
 
   const isAporte = draft.tipoEntrada === 'aporte_societario'
+  const isRetornoFundo = draft.tipoEntrada === 'retorno_fundo_caixa'
   const sociosDoEspaco = draft.espaco ? (DIVISAO_SOCIOS[draft.espaco] ?? []) : []
 
   const errors = isAporte
     ? {
         socioResponsavel: !draft.socioResponsavel,
+        espaco: !draft.espaco,
+        data: !draft.data,
+        valor: !draft.valor || parseCurrencyBR(draft.valor) <= 0,
+        descricao: !draft.descricao.trim(),
+      }
+    : isRetornoFundo
+    ? {
         espaco: !draft.espaco,
         data: !draft.data,
         valor: !draft.valor || parseCurrencyBR(draft.valor) <= 0,
@@ -106,8 +115,9 @@ export default function NovaReceitaModal({
     setSaving(true)
     setErro(null)
     try {
-      // Aporte societário não tem categoria própria no cadastro — usa "Outros" e
-      // já entra como transação concluída (é sempre um repasse já efetivado).
+      // Aporte societário e retorno do Fundo de Caixa não têm categoria própria
+      // no cadastro — usam "Outros" e já entram como transação concluída (são
+      // sempre um movimento já efetivado, nunca pendente).
       const categoriaAporte = categorias.find(c => c.slug === 'outros')?.id ?? categoriasDisponiveis[0]?.id ?? ''
       const nova = await onSave(isAporte ? {
         categoriaId: categoriaAporte,
@@ -121,6 +131,17 @@ export default function NovaReceitaModal({
         observacoes: draft.observacoes.trim() || undefined,
         tipoEntrada: 'aporte_societario',
         socioResponsavel: draft.socioResponsavel,
+      } : isRetornoFundo ? {
+        categoriaId: categoriaAporte,
+        eventoId,
+        espaco: draft.espaco,
+        descricao: draft.descricao.trim(),
+        data: draft.data,
+        dataRecebimento: draft.data,
+        valor: parseCurrencyBR(draft.valor),
+        status: 'pago',
+        observacoes: draft.observacoes.trim() || undefined,
+        tipoEntrada: 'retorno_fundo_caixa',
       } : {
         categoriaId: draft.categoriaId,
         eventoId,
@@ -143,7 +164,7 @@ export default function NovaReceitaModal({
             entityId: nova.id,
             entityName: draft.descricao.trim(),
             espaco: draft.espaco || undefined,
-            categoria: isAporte ? 'comprovante_aporte' : 'comprovante',
+            categoria: isAporte ? 'comprovante_aporte' : isRetornoFundo ? 'comprovante_retorno_fundo' : 'comprovante',
           })
         } catch {
           setErro('Entrada salva, mas não foi possível anexar o comprovante automaticamente. Anexe depois pela lista.')
@@ -192,10 +213,73 @@ export default function NovaReceitaModal({
                   Não conta como faturamento — aumenta o caixa, mas fica separado nos relatórios.
                 </p>
               )}
+              {isRetornoFundo && (
+                <p className="text-xs text-app-subtle mt-1">
+                  Não é receita — é só uma transferência de saldo do Fundo de Caixa de volta pro caixa disponível.
+                </p>
+              )}
             </div>
           )}
 
-          {isAporte ? (
+          {isRetornoFundo ? (
+            <>
+              <div>
+                <label className="text-xs text-app-subtle mb-0.5 block">Espaço<span className="text-red-400 ml-0.5">*</span></label>
+                <select
+                  value={draft.espaco}
+                  onChange={e => set('espaco', e.target.value)}
+                  className={`w-full cursor-pointer rounded-lg border ${submitted && errors.espaco ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
+                >
+                  <option value="">— Selecione —</option>
+                  {espacosNomes.map(e => <option key={e} value={e}>{e}</option>)}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-app-subtle mb-0.5 block">Data do retorno<span className="text-red-400 ml-0.5">*</span></label>
+                  <input
+                    type="date"
+                    value={draft.data}
+                    onChange={e => set('data', e.target.value)}
+                    className={`w-full rounded-lg border ${submitted && errors.data ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-app-subtle mb-0.5 block">Valor do retorno (R$)<span className="text-red-400 ml-0.5">*</span></label>
+                  <input
+                    type="text" inputMode="decimal"
+                    value={draft.valor}
+                    onChange={e => set('valor', e.target.value)}
+                    placeholder="0,00"
+                    className={`w-full rounded-lg border ${submitted && errors.valor ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-app-subtle mb-0.5 block">
+                  Descrição / motivo<span className="text-red-400 ml-0.5">*</span>
+                </label>
+                <input
+                  value={draft.descricao}
+                  onChange={e => set('descricao', e.target.value)}
+                  placeholder="Ex: Retorno parcial do Fundo de Caixa — Complexo Jussara"
+                  className={`w-full rounded-lg border ${submitted && errors.descricao ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-app-subtle mb-0.5 block">Observações</label>
+                <textarea
+                  value={draft.observacoes}
+                  onChange={e => set('observacoes', e.target.value)}
+                  rows={2}
+                  className="w-full resize-none rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
+                />
+              </div>
+            </>
+          ) : isAporte ? (
             <>
               <div>
                 <label className="text-xs text-app-subtle mb-0.5 block">Espaço<span className="text-red-400 ml-0.5">*</span></label>

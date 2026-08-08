@@ -11,7 +11,7 @@ export interface CategoriaReceita {
   nome: string
 }
 
-export type TipoEntrada = 'evento' | 'aporte_societario' | 'outras_entradas'
+export type TipoEntrada = 'evento' | 'aporte_societario' | 'outras_entradas' | 'retorno_fundo_caixa'
 
 export interface Receita {
   id: string

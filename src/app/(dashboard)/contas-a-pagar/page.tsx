@@ -4,7 +4,7 @@ import { useState, useMemo, useRef } from 'react'
 import {
   Receipt, TrendingDown, CheckCircle2, AlertCircle, Clock,
   Filter, X, Plus, FolderOpen, Paperclip, ChevronDown, ChevronUp, Sparkles, Camera, Banknote, Pencil, Trash2,
-  MessageSquareText, RefreshCw,
+  MessageSquareText, RefreshCw, Vault,
 } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
@@ -112,13 +112,14 @@ function statusEfetivo(conta: ContaPagar): StatusContaPagar {
   return conta.dataVencimento < hoje ? 'atrasado' : 'pendente'
 }
 
-const CATEGORIAS: CategoriaContaPagar[] = ['operacional', 'obra', 'financeiro', 'retirada_socio']
+const CATEGORIAS: CategoriaContaPagar[] = ['operacional', 'obra', 'financeiro', 'retirada_socio', 'fundo_caixa']
 const categoriaLabel: Record<CategoriaContaPagar, string> = {
   operacional: 'Operacional', obra: 'Obra', financeiro: 'Financeiro', retirada_socio: 'Retirada Sócio',
+  fundo_caixa: 'Fundo de Caixa',
 }
 const categoriaBadge: Record<CategoriaContaPagar, string> = {
   operacional: 'bg-sky-500/10 text-sky-600', obra: 'bg-orange-500/10 text-orange-600', financeiro: 'bg-emerald-500/10 text-emerald-600',
-  retirada_socio: 'bg-violet-500/10 text-violet-600',
+  retirada_socio: 'bg-violet-500/10 text-violet-600', fundo_caixa: 'bg-amber-500/10 text-amber-600',
 }
 
 const SUBCATEGORIAS: string[] = ['aluguel', 'energia', 'internet', 'funcionários', 'manutenção', 'fornecedores', 'extras', 'outros']
@@ -187,6 +188,7 @@ export default function ContasPagarPage() {
   const [filterValorMin,    setFilterValorMin]    = useState('')
   const [filterValorMax,    setFilterValorMax]    = useState('')
   const [novaContaOpen,     setNovaContaOpen]     = useState(false)
+  const [transferirFundoOpen, setTransferirFundoOpen] = useState(false)
   const [docModalOpen,      setDocModalOpen]      = useState(false)
   const [excluindo,         setExcluindo]         = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
@@ -349,6 +351,13 @@ export default function ContasPagarPage() {
           Nova Conta
         </button>
         <button
+          onClick={() => setTransferirFundoOpen(true)}
+          className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-600 hover:bg-amber-500/20 transition-colors"
+        >
+          <Vault className="h-4 w-4" />
+          Transferir para Fundo de Caixa
+        </button>
+        <button
           onClick={() => setDocModalOpen(true)}
           className="flex items-center gap-1.5 rounded-lg border border-app-border2 bg-app-surface px-4 py-2 text-sm font-medium text-app-text hover:bg-app-surface2 transition-colors"
         >
@@ -481,6 +490,15 @@ export default function ContasPagarPage() {
         <ContaFormModal
           onClose={() => setNovaContaOpen(false)}
           onSave={async conta => { await addConta(conta); showToast('Conta cadastrada com sucesso.') }}
+        />
+      )}
+
+      {/* Modal Transferir para Fundo de Caixa */}
+      {transferirFundoOpen && (
+        <TransferirFundoCaixaModal
+          onClose={() => setTransferirFundoOpen(false)}
+          onSave={addConta}
+          onSaved={() => showToast('Transferência para o Fundo de Caixa registrada.')}
         />
       )}
 
@@ -939,6 +957,230 @@ function ContaFormModal({ conta, onClose, onSave }: ContaFormModalProps) {
             className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
             style={{ backgroundColor: GREEN }}>
             {saving ? 'Salvando…' : isEdit ? 'Salvar alterações' : 'Salvar conta'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Fundo de Caixa é uma transferência de saldo, não uma despesa — por isso tem um
+// fluxo dedicado (espaço, valor, data/hora da movimentação, responsável,
+// comprovante), separado do formulário genérico de Nova Conta. A reclassificação
+// de lançamentos já cadastrados errado como despesa continua pelo Editar normal
+// (basta trocar o Tipo de Despesa pra "Fundo de Caixa" ali).
+function TransferirFundoCaixaModal({ onClose, onSave, onSaved }: {
+  onClose: () => void
+  onSave: (c: ContaPagar) => Promise<void>
+  onSaved: () => void
+}) {
+  const { espacosNomes } = useEspacos()
+  const [espaco, setEspaco] = useState(espacosNomes[0] ?? '')
+  const [valor, setValor] = useState('')
+  const [data, setData] = useState(() => new Date().toISOString().split('T')[0])
+  const [hora, setHora] = useState(() => new Date().toTimeString().slice(0, 5))
+  const [descricao, setDescricao] = useState('')
+  const [observacoes, setObservacoes] = useState('')
+  const [responsavel, setResponsavel] = useState('')
+  const [comprovante, setComprovante] = useState<File | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
+  const [submitted, setSubmitted] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+
+  const errors = {
+    espaco: !espaco,
+    valor: !valor || parseCurrencyBR(valor) <= 0,
+    data: !data,
+    descricao: !descricao.trim(),
+    responsavel: !responsavel.trim(),
+  }
+  const hasErrors = Object.values(errors).some(Boolean)
+
+  async function handleSalvar() {
+    setSubmitted(true)
+    if (hasErrors) return
+    setSaving(true)
+    setErro(null)
+    const id = crypto.randomUUID()
+    try {
+      await onSave({
+        id,
+        descricao: descricao.trim(),
+        espaco: espaco as ContaPagar['espaco'],
+        categoria: 'fundo_caixa',
+        subcategoria: 'outros',
+        valor: parseCurrencyBR(valor),
+        status: 'pago',
+        dataVencimento: data,
+        dataPagamento: data,
+        horaPagamento: hora || undefined,
+        fornecedor: responsavel.trim(),
+        observacoes: observacoes.trim() || undefined,
+      })
+      if (comprovante) {
+        try {
+          await saveFile(comprovante, {
+            module: 'contas',
+            entityId: id,
+            entityName: descricao.trim(),
+            espaco,
+            categoria: 'comprovante_fundo_caixa',
+          })
+        } catch {
+          setErro('Transferência registrada, mas não foi possível anexar o comprovante. Anexe depois pela lista.')
+          return
+        }
+      }
+      onSaved()
+      onClose()
+    } catch (err) {
+      setErro(err instanceof Error ? `Falha ao registrar: ${err.message}` : 'Falha ao registrar a transferência. Tente novamente.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="w-full max-w-lg bg-app-surface rounded-2xl border border-app-border shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-app-border sticky top-0 bg-app-surface z-10">
+          <h2 className="text-sm font-semibold text-app-text flex items-center gap-2">
+            <Vault className="h-4 w-4 text-amber-500" />
+            Transferir para Fundo de Caixa
+          </h2>
+          <button onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-lg text-app-subtle hover:bg-app-surface2 transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2.5">
+            <p className="text-xs text-amber-600">
+              Isso registra a saída do caixa disponível pro Fundo de Caixa — não conta como despesa em nenhum relatório.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-app-subtle mb-0.5 block">Espaço<span className="text-red-400 ml-0.5">*</span></label>
+              <select
+                value={espaco}
+                onChange={e => setEspaco(e.target.value)}
+                className={`w-full cursor-pointer rounded-lg border ${submitted && errors.espaco ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
+              >
+                <option value="">— Selecione —</option>
+                {espacosNomes.map(e => <option key={e} value={e}>{e}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-app-subtle mb-0.5 block">Valor (R$)<span className="text-red-400 ml-0.5">*</span></label>
+              <input
+                type="text" inputMode="decimal"
+                value={valor}
+                onChange={e => setValor(e.target.value)}
+                placeholder="0,00"
+                className={`w-full rounded-lg border ${submitted && errors.valor ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-app-subtle mb-0.5 block">Data da movimentação<span className="text-red-400 ml-0.5">*</span></label>
+              <input
+                type="date"
+                value={data}
+                onChange={e => setData(e.target.value)}
+                className={`w-full rounded-lg border ${submitted && errors.data ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-app-subtle mb-0.5 block">Hora da movimentação</label>
+              <input
+                type="time"
+                value={hora}
+                onChange={e => setHora(e.target.value)}
+                className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-app-subtle mb-0.5 block">Descrição<span className="text-red-400 ml-0.5">*</span></label>
+            <input
+              value={descricao}
+              onChange={e => setDescricao(e.target.value)}
+              placeholder="Ex: Reserva de caixa — Complexo Jussara"
+              className={`w-full rounded-lg border ${submitted && errors.descricao ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-app-subtle mb-0.5 block">Responsável pelo lançamento<span className="text-red-400 ml-0.5">*</span></label>
+            <input
+              value={responsavel}
+              onChange={e => setResponsavel(e.target.value)}
+              placeholder="Nome de quem está fazendo o lançamento"
+              className={`w-full rounded-lg border ${submitted && errors.responsavel ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-app-subtle mb-0.5 block">Observações</label>
+            <textarea
+              value={observacoes}
+              onChange={e => setObservacoes(e.target.value)}
+              rows={2}
+              className="w-full resize-none rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-app-subtle mb-0.5 block">Comprovante da transferência</label>
+            <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden"
+              onChange={e => setComprovante(e.target.files?.[0] ?? null)} />
+            <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+              onChange={e => setComprovante(e.target.files?.[0] ?? null)} />
+            <div className="flex items-center gap-2 flex-wrap">
+              <button type="button" onClick={() => fileRef.current?.click()}
+                className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors">
+                <Paperclip className="h-3.5 w-3.5" />
+                {comprovante ? comprovante.name : 'Selecionar arquivo…'}
+              </button>
+              <button type="button" onClick={() => cameraRef.current?.click()}
+                className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors">
+                <Camera className="h-3.5 w-3.5" />
+                Tirar foto
+              </button>
+            </div>
+          </div>
+
+          {erro && (
+            <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5">
+              <p className="text-xs text-red-400">{erro}</p>
+            </div>
+          )}
+          {submitted && hasErrors && (
+            <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5">
+              <p className="text-xs text-red-400">Preencha todos os campos obrigatórios antes de salvar.</p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-app-border">
+          <button onClick={onClose} className="rounded-lg border border-app-border2 px-4 py-2 text-sm text-app-muted hover:bg-app-surface2 transition-colors">
+            Cancelar
+          </button>
+          <button
+            onClick={handleSalvar}
+            disabled={saving}
+            className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            style={{ backgroundColor: '#d97706' }}
+          >
+            <Vault className="h-3.5 w-3.5" />
+            {saving ? 'Salvando…' : 'Transferir para o Fundo'}
           </button>
         </div>
       </div>

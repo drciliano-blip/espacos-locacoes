@@ -6,6 +6,13 @@ import { createClient } from '@/lib/supabase/client'
 import { useAtividades } from '@/contexts/AtividadesContext'
 import type { ContaPagar, CategoriaContaPagar, StatusContaPagar } from '@/types'
 
+// Fundo de Caixa (transferência de saldo) e Retirada Sócio (distribuição a
+// sócio) não são despesa operacional — não entram no Resultado Operacional,
+// só aparecem separadamente em Movimentações Societárias / Controle de Caixa.
+export function isDespesaOperacional(c: ContaPagar): boolean {
+  return c.categoria !== 'fundo_caixa' && c.categoria !== 'retirada_socio'
+}
+
 interface ContaPagarRow {
   id: string
   descricao: string

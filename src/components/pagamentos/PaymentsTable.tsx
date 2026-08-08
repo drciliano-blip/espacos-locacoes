@@ -30,12 +30,14 @@ const TIPO_ENTRADA_LABEL: Record<TipoEntrada, string> = {
   evento: 'Receita de Evento',
   aporte_societario: 'Aporte Societário',
   outras_entradas: 'Outras Entradas',
+  retorno_fundo_caixa: 'Retorno do Fundo de Caixa',
 }
 
 const TIPO_ENTRADA_BADGE: Record<TipoEntrada, string> = {
   evento: 'bg-sky-500/10 text-sky-500 border-sky-500/20',
   aporte_societario: 'bg-violet-500/10 text-violet-500 border-violet-500/20',
   outras_entradas: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
+  retorno_fundo_caixa: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
 }
 
 const TODOS_SOCIOS = Array.from(new Set(Object.values(DIVISAO_SOCIOS).flat().map(s => s.nome))).sort()

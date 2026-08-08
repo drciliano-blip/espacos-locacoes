@@ -20,6 +20,7 @@ const TIPO_ENTRADA_LABEL: Record<TipoEntrada, string> = {
   evento: 'Receita de Evento',
   aporte_societario: 'Aporte Societário',
   outras_entradas: 'Outras Entradas',
+  retorno_fundo_caixa: 'Retorno do Fundo de Caixa',
 }
 
 interface Props {

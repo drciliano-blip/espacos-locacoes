@@ -18,7 +18,7 @@ export type TipoEvento = 'Festivo' | 'Corporativo' | 'Audiovisual'
 export type NivelAcesso = 'admin' | 'financeiro' | 'operacional' | 'visualizador' | 'socio'
 
 // Feature 1: Contas a Pagar
-export type CategoriaContaPagar = 'operacional' | 'obra' | 'financeiro' | 'retirada_socio'
+export type CategoriaContaPagar = 'operacional' | 'obra' | 'financeiro' | 'retirada_socio' | 'fundo_caixa'
 export type SubcategoriaContaPagar = 'aluguel' | 'energia' | 'internet' | 'funcionários' | 'manutenção' | 'fornecedores' | 'extras' | 'outros'
 export type StatusContaPagar = 'pendente' | 'pago' | 'atrasado'
 
