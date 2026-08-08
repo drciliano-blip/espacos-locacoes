@@ -18,7 +18,7 @@ export type TipoEvento = 'Festivo' | 'Corporativo' | 'Audiovisual'
 export type NivelAcesso = 'admin' | 'financeiro' | 'operacional' | 'visualizador' | 'socio'
 
 // Feature 1: Contas a Pagar
-export type CategoriaContaPagar = 'operacional' | 'obra' | 'financeiro' | 'retirada_socio' | 'fundo_caixa'
+export type CategoriaContaPagar = 'operacional' | 'obra' | 'financeiro' | 'retirada_socio' | 'fundo_caixa' | 'reembolso_evento'
 export type SubcategoriaContaPagar = 'aluguel' | 'energia' | 'internet' | 'funcionários' | 'manutenção' | 'fornecedores' | 'extras' | 'outros'
 export type StatusContaPagar = 'pendente' | 'pago' | 'atrasado'
 
@@ -141,6 +141,9 @@ export interface ContaPagar {
   fornecedor?: string
   observacoes?: string
   textoOrigemWhatsapp?: string
+  // Presente só em despesas geradas automaticamente a partir de um evento
+  // (hoje: reembolso de evento cancelado) — vincula a saída ao evento original.
+  eventoId?: string
 }
 
 // Feature 2: Usuário do sistema

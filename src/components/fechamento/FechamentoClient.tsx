@@ -17,6 +17,7 @@ import { formatCurrency } from '@/lib/utils'
 import FundoCard from './FundoCard'
 import NovoFundoModal from './NovoFundoModal'
 import NovaReceitaModal from '@/components/pagamentos/NovaReceitaModal'
+import EditarEntradaModal from '@/components/pagamentos/EditarEntradaModal'
 import NovaRetiradaSocioModal from '@/components/relatorios/NovaRetiradaSocioModal'
 import LancamentoSocioListModal, { type LancamentoSocioRow } from '@/components/relatorios/LancamentoSocioListModal'
 import Toast from '@/components/shared/Toast'
@@ -31,7 +32,7 @@ function getDefaultFilters(): RelatorioFilters {
 // Obra, Societário e Reservas. Toda a aritmética vem de fechamento-calc.ts,
 // a mesma função usada em Relatórios, pra garantir números idênticos.
 export default function FechamentoClient() {
-  const { receitas, addReceita, categorias } = useReceitas()
+  const { receitas, addReceita, editarReceita, deleteReceita, categorias } = useReceitas()
   const { contas: contasPagar, addConta } = useContasPagar()
   const { espacosConfig } = useEspacos()
   const { fundos, movimentacoes, addFundo } = useFundos()
@@ -44,6 +45,7 @@ export default function FechamentoClient() {
   const [novoAporteOpen, setNovoAporteOpen] = useState(false)
   const [novaRetiradaOpen, setNovaRetiradaOpen] = useState(false)
   const [drillDown, setDrillDown] = useState<null | 'aportes' | 'retiradas'>(null)
+  const [editandoAporteId, setEditandoAporteId] = useState<string | null>(null)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   function showToast(msg: string) {
     setToastMsg(msg)
@@ -345,8 +347,33 @@ export default function FechamentoClient() {
       )}
 
       {drillDown === 'aportes' && (
-        <LancamentoSocioListModal titulo="Aportes Societários" rows={aportesRows} fileModule="receitas" onClose={() => setDrillDown(null)} />
+        <LancamentoSocioListModal
+          titulo="Aportes Societários"
+          rows={aportesRows}
+          fileModule="receitas"
+          onClose={() => setDrillDown(null)}
+          onEdit={id => setEditandoAporteId(id)}
+        />
       )}
+
+      {editandoAporteId && (() => {
+        const receitaEditando = receitas.find(r => r.id === editandoAporteId)
+        return receitaEditando ? (
+          <EditarEntradaModal
+            receita={receitaEditando}
+            categorias={categorias}
+            onClose={() => setEditandoAporteId(null)}
+            onSave={async (id, patch) => {
+              await editarReceita(id, patch)
+              showToast('Aporte atualizado.')
+            }}
+            onExcluir={async id => {
+              await deleteReceita(id)
+              showToast('Aporte excluído.')
+            }}
+          />
+        ) : null
+      })()}
       {drillDown === 'retiradas' && (
         <LancamentoSocioListModal titulo="Retiradas de Sócios" rows={retiradasRows} fileModule="contas" onClose={() => setDrillDown(null)} />
       )}

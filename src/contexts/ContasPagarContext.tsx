@@ -35,6 +35,7 @@ interface ContaPagarRow {
   fornecedor: string | null
   observacoes: string | null
   texto_origem_whatsapp: string | null
+  evento_id: string | null
 }
 
 function fromRow(row: ContaPagarRow): ContaPagar {
@@ -55,6 +56,7 @@ function fromRow(row: ContaPagarRow): ContaPagar {
     fornecedor: row.fornecedor ?? undefined,
     observacoes: row.observacoes ?? undefined,
     textoOrigemWhatsapp: row.texto_origem_whatsapp ?? undefined,
+    eventoId: row.evento_id ?? undefined,
   }
 }
 
@@ -116,6 +118,7 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
         fornecedor: c.fornecedor ?? null,
         observacoes: c.observacoes ?? null,
         texto_origem_whatsapp: c.textoOrigemWhatsapp ?? null,
+        evento_id: c.eventoId ?? null,
         created_by: user?.id ?? null,
       })
       .select(SELECT)
@@ -156,6 +159,7 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
         fornecedor: c.fornecedor ?? null,
         observacoes: c.observacoes ?? null,
         texto_origem_whatsapp: c.textoOrigemWhatsapp ?? null,
+        evento_id: c.eventoId ?? null,
       })
       .eq('id', c.id)
       .select(SELECT)

@@ -17,7 +17,7 @@ export const SUBCATEGORIA_LABEL: Record<string, string> = {
 
 export const CATEGORIA_CONTA_LABEL: Record<string, string> = {
   operacional: 'Operacional', obra: 'Obra', financeiro: 'Financeiro', retirada_socio: 'Retirada Sócio',
-  fundo_caixa: 'Fundo de Caixa',
+  fundo_caixa: 'Fundo de Caixa', reembolso_evento: 'Reembolso de Evento',
 }
 
 // Tabelas completas de lançamentos (receita/despesa) — usadas em todo o módulo de

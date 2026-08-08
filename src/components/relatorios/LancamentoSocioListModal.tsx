@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { X, Paperclip } from 'lucide-react'
+import { X, Paperclip, Pencil } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { getFiles, viewFile, type StoredFile } from '@/lib/file-storage'
 
@@ -20,13 +20,16 @@ interface Props {
   rows: LancamentoSocioRow[]
   fileModule: StoredFile['module']
   onClose: () => void
+  // Só faz sentido pra aportes hoje (Receita já tem EditarEntradaModal
+  // pronto) — quando ausente, a lista fica só de leitura, como retiradas.
+  onEdit?: (id: string) => void
 }
 
 // Drill-down genérico dos cards de Aportes/Retiradas em Movimentações
 // Societárias — mostra o lançamento completo, com link direto pro
 // comprovante quando existir (mesmo padrão de leitura de arquivos usado no
 // resto do sistema, module+entityId).
-export default function LancamentoSocioListModal({ titulo, rows, fileModule, onClose }: Props) {
+export default function LancamentoSocioListModal({ titulo, rows, fileModule, onClose, onEdit }: Props) {
   const [filesPorLancamento, setFilesPorLancamento] = useState<Map<string, StoredFile[]>>(new Map())
 
   useEffect(() => {
@@ -67,8 +70,8 @@ export default function LancamentoSocioListModal({ titulo, rows, fileModule, onC
               <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-app-border">
-                    {['Data', 'Sócio', 'Espaço', 'Valor', 'Descrição', 'Comprovante'].map(h => (
-                      <th key={h} className="px-2 py-2 text-left font-medium text-app-subtle uppercase tracking-wide whitespace-nowrap">{h}</th>
+                    {['Data', 'Sócio', 'Espaço', 'Valor', 'Descrição', 'Comprovante', ...(onEdit ? [''] : [])].map((h, i) => (
+                      <th key={h || `acao-${i}`} className="px-2 py-2 text-left font-medium text-app-subtle uppercase tracking-wide whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -95,6 +98,17 @@ export default function LancamentoSocioListModal({ titulo, rows, fileModule, onC
                             <span className="text-app-subtle">—</span>
                           )}
                         </td>
+                        {onEdit && (
+                          <td className="px-2 py-2 whitespace-nowrap">
+                            <button
+                              onClick={() => onEdit(r.id)}
+                              className="flex items-center gap-1 text-app-muted hover:text-app-text transition-colors"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              Editar
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     )
                   })}

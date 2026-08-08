@@ -112,14 +112,14 @@ function statusEfetivo(conta: ContaPagar): StatusContaPagar {
   return conta.dataVencimento < hoje ? 'atrasado' : 'pendente'
 }
 
-const CATEGORIAS: CategoriaContaPagar[] = ['operacional', 'obra', 'financeiro', 'retirada_socio', 'fundo_caixa']
+const CATEGORIAS: CategoriaContaPagar[] = ['operacional', 'obra', 'financeiro', 'retirada_socio', 'fundo_caixa', 'reembolso_evento']
 const categoriaLabel: Record<CategoriaContaPagar, string> = {
   operacional: 'Operacional', obra: 'Obra', financeiro: 'Financeiro', retirada_socio: 'Retirada Sócio',
-  fundo_caixa: 'Fundo de Caixa',
+  fundo_caixa: 'Fundo de Caixa', reembolso_evento: 'Reembolso de Evento',
 }
 const categoriaBadge: Record<CategoriaContaPagar, string> = {
   operacional: 'bg-sky-500/10 text-sky-600', obra: 'bg-orange-500/10 text-orange-600', financeiro: 'bg-emerald-500/10 text-emerald-600',
-  retirada_socio: 'bg-violet-500/10 text-violet-600', fundo_caixa: 'bg-amber-500/10 text-amber-600',
+  retirada_socio: 'bg-violet-500/10 text-violet-600', fundo_caixa: 'bg-amber-500/10 text-amber-600', reembolso_evento: 'bg-rose-500/10 text-rose-600',
 }
 
 const SUBCATEGORIAS: string[] = ['aluguel', 'energia', 'internet', 'funcionários', 'manutenção', 'fornecedores', 'extras', 'outros']
@@ -726,6 +726,9 @@ function ContaFormModal({ conta, onClose, onSave }: ContaFormModalProps) {
       fornecedor:      form.fornecedor || undefined,
       observacoes:     form.observacoes || undefined,
       textoOrigemWhatsapp: form.textoOrigemWhatsapp || undefined,
+      // Não editável neste formulário — preserva o vínculo se a conta já veio
+      // de um fluxo automático (ex: reembolso gerado a partir de um evento).
+      eventoId: conta?.eventoId,
     }
     try {
       if (pendingFile) {

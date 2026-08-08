@@ -11,6 +11,7 @@ import { DIVISAO_SOCIOS, GRUPOS_SOCIOS } from '@/lib/socios-config'
 import { calcularFechamento } from '@/lib/fechamento-calc'
 import { DespesasTable } from './LancamentosTables'
 import NovaReceitaModal from '@/components/pagamentos/NovaReceitaModal'
+import EditarEntradaModal from '@/components/pagamentos/EditarEntradaModal'
 import NovaRetiradaSocioModal from './NovaRetiradaSocioModal'
 import LancamentoSocioListModal, { type LancamentoSocioRow } from './LancamentoSocioListModal'
 import Toast from '@/components/shared/Toast'
@@ -47,7 +48,7 @@ interface Props {
 }
 
 export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dataFim }: Props) {
-  const { receitas, addReceita, categorias } = useReceitas()
+  const { receitas, addReceita, editarReceita, deleteReceita, categorias } = useReceitas()
   const { contas: contasPagar, addConta } = useContasPagar()
   const { espacosConfig } = useEspacos()
   const { role } = useCurrentUser()
@@ -56,6 +57,7 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
   const [novoAporteOpen, setNovoAporteOpen] = useState(false)
   const [novaRetiradaOpen, setNovaRetiradaOpen] = useState(false)
   const [drillDown, setDrillDown] = useState<null | 'aportes' | 'retiradas'>(null)
+  const [editandoAporteId, setEditandoAporteId] = useState<string | null>(null)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   function showToast(msg: string) {
     setToastMsg(msg)
@@ -379,8 +381,29 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
           rows={aportesRows}
           fileModule="receitas"
           onClose={() => setDrillDown(null)}
+          onEdit={id => setEditandoAporteId(id)}
         />
       )}
+
+      {editandoAporteId && (() => {
+        const receitaEditando = receitas.find(r => r.id === editandoAporteId)
+        return receitaEditando ? (
+          <EditarEntradaModal
+            receita={receitaEditando}
+            categorias={categorias}
+            onClose={() => setEditandoAporteId(null)}
+            onSave={async (id, patch) => {
+              await editarReceita(id, patch)
+              showToast('Aporte atualizado.')
+            }}
+            onExcluir={async id => {
+              await deleteReceita(id)
+              setEditandoAporteId(null)
+              showToast('Aporte excluído.')
+            }}
+          />
+        ) : null
+      })()}
       {drillDown === 'retiradas' && (
         <LancamentoSocioListModal
           titulo="Retiradas de Sócios"

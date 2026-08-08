@@ -6,12 +6,14 @@ import type { Evento, StatusVistoria, TipoEvento, Contrato, TipoMinuta } from '@
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useCurrentUser } from '@/contexts/UserContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
+import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { useContratos } from '@/contexts/ContratosContext'
 import FileList from '@/components/shared/FileList'
 import FileAttachButton from '@/components/shared/FileAttachButton'
 import PlanoPagamentoSection from '@/components/eventos/PlanoPagamentoSection'
 import GerarContratoDoEventoModal from '@/components/eventos/GerarContratoDoEventoModal'
 import GerarContratoModal from '@/components/contratos/GerarContratoModal'
+import CancelarEventoModal from '@/components/eventos/CancelarEventoModal'
 import Toast from '@/components/shared/Toast'
 
 const statusBadge: Record<string, string> = {
@@ -58,7 +60,8 @@ interface EventoDrawerProps {
 
 export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: EventoDrawerProps) {
   const { role } = useCurrentUser()
-  const { receitas, syncParcelasDoEvento, updateReceita } = useReceitas()
+  const { receitas, syncParcelasDoEvento, updateReceita, deleteReceita } = useReceitas()
+  const { contas, addConta, deleteConta } = useContasPagar()
   const { contratos, addContrato } = useContratos()
   const [tab, setTab] = useState<DrawerTab>('detalhes')
   const [editing, setEditing] = useState(false)
@@ -66,6 +69,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [cancelConfirm, setCancelConfirm] = useState(false)
+  const [cancelarEventoOpen, setCancelarEventoOpen] = useState(false)
   const [togglingStatus, setTogglingStatus] = useState(false)
   const [trocaTipoContratoPendente, setTrocaTipoContratoPendente] = useState<TipoMinuta | null>(null)
   const [saving, setSaving] = useState(false)
@@ -84,6 +88,50 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
     () => receitas.filter(r => r.eventoId === evento.id && r.categoriaSlug === 'aluguel' && r.parcelaNumero != null),
     [receitas, evento.id],
   )
+
+  const totalRecebidoEvento = useMemo(
+    () => receitas.filter(r => r.eventoId === evento.id && r.status === 'pago').reduce((s, r) => s + r.valor, 0),
+    [receitas, evento.id],
+  )
+
+  // Exclusão de verdade: some com o evento e tudo que foi gerado a partir
+  // dele (receitas e eventuais saídas de reembolso) — nunca fica só
+  // "Cancelado". Usado tanto pelo ícone de lixeira quanto pela opção
+  // "Excluir definitivamente" do fluxo de cancelamento.
+  async function excluirEventoEDependencias() {
+    for (const r of receitas.filter(r => r.eventoId === evento.id)) await deleteReceita(r.id)
+    for (const c of contas.filter(c => c.eventoId === evento.id)) await deleteConta(c.id)
+    await onDelete(evento.id)
+  }
+
+  async function handleCancelarMantendoReceita() {
+    await onUpdate({ ...evento, status: 'cancelado' })
+    setCancelarEventoOpen(false)
+  }
+
+  async function handleCancelarComReembolso(valor: number) {
+    await addConta({
+      id: crypto.randomUUID(),
+      descricao: `Reembolso — ${evento.cliente} (${formatDate(evento.data)})`,
+      espaco: evento.espaco,
+      categoria: 'reembolso_evento',
+      subcategoria: 'outros',
+      valor,
+      status: 'pago',
+      dataVencimento: new Date().toISOString().split('T')[0],
+      dataPagamento: new Date().toISOString().split('T')[0],
+      fornecedor: evento.cliente,
+      eventoId: evento.id,
+    })
+    await onUpdate({ ...evento, status: 'cancelado' })
+    setCancelarEventoOpen(false)
+    showToast('Reembolso registrado e evento cancelado.')
+  }
+
+  async function handleExcluirDefinitivoViaModal() {
+    await excluirEventoEDependencias()
+    setCancelarEventoOpen(false)
+  }
 
   async function handleSyncPlano(novasParcelas: Parameters<typeof syncParcelasDoEvento>[0]['parcelas']) {
     await syncParcelasDoEvento({ eventoId: evento.id, cliente: evento.cliente, espaco: evento.espaco, parcelas: novasParcelas })
@@ -112,14 +160,22 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
 
   async function handleDelete() {
     setDeleting(true)
-    await onDelete(evento.id)
-    setDeleting(false)
+    try {
+      await excluirEventoEDependencias()
+    } catch (err) {
+      showToast(err instanceof Error ? `Não foi possível excluir: ${err.message}` : 'Não foi possível excluir o evento. Tente novamente.')
+    } finally {
+      setDeleting(false)
+    }
   }
 
-  async function handleToggleStatus() {
+  // Só reativação passa por aqui agora — cancelar tem o fluxo próprio de 3
+  // opções (CancelarEventoModal), que decide se mantém a receita, gera
+  // reembolso ou exclui tudo.
+  async function handleReativar() {
     setTogglingStatus(true)
     try {
-      await onUpdate({ ...evento, status: evento.status === 'confirmado' ? 'cancelado' : 'confirmado' })
+      await onUpdate({ ...evento, status: 'confirmado' })
       setCancelConfirm(false)
     } catch (err) {
       showToast(err instanceof Error ? `Não foi possível atualizar o status: ${err.message}` : 'Não foi possível atualizar o status. Tente novamente.')
@@ -261,7 +317,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                       </button>
                       {evento.status === 'confirmado' ? (
                         <button
-                          onClick={() => setCancelConfirm(true)}
+                          onClick={() => setCancelarEventoOpen(true)}
                           className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors"
                         >
                           <Ban className="h-3.5 w-3.5" />
@@ -535,7 +591,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
           <div className="w-full max-w-sm rounded-2xl border border-app-border bg-app-surface p-6 shadow-2xl">
             <h3 className="text-base font-bold text-app-text mb-2">Excluir evento?</h3>
             <p className="text-sm text-app-muted mb-5">
-              Esta ação não pode ser desfeita. Receitas já lançadas para este evento não serão apagadas.
+              Esta ação não pode ser desfeita. O evento, as receitas e os reembolsos vinculados a ele serão excluídos permanentemente — não fica só como "Cancelado".
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -557,18 +613,12 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
         </div>
       )}
 
-      {/* Confirmação de cancelamento / reativação */}
+      {/* Confirmação de reativação — cancelar tem o fluxo próprio (CancelarEventoModal) */}
       {cancelConfirm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60" onClick={(e) => e.stopPropagation()}>
           <div className="w-full max-w-sm rounded-2xl border border-app-border bg-app-surface p-6 shadow-2xl">
-            <h3 className="text-base font-bold text-app-text mb-2">
-              {evento.status === 'confirmado' ? 'Cancelar evento?' : 'Reativar evento?'}
-            </h3>
-            <p className="text-sm text-app-muted mb-5">
-              {evento.status === 'confirmado'
-                ? 'O evento não será excluído — ficará marcado como Cancelado, continua disponível no histórico, e o horário e a data ficam livres novamente na agenda.'
-                : 'O status volta para Confirmado.'}
-            </p>
+            <h3 className="text-base font-bold text-app-text mb-2">Reativar evento?</h3>
+            <p className="text-sm text-app-muted mb-5">O status volta para Confirmado.</p>
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setCancelConfirm(false)}
@@ -578,13 +628,11 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                 Voltar
               </button>
               <button
-                onClick={handleToggleStatus}
+                onClick={handleReativar}
                 disabled={togglingStatus}
-                className={`rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50 ${
-                  evento.status === 'confirmado' ? 'bg-red-600 hover:bg-red-500' : 'bg-[#25D366] hover:bg-[#128C7E]'
-                }`}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50 bg-[#25D366] hover:bg-[#128C7E]"
               >
-                {togglingStatus ? 'Aguarde…' : evento.status === 'confirmado' ? 'Cancelar evento' : 'Reativar evento'}
+                {togglingStatus ? 'Aguarde…' : 'Reativar evento'}
               </button>
             </div>
           </div>
@@ -615,6 +663,17 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
             </div>
           </div>
         </div>
+      )}
+
+      {cancelarEventoOpen && (
+        <CancelarEventoModal
+          evento={evento}
+          totalRecebido={totalRecebidoEvento}
+          onClose={() => setCancelarEventoOpen(false)}
+          onManterReceita={handleCancelarMantendoReceita}
+          onReembolso={handleCancelarComReembolso}
+          onExcluir={handleExcluirDefinitivoViaModal}
+        />
       )}
 
       {gerarContratoDoEventoOpen && (
