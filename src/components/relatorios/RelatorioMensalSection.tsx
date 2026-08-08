@@ -1,8 +1,8 @@
 'use client'
 
 import { useMemo } from 'react'
-import { ArrowUpCircle, ArrowDownCircle, Wallet } from 'lucide-react'
-import { useReceitas } from '@/contexts/ReceitasContext'
+import { ArrowUpCircle, ArrowDownCircle, Wallet, Handshake, PlusCircle } from 'lucide-react'
+import { useReceitas, isReceitaOperacional } from '@/contexts/ReceitasContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { formatCurrency } from '@/lib/utils'
@@ -36,9 +36,16 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
     return matchEspaco && matchInicio && matchFim
   }), [contasPagar, selectedSpaces, dataInicio, dataFim])
 
-  // Total e divisão de lucro consideram só o que foi de fato recebido/pago —
-  // mesmo critério já usado no Dashboard e nos Relatórios (receita = status "pago").
-  const totalEntradas = entradas.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)
+  // Aporte societário e outras entradas manuais NÃO contam como faturamento/receita
+  // operacional — só entram no "Total de Entradas (Caixa)", separado do Lucro.
+  const entradasOperacionais = useMemo(() => entradas.filter(isReceitaOperacional), [entradas])
+  const aportes = useMemo(() => entradas.filter(r => r.tipoEntrada === 'aporte_societario'), [entradas])
+  const outrasEntradas = useMemo(() => entradas.filter(r => r.tipoEntrada === 'outras_entradas'), [entradas])
+
+  const totalEntradas = entradasOperacionais.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)
+  const totalAportes = aportes.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)
+  const totalOutrasEntradas = outrasEntradas.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)
+  const totalCaixa = totalEntradas + totalAportes + totalOutrasEntradas
   const totalSaidas   = saidas.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0)
   const lucroLiquido  = totalEntradas - totalSaidas
 
@@ -47,7 +54,9 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
     : espacosConfig
 
   const porEspaco = useMemo(() => espacos.map(e => {
-    const entradasEspaco = entradas.filter(r => r.espaco === e.nome)
+    // Divisão de lucro entre sócios usa só receita operacional (de evento) —
+    // aporte/outras entradas não são lucro, são caixa injetado.
+    const entradasEspaco = entradasOperacionais.filter(r => r.espaco === e.nome)
     // Contas com espaço "Todos" são despesas gerais, não entram na divisão por espaço.
     const saidasEspaco = saidas.filter(c => c.espaco === e.nome)
     const receitaTotal = entradasEspaco.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)
@@ -55,8 +64,9 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
     const lucro = receitaTotal - despesaTotal
     // Se o espaço não estiver configurado em DIVISAO_SOCIOS, presume-se que não tem sócio.
     const socios = (DIVISAO_SOCIOS[e.nome] ?? []).map(s => ({ ...s, valor: lucro * (s.percentual / 100) }))
-    return { nome: e.nome, entradasEspaco, saidasEspaco, receitaTotal, despesaTotal, lucro, socios }
-  }), [espacos, entradas, saidas])
+    const aportesEspaco = aportes.filter(r => r.espaco === e.nome && r.status === 'pago').reduce((s, r) => s + r.valor, 0)
+    return { nome: e.nome, entradasEspaco, saidasEspaco, receitaTotal, despesaTotal, lucro, socios, aportesEspaco }
+  }), [espacos, entradasOperacionais, saidas, aportes])
 
   const saidasGerais = saidas.filter(c => c.espaco === 'Todos')
   const totalSaidasGerais = saidasGerais.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0)
@@ -68,9 +78,9 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
       {/* KPIs gerais */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="min-w-0 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-          <div className="flex items-center gap-2 mb-1"><ArrowUpCircle className="h-4 w-4 shrink-0 text-emerald-500" /><span className="text-xs text-emerald-600 font-medium">Total de Entradas</span></div>
+          <div className="flex items-center gap-2 mb-1"><ArrowUpCircle className="h-4 w-4 shrink-0 text-emerald-500" /><span className="text-xs text-emerald-600 font-medium">Receitas Operacionais</span></div>
           <p className="text-lg font-bold text-emerald-600 break-words">{formatCurrency(totalEntradas)}</p>
-          <p className="text-xs text-app-subtle mt-1">{entradas.length} lançamentos</p>
+          <p className="text-xs text-app-subtle mt-1">{entradasOperacionais.length} lançamentos — de eventos/Agenda</p>
         </div>
         <div className="min-w-0 rounded-xl border border-red-500/20 bg-red-500/5 p-4">
           <div className="flex items-center gap-2 mb-1"><ArrowDownCircle className="h-4 w-4 shrink-0 text-red-500" /><span className="text-xs text-red-600 font-medium">Total de Saídas</span></div>
@@ -80,6 +90,26 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
         <div className={`min-w-0 rounded-xl border p-4 ${lucroLiquido >= 0 ? 'border-[#25D366]/25 bg-[#25D366]/5' : 'border-red-500/20 bg-red-500/5'}`}>
           <div className="flex items-center gap-2 mb-1"><Wallet className={`h-4 w-4 shrink-0 ${lucroLiquido >= 0 ? 'text-[#128C7E]' : 'text-red-500'}`} /><span className={`text-xs font-medium ${lucroLiquido >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>Lucro Líquido</span></div>
           <p className={`text-lg font-bold break-words ${lucroLiquido >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>{formatCurrency(lucroLiquido)}</p>
+          <p className="text-xs text-app-subtle mt-1">Só receita operacional − saídas</p>
+        </div>
+      </div>
+
+      {/* Aportes/Outras entradas — separados do faturamento, mas somam no caixa */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="min-w-0 rounded-xl border border-violet-500/20 bg-violet-500/5 p-4">
+          <div className="flex items-center gap-2 mb-1"><Handshake className="h-4 w-4 shrink-0 text-violet-500" /><span className="text-xs text-violet-600 font-medium">Aportes Societários</span></div>
+          <p className="text-lg font-bold text-violet-600 break-words">{formatCurrency(totalAportes)}</p>
+          <p className="text-xs text-app-subtle mt-1">{aportes.length} lançamentos — não conta como faturamento</p>
+        </div>
+        <div className="min-w-0 rounded-xl border border-zinc-500/20 bg-zinc-500/5 p-4">
+          <div className="flex items-center gap-2 mb-1"><PlusCircle className="h-4 w-4 shrink-0 text-zinc-400" /><span className="text-xs text-zinc-500 font-medium">Outras Entradas</span></div>
+          <p className="text-lg font-bold text-zinc-400 break-words">{formatCurrency(totalOutrasEntradas)}</p>
+          <p className="text-xs text-app-subtle mt-1">{outrasEntradas.length} lançamentos — não conta como faturamento</p>
+        </div>
+        <div className="min-w-0 rounded-xl border border-app-border2 bg-app-surface2/40 p-4">
+          <div className="flex items-center gap-2 mb-1"><Wallet className="h-4 w-4 shrink-0 text-app-muted" /><span className="text-xs text-app-muted font-medium">Total de Entradas (Caixa)</span></div>
+          <p className="text-lg font-bold text-app-text break-words">{formatCurrency(totalCaixa)}</p>
+          <p className="text-xs text-app-subtle mt-1">Operacionais + Aportes + Outras</p>
         </div>
       </div>
 
@@ -121,19 +151,20 @@ interface EspacoReportCardProps {
   despesaTotal: number
   lucro: number
   socios: { nome: string; percentual: number; valor: number }[]
+  aportesEspaco: number
 }
 
-function EspacoReportCard({ nome, entradasEspaco, saidasEspaco, receitaTotal, despesaTotal, lucro, socios }: EspacoReportCardProps) {
+function EspacoReportCard({ nome, entradasEspaco, saidasEspaco, receitaTotal, despesaTotal, lucro, socios, aportesEspaco }: EspacoReportCardProps) {
   return (
     <div className="rounded-lg border border-app-border2/60 bg-app-bg p-4 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-semibold text-app-text">{nome}</p>
-        <p className="text-xs text-app-subtle">{entradasEspaco.length} receita(s) · {saidasEspaco.length} despesa(s)</p>
+        <p className="text-xs text-app-subtle">{entradasEspaco.length} receita(s) operacional(is) · {saidasEspaco.length} despesa(s)</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 text-xs">
         <div>
-          <p className="text-app-subtle">Total de Entradas</p>
+          <p className="text-app-subtle">Receitas Operacionais</p>
           <p className="font-semibold text-emerald-600">{formatCurrency(receitaTotal)}</p>
         </div>
         <div>
@@ -141,6 +172,13 @@ function EspacoReportCard({ nome, entradasEspaco, saidasEspaco, receitaTotal, de
           <p className="font-semibold text-red-500">{formatCurrency(despesaTotal)}</p>
         </div>
       </div>
+
+      {aportesEspaco > 0 && (
+        <p className="text-xs text-violet-500 flex items-center gap-1.5">
+          <Handshake className="h-3 w-3" />
+          + {formatCurrency(aportesEspaco)} em aportes societários neste espaço (fora do lucro)
+        </p>
+      )}
 
       <div className="flex items-center justify-between pt-1 border-t border-app-border/50">
         <span className="text-xs font-medium text-app-muted">Lucro</span>

@@ -1,12 +1,16 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Search, ChevronDown, ChevronUp, FolderOpen, Paperclip } from 'lucide-react'
-import type { Receita, CategoriaReceita } from '@/contexts/ReceitasContext'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { Search, ChevronDown, ChevronUp, FolderOpen, Paperclip, Pencil, Handshake } from 'lucide-react'
+import type { Receita, CategoriaReceita, TipoEntrada } from '@/contexts/ReceitasContext'
+import { useReceitas } from '@/contexts/ReceitasContext'
+import { formatCurrency, formatDate, parseCurrencyBR } from '@/lib/utils'
 import { useEspacos } from '@/contexts/EspacosContext'
+import { DIVISAO_SOCIOS } from '@/lib/socios-config'
 import FileList from '@/components/shared/FileList'
 import FileSearchModal from '@/components/shared/FileSearchModal'
+import EditarEntradaModal from './EditarEntradaModal'
+import Toast from '@/components/shared/Toast'
 
 type StatusReceita = Receita['status']
 
@@ -22,6 +26,20 @@ const statusLabels: Record<StatusReceita, string> = {
   atrasado: 'Atrasado',
 }
 
+const TIPO_ENTRADA_LABEL: Record<TipoEntrada, string> = {
+  evento: 'Receita de Evento',
+  aporte_societario: 'Aporte Societário',
+  outras_entradas: 'Outras Entradas',
+}
+
+const TIPO_ENTRADA_BADGE: Record<TipoEntrada, string> = {
+  evento: 'bg-sky-500/10 text-sky-500 border-sky-500/20',
+  aporte_societario: 'bg-violet-500/10 text-violet-500 border-violet-500/20',
+  outras_entradas: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
+}
+
+const TODOS_SOCIOS = Array.from(new Set(Object.values(DIVISAO_SOCIOS).flat().map(s => s.nome))).sort()
+
 interface PaymentsTableProps {
   receitas: Receita[]
   categorias: CategoriaReceita[]
@@ -29,28 +47,45 @@ interface PaymentsTableProps {
 
 export default function PaymentsTable({ receitas, categorias }: PaymentsTableProps) {
   const { espacosNomes } = useEspacos()
+  const { editarReceita, deleteReceita } = useReceitas()
   const [search, setSearch]           = useState('')
   const [statusFilter, setStatus]     = useState<StatusReceita | 'todos'>('todos')
   const [espacoFilter, setEspaco]     = useState<string>('todos')
   const [categoriaFilter, setCategoriaFilter] = useState<string>('todos')
+  const [tipoFilter, setTipoFilter]   = useState<TipoEntrada | 'todos'>('todos')
+  const [socioFilter, setSocioFilter] = useState<string>('todos')
+  const [valorMin, setValorMin]       = useState('')
+  const [valorMax, setValorMax]       = useState('')
   const [dataInicio, setDataInicio]   = useState('')
   const [dataFim, setDataFim]         = useState('')
   const [expandedId, setExpandedId]   = useState<string | null>(null)
   const [docModalOpen, setDocModal]   = useState(false)
+  const [editando, setEditando]       = useState<Receita | null>(null)
+  const [toastMsg, setToastMsg]       = useState<string | null>(null)
+
+  function showToast(msg: string) {
+    setToastMsg(msg)
+    setTimeout(() => setToastMsg(null), 3500)
+  }
 
   const filtered = useMemo(() => {
     return receitas.filter((p) => {
       const matchSearch  = (p.cliente ?? '').toLowerCase().includes(search.toLowerCase()) ||
-        p.descricao.toLowerCase().includes(search.toLowerCase())
+        p.descricao.toLowerCase().includes(search.toLowerCase()) ||
+        (p.socioResponsavel ?? '').toLowerCase().includes(search.toLowerCase())
       const matchStatus    = statusFilter === 'todos' || p.status === statusFilter
       const matchEspaco    = espacoFilter === 'todos' || p.espaco === espacoFilter
       const matchCategoria = categoriaFilter === 'todos' || p.categoriaId === categoriaFilter
+      const matchTipo       = tipoFilter === 'todos' || p.tipoEntrada === tipoFilter
+      const matchSocio      = socioFilter === 'todos' || p.socioResponsavel === socioFilter
+      const matchValorMin   = !valorMin || p.valor >= parseCurrencyBR(valorMin)
+      const matchValorMax   = !valorMax || p.valor <= parseCurrencyBR(valorMax)
       const ref          = p.dataRecebimento ?? p.data
       const matchInicio  = !dataInicio || ref >= dataInicio
       const matchFim     = !dataFim    || ref <= dataFim
-      return matchSearch && matchStatus && matchEspaco && matchCategoria && matchInicio && matchFim
+      return matchSearch && matchStatus && matchEspaco && matchCategoria && matchTipo && matchSocio && matchValorMin && matchValorMax && matchInicio && matchFim
     })
-  }, [receitas, search, statusFilter, espacoFilter, categoriaFilter, dataInicio, dataFim])
+  }, [receitas, search, statusFilter, espacoFilter, categoriaFilter, tipoFilter, socioFilter, valorMin, valorMax, dataInicio, dataFim])
 
   const totals = useMemo(() => ({
     total:    filtered.reduce((s, p) => s + p.valor, 0),
@@ -61,6 +96,11 @@ export default function PaymentsTable({ receitas, categorias }: PaymentsTablePro
 
   function toggleRow(id: string) {
     setExpandedId(prev => prev === id ? null : id)
+  }
+
+  async function handleExcluir(id: string) {
+    await deleteReceita(id)
+    showToast('Entrada excluída.')
   }
 
   return (
@@ -79,6 +119,9 @@ export default function PaymentsTable({ receitas, categorias }: PaymentsTablePro
           </div>
         ))}
       </div>
+      {tipoFilter !== 'todos' && (
+        <p className="text-xs text-app-subtle -mt-2">Totais acima considerando só "{TIPO_ENTRADA_LABEL[tipoFilter]}" — ajuste o filtro "Tipo de entrada" pra ver outro recorte.</p>
+      )}
 
       <div className="rounded-xl border border-app-border bg-app-surface">
         {/* Filters */}
@@ -88,7 +131,7 @@ export default function PaymentsTable({ receitas, categorias }: PaymentsTablePro
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-app-subtle" />
               <input
                 type="text"
-                placeholder="Buscar cliente ou descrição..."
+                placeholder="Buscar cliente, sócio ou descrição..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full rounded-lg border border-app-border2 bg-app-surface2 py-2 pl-9 pr-3 text-sm text-app-text placeholder-app-subtle focus:outline-none"
@@ -105,6 +148,26 @@ export default function PaymentsTable({ receitas, categorias }: PaymentsTablePro
             </button>
           </div>
           <div className="flex flex-wrap gap-2">
+            <select
+              value={tipoFilter}
+              onChange={(e) => { setTipoFilter(e.target.value as TipoEntrada | 'todos'); setSocioFilter('todos') }}
+              className="rounded-lg border border-app-border2 bg-app-surface2 px-3 py-2 text-sm text-app-text2 focus:outline-none cursor-pointer"
+            >
+              <option value="todos">Todos os tipos de entrada</option>
+              {(Object.keys(TIPO_ENTRADA_LABEL) as TipoEntrada[]).map(t => (
+                <option key={t} value={t}>{TIPO_ENTRADA_LABEL[t]}</option>
+              ))}
+            </select>
+            {tipoFilter === 'aporte_societario' && (
+              <select
+                value={socioFilter}
+                onChange={(e) => setSocioFilter(e.target.value)}
+                className="rounded-lg border border-app-border2 bg-app-surface2 px-3 py-2 text-sm text-app-text2 focus:outline-none cursor-pointer"
+              >
+                <option value="todos">Todos os sócios</option>
+                {TODOS_SOCIOS.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            )}
             <select
               value={categoriaFilter}
               onChange={(e) => setCategoriaFilter(e.target.value)}
@@ -132,6 +195,24 @@ export default function PaymentsTable({ receitas, categorias }: PaymentsTablePro
               {espacosNomes.map((e) => <option key={e} value={e}>{e}</option>)}
             </select>
             <div className="flex items-center gap-1.5">
+              <span className="text-xs text-app-subtle">Valor de</span>
+              <input
+                type="text" inputMode="decimal" placeholder="0,00"
+                value={valorMin}
+                onChange={e => setValorMin(e.target.value)}
+                className="w-24 rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-2 text-sm text-app-text2 focus:outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-app-subtle">até</span>
+              <input
+                type="text" inputMode="decimal" placeholder="0,00"
+                value={valorMax}
+                onChange={e => setValorMax(e.target.value)}
+                className="w-24 rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-2 text-sm text-app-text2 focus:outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
               <span className="text-xs text-app-subtle">De</span>
               <input
                 type="date"
@@ -153,12 +234,12 @@ export default function PaymentsTable({ receitas, categorias }: PaymentsTablePro
                 onBlur={e => { e.currentTarget.style.borderColor = '' }}
               />
             </div>
-            {(dataInicio || dataFim) && (
+            {(dataInicio || dataFim || valorMin || valorMax) && (
               <button
-                onClick={() => { setDataInicio(''); setDataFim('') }}
+                onClick={() => { setDataInicio(''); setDataFim(''); setValorMin(''); setValorMax('') }}
                 className="text-xs text-app-subtle hover:text-app-text transition-colors px-1"
               >
-                Limpar datas
+                Limpar
               </button>
             )}
           </div>
@@ -169,7 +250,7 @@ export default function PaymentsTable({ receitas, categorias }: PaymentsTablePro
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-app-border">
-                {['Cliente', 'Categoria', 'Espaço', 'Data', 'Descrição', 'Dt. Recebimento', 'Método', 'Valor', 'Status', ''].map((h) => (
+                {['Tipo', 'Cliente/Sócio', 'Categoria', 'Espaço', 'Data', 'Descrição', 'Dt. Recebimento', 'Método', 'Valor', 'Status', ''].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-medium text-app-subtle uppercase tracking-wider whitespace-nowrap">
                     {h}
                   </th>
@@ -179,7 +260,7 @@ export default function PaymentsTable({ receitas, categorias }: PaymentsTablePro
             <tbody className="divide-y divide-app-border/50">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-sm text-app-subtle">
+                  <td colSpan={11} className="px-4 py-8 text-center text-sm text-app-subtle">
                     Nenhuma receita encontrada.
                   </td>
                 </tr>
@@ -191,7 +272,16 @@ export default function PaymentsTable({ receitas, categorias }: PaymentsTablePro
                       className="hover:bg-app-surface2/30 transition-colors cursor-pointer"
                       onClick={() => toggleRow(p.id)}
                     >
-                      <td className="px-4 py-3 text-app-text font-medium whitespace-nowrap">{p.cliente ?? '—'}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${TIPO_ENTRADA_BADGE[p.tipoEntrada]}`}>
+                          {TIPO_ENTRADA_LABEL[p.tipoEntrada]}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-app-text font-medium whitespace-nowrap">
+                        {p.tipoEntrada === 'aporte_societario' ? (
+                          <span className="flex items-center gap-1.5"><Handshake className="h-3.5 w-3.5 text-violet-400" />{p.socioResponsavel ?? '—'}</span>
+                        ) : (p.cliente ?? '—')}
+                      </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className="rounded-full border border-violet-500/20 bg-violet-500/10 text-violet-400 px-2.5 py-0.5 text-xs font-medium">
                           {p.categoriaNome}
@@ -211,16 +301,27 @@ export default function PaymentsTable({ receitas, categorias }: PaymentsTablePro
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="flex h-6 w-6 items-center justify-center rounded text-app-subtle">
-                          {expandedId === p.id
-                            ? <ChevronUp className="h-3.5 w-3.5" />
-                            : <ChevronDown className="h-3.5 w-3.5" />}
-                        </span>
+                        <div className="flex items-center gap-1">
+                          {p.tipoEntrada !== 'evento' && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setEditando(p) }}
+                              title="Editar"
+                              className="flex h-6 w-6 items-center justify-center rounded text-app-subtle hover:bg-app-surface2 hover:text-app-text transition-colors"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          <span className="flex h-6 w-6 items-center justify-center rounded text-app-subtle">
+                            {expandedId === p.id
+                              ? <ChevronUp className="h-3.5 w-3.5" />
+                              : <ChevronDown className="h-3.5 w-3.5" />}
+                          </span>
+                        </div>
                       </td>
                     </tr>
                     {expandedId === p.id && (
                       <tr key={`${p.id}-expand`}>
-                        <td colSpan={10} className="px-6 py-4 bg-app-bg/50 border-b border-app-border/40">
+                        <td colSpan={11} className="px-6 py-4 bg-app-bg/50 border-b border-app-border/40">
                           <div className="max-w-lg">
                             <p className="text-xs font-medium text-app-muted flex items-center gap-1.5 mb-3">
                               <Paperclip className="h-3 w-3 text-[#25D366]" />
@@ -232,6 +333,9 @@ export default function PaymentsTable({ receitas, categorias }: PaymentsTablePro
                               entityName={`${p.cliente ?? p.categoriaNome} — ${p.espaco ?? ''}`}
                               espaco={p.espaco}
                             />
+                            {p.observacoes && (
+                              <p className="text-xs text-app-subtle mt-3"><span className="text-app-muted font-medium">Observações:</span> {p.observacoes}</p>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -257,6 +361,18 @@ export default function PaymentsTable({ receitas, categorias }: PaymentsTablePro
           defaultEspaco={espacoFilter !== 'todos' ? espacoFilter : undefined}
         />
       )}
+
+      {editando && (
+        <EditarEntradaModal
+          receita={editando}
+          categorias={categorias}
+          onClose={() => setEditando(null)}
+          onSave={async (id, patch) => { await editarReceita(id, patch); showToast('Entrada atualizada.') }}
+          onExcluir={handleExcluir}
+        />
+      )}
+
+      <Toast message={toastMsg} />
     </div>
   )
 }

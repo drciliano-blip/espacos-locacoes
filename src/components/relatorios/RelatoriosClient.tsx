@@ -5,7 +5,7 @@ import FilterBar, { type RelatorioFilters, type Periodo } from './FilterBar'
 import { getPeriodRange } from '@/lib/relatorios-utils'
 import { formatCurrency } from '@/lib/utils'
 import { useEventos } from '@/contexts/EventosContext'
-import { useReceitas } from '@/contexts/ReceitasContext'
+import { useReceitas, isReceitaOperacional } from '@/contexts/ReceitasContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useRepasses } from '@/contexts/RepassesContext'
@@ -84,13 +84,20 @@ export default function RelatoriosClient() {
     return matchEspaco && matchInicio && matchFim
   }), [contasPagar, selectedSpaces, filters.dataInicio, filters.dataFim])
 
-  // Repasse para os sócios do período — lucro (receita paga - despesa paga) de cada
-  // espaço, dividido pelas regras cadastradas em DIVISAO_SOCIOS. "Já repassado" soma
-  // os lançamentos reais de repasse (tela de Fluxo de Caixa) dentro do mesmo período.
+  // Aporte societário e outras entradas manuais não contam como faturamento — só
+  // receita de evento entra em "Receitas Discriminadas", lucro e divisão de sócios.
+  const entradasOperacionais = useMemo(() => entradas.filter(isReceitaOperacional), [entradas])
+  const aportes = useMemo(() => entradas.filter(r => r.tipoEntrada === 'aporte_societario'), [entradas])
+  const outrasEntradas = useMemo(() => entradas.filter(r => r.tipoEntrada === 'outras_entradas'), [entradas])
+
+  // Repasse para os sócios do período — lucro (receita operacional paga - despesa
+  // paga) de cada espaço, dividido pelas regras cadastradas em DIVISAO_SOCIOS. "Já
+  // repassado" soma os lançamentos reais de repasse (tela de Fluxo de Caixa) dentro
+  // do mesmo período.
   const repasseSociosRows = useMemo(() => {
     const rows: { espaco: string; socio: string; percentual: number; lucro: number; valorDevido: number; jaRepassado: number; valorPendente: number }[] = []
     for (const e of espacosParaTabela) {
-      const receitaTotal = entradas.filter(r => r.status === 'pago' && r.espaco === e.nome).reduce((s, r) => s + r.valor, 0)
+      const receitaTotal = entradasOperacionais.filter(r => r.status === 'pago' && r.espaco === e.nome).reduce((s, r) => s + r.valor, 0)
       const despesaTotal = saidas.filter(c => c.status === 'pago' && c.espaco === e.nome).reduce((s, c) => s + c.valor, 0)
       const lucro = receitaTotal - despesaTotal
       const socios = DIVISAO_SOCIOS[e.nome] ?? []
@@ -103,10 +110,12 @@ export default function RelatoriosClient() {
       }
     }
     return rows
-  }, [espacosParaTabela, entradas, saidas, repasses, filters.dataInicio, filters.dataFim])
+  }, [espacosParaTabela, entradasOperacionais, saidas, repasses, filters.dataInicio, filters.dataFim])
 
   function handleExportExcel() {
-    const totalEntradasPeriodo = entradas.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)
+    const totalEntradasPeriodo = entradasOperacionais.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)
+    const totalAportesPeriodo = aportes.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)
+    const totalOutrasPeriodo = outrasEntradas.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)
     const totalDespesasPeriodo = saidas.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0)
 
     const resumoSheet: ExportSheet = {
@@ -114,13 +123,16 @@ export default function RelatoriosClient() {
       rows: [
         ['Período', `${filters.dataInicio} a ${filters.dataFim}`],
         ['Espaços filtrados', espacosLabel],
-        ['Total de Entradas', totalEntradasPeriodo],
+        ['Receitas Operacionais (eventos)', totalEntradasPeriodo],
+        ['Aportes Societários', totalAportesPeriodo],
+        ['Outras Entradas', totalOutrasPeriodo],
+        ['Total de Entradas (Caixa)', totalEntradasPeriodo + totalAportesPeriodo + totalOutrasPeriodo],
         ['Total de Saídas', totalDespesasPeriodo],
-        ['Lucro Líquido', totalEntradasPeriodo - totalDespesasPeriodo],
+        ['Lucro Líquido (só receita operacional)', totalEntradasPeriodo - totalDespesasPeriodo],
         [],
-        ['Espaço', 'Total Entradas', 'Total Saídas', 'Lucro'],
+        ['Espaço', 'Receitas Operacionais', 'Total Saídas', 'Lucro'],
         ...espacosParaTabela.map(e => {
-          const receitaTotal = entradas.filter(r => r.status === 'pago' && r.espaco === e.nome).reduce((s, r) => s + r.valor, 0)
+          const receitaTotal = entradasOperacionais.filter(r => r.status === 'pago' && r.espaco === e.nome).reduce((s, r) => s + r.valor, 0)
           const despesaTotal = saidas.filter(c => c.status === 'pago' && c.espaco === e.nome).reduce((s, c) => s + c.valor, 0)
           return [e.nome, receitaTotal, despesaTotal, receitaTotal - despesaTotal]
         }),
@@ -131,13 +143,31 @@ export default function RelatoriosClient() {
       name: 'Receitas Discriminadas',
       rows: [
         ['Data', 'Descrição', 'Categoria', 'Espaço', 'Evento Relacionado', 'Cliente/Pagador', 'Forma de Pagamento', 'Valor', 'Status', 'Data Recebimento', 'Parcela', 'Observações'],
-        ...entradas.map(r => {
+        ...entradasOperacionais.map(r => {
           const evento = r.eventoId ? eventosPorId.get(r.eventoId) : undefined
           return [
             r.data, r.descricao, r.categoriaNome, r.espaco ?? '', evento?.nomeEvento || evento?.tipo || '', r.cliente ?? '',
             r.metodoPagamento ?? '', r.valor, r.status, r.dataRecebimento ?? '', r.parcelaLabel ?? '', r.observacoes ?? '',
           ]
         }),
+      ],
+    }
+
+    const aportesSheet: ExportSheet = {
+      name: 'Aportes Societários',
+      rows: [
+        ['Data', 'Sócio', 'Espaço', 'Descrição/Motivo', 'Valor', 'Observações'],
+        ...aportes.map(r => [r.data, r.socioResponsavel ?? '', r.espaco ?? '', r.descricao, r.valor, r.observacoes ?? '']),
+      ],
+    }
+
+    const outrasEntradasSheet: ExportSheet = {
+      name: 'Outras Entradas',
+      rows: [
+        ['Data', 'Descrição', 'Categoria', 'Espaço', 'Cliente/Pagador', 'Valor', 'Status', 'Data Recebimento', 'Observações'],
+        ...outrasEntradas.map(r => [
+          r.data, r.descricao, r.categoriaNome, r.espaco ?? '', r.cliente ?? '', r.valor, r.status, r.dataRecebimento ?? '', r.observacoes ?? '',
+        ]),
       ],
     }
 
@@ -161,7 +191,7 @@ export default function RelatoriosClient() {
     }
 
     downloadWorkbook(
-      [resumoSheet, receitasSheet, despesasSheet, repasseSheet],
+      [resumoSheet, receitasSheet, aportesSheet, outrasEntradasSheet, despesasSheet, repasseSheet],
       `relatorio-${filters.dataInicio}-a-${filters.dataFim}.xlsx`,
     )
   }
@@ -193,11 +223,12 @@ export default function RelatoriosClient() {
         dataFim={filters.dataFim}
       />
 
-      {/* 2. Receitas Discriminadas — sempre aberta, sem botão de expandir/recolher */}
+      {/* 2. Receitas Discriminadas — só operacionais (de evento); aporte/outras entradas
+          têm seções próprias abaixo, pra não misturar com faturamento */}
       <FullTable
-        titulo="Receitas Discriminadas"
+        titulo="Receitas Operacionais Discriminadas"
         headers={['Data', 'Descrição', 'Categoria', 'Espaço', 'Evento Relacionado', 'Cliente/Pagador', 'Forma de Pagamento', 'Valor', 'Status', 'Observações']}
-        rows={entradas.map(r => {
+        rows={entradasOperacionais.map(r => {
           const evento = r.eventoId ? eventosPorId.get(r.eventoId) : undefined
           return [
             r.data.split('-').reverse().join('/'), r.descricao, r.categoriaNome, r.espaco ?? '—',
@@ -205,8 +236,30 @@ export default function RelatoriosClient() {
             formatCurrency(r.valor), r.status, r.observacoes ?? '—',
           ]
         })}
-        totalLabel="Total de Receitas"
-        totalValor={formatCurrency(entradas.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0))}
+        totalLabel="Total de Receitas Operacionais"
+        totalValor={formatCurrency(entradasOperacionais.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0))}
+      />
+
+      {/* Aportes Societários — separado do faturamento */}
+      <FullTable
+        titulo="Aportes Societários"
+        headers={['Data', 'Sócio', 'Espaço', 'Descrição/Motivo', 'Valor', 'Observações']}
+        rows={aportes.map(r => [
+          r.data.split('-').reverse().join('/'), r.socioResponsavel ?? '—', r.espaco ?? '—', r.descricao, formatCurrency(r.valor), r.observacoes ?? '—',
+        ])}
+        totalLabel="Total de Aportes"
+        totalValor={formatCurrency(aportes.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0))}
+      />
+
+      {/* Outras Entradas — separado do faturamento */}
+      <FullTable
+        titulo="Outras Entradas"
+        headers={['Data', 'Descrição', 'Categoria', 'Espaço', 'Cliente/Pagador', 'Valor', 'Status', 'Observações']}
+        rows={outrasEntradas.map(r => [
+          r.data.split('-').reverse().join('/'), r.descricao, r.categoriaNome, r.espaco ?? '—', r.cliente ?? '—', formatCurrency(r.valor), r.status, r.observacoes ?? '—',
+        ])}
+        totalLabel="Total de Outras Entradas"
+        totalValor={formatCurrency(outrasEntradas.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0))}
       />
 
       {/* 3. Despesas Discriminadas — sempre aberta, sem botão de expandir/recolher.

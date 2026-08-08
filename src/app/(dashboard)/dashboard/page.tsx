@@ -8,7 +8,7 @@ import OccupancyChart from '@/components/dashboard/OccupancyChart'
 import { formatCurrency } from '@/lib/utils'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useEventos } from '@/contexts/EventosContext'
-import { useReceitas } from '@/contexts/ReceitasContext'
+import { useReceitas, isReceitaOperacional } from '@/contexts/ReceitasContext'
 import type { TipoEvento } from '@/types'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
@@ -66,8 +66,10 @@ export default function DashboardPage() {
     (e) => e.status === 'confirmado' && e.data.startsWith(mesAtual)
   ).length
 
+  // Aporte societário e outras entradas manuais não contam como faturamento —
+  // só receita de evento entra na "Receita do Mês".
   const receitaMes = pagamentosFiltrados
-    .filter((p) => p.status === 'pago' && p.data.startsWith(mesAtual))
+    .filter((p) => p.status === 'pago' && p.data.startsWith(mesAtual) && isReceitaOperacional(p))
     .reduce((s, p) => s + p.valor, 0)
 
   const pendente = pagamentosFiltrados
@@ -99,7 +101,7 @@ export default function DashboardPage() {
   const comparativoData = espacosNomes.map((esp) => {
     const evs = eventos.filter(e => e.espaco === esp)
     const pags = pagamentos.filter(p => p.espaco === esp)
-    const receita = pags.filter(p => p.status === 'pago').reduce((s, p) => s + p.valor, 0)
+    const receita = pags.filter(p => p.status === 'pago' && isReceitaOperacional(p)).reduce((s, p) => s + p.valor, 0)
     const cap = espacosConfig.find(c => c.nome === esp)?.capacidade ?? 0
     const totalPessoas = evs.reduce((s, e) => s + (e.numeroPessoas ?? 0), 0)
     const ocupacaoMedia = evs.length > 0

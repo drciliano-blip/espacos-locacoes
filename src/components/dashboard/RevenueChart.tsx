@@ -10,7 +10,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { useReceitas } from '@/contexts/ReceitasContext'
+import { useReceitas, isReceitaOperacional } from '@/contexts/ReceitasContext'
 
 const MONTH_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
@@ -41,7 +41,7 @@ export default function RevenueChart() {
     }
     const porMes: Record<string, number> = {}
     for (const r of receitas) {
-      if (r.status !== 'pago') continue
+      if (r.status !== 'pago' || !isReceitaOperacional(r)) continue
       const ym = r.data.substring(0, 7)
       porMes[ym] = (porMes[ym] ?? 0) + r.valor
     }

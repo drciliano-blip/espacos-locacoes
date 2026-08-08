@@ -21,7 +21,7 @@ export default function PagamentosPage() {
           onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#25D366' }}
         >
           <Plus className="h-4 w-4" />
-          Nova Receita
+          Nova Entrada
         </button>
       </div>
 

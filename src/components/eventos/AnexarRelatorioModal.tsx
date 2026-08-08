@@ -4,7 +4,7 @@ import { useRef, useState } from 'react'
 import { X, Save, Sparkles, Paperclip, FileText, Camera } from 'lucide-react'
 import { saveFile } from '@/lib/file-storage'
 import { parseCurrencyBR } from '@/lib/utils'
-import type { CategoriaReceita, NovaReceitaInput } from '@/contexts/ReceitasContext'
+import type { CategoriaReceita, NovaReceitaInput, Receita } from '@/contexts/ReceitasContext'
 import type { Evento } from '@/types'
 
 const GREEN = '#25D366'
@@ -37,7 +37,7 @@ interface Props {
   evento: Evento
   categorias: CategoriaReceita[]
   onClose: () => void
-  onSaveReceita: (input: NovaReceitaInput) => Promise<void>
+  onSaveReceita: (input: NovaReceitaInput) => Promise<Receita>
 }
 
 export default function AnexarRelatorioModal({ evento, categorias, onClose, onSaveReceita }: Props) {

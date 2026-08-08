@@ -11,6 +11,8 @@ export interface CategoriaReceita {
   nome: string
 }
 
+export type TipoEntrada = 'evento' | 'aporte_societario' | 'outras_entradas'
+
 export interface Receita {
   id: string
   categoriaId: string
@@ -28,6 +30,15 @@ export interface Receita {
   observacoes?: string
   parcelaNumero?: number
   parcelaLabel?: string
+  tipoEntrada: TipoEntrada
+  socioResponsavel?: string
+}
+
+// Só receita de evento conta como faturamento/receita operacional — aporte
+// societário e outras entradas manuais aumentam o caixa, mas não entram em
+// nenhum cálculo de faturamento, lucro ou divisão de lucro entre sócios.
+export function isReceitaOperacional(r: Receita): boolean {
+  return r.tipoEntrada === 'evento'
 }
 
 interface ReceitaRow {
@@ -46,6 +57,8 @@ interface ReceitaRow {
   observacoes: string | null
   parcela_numero: number | null
   parcela_label: string | null
+  tipo_entrada: string
+  socio_responsavel: string | null
 }
 
 function fromRow(row: ReceitaRow): Receita {
@@ -66,6 +79,8 @@ function fromRow(row: ReceitaRow): Receita {
     observacoes: row.observacoes ?? undefined,
     parcelaNumero: row.parcela_numero ?? undefined,
     parcelaLabel: row.parcela_label ?? undefined,
+    tipoEntrada: (row.tipo_entrada as TipoEntrada) ?? 'evento',
+    socioResponsavel: row.socio_responsavel ?? undefined,
   }
 }
 
@@ -81,6 +96,8 @@ export interface NovaReceitaInput {
   status: Receita['status']
   metodoPagamento?: string
   observacoes?: string
+  tipoEntrada?: TipoEntrada
+  socioResponsavel?: string
 }
 
 export interface ParcelaPlano {
@@ -104,13 +121,32 @@ interface BaixaReceitaInput {
   observacoes?: string
 }
 
+// Edição completa — usada pelo formulário de editar uma entrada manual
+// (Aporte Societário / Outras Entradas / Receita de Evento cadastrada à mão).
+export interface EditarReceitaInput {
+  categoriaId: string
+  espaco?: string
+  cliente?: string
+  descricao: string
+  data: string
+  dataRecebimento?: string
+  valor: number
+  status: Receita['status']
+  metodoPagamento?: string
+  observacoes?: string
+  tipoEntrada: TipoEntrada
+  socioResponsavel?: string
+}
+
 interface ReceitasContextValue {
   receitas: Receita[]
   categorias: CategoriaReceita[]
   loading: boolean
-  addReceita: (input: NovaReceitaInput) => Promise<void>
+  addReceita: (input: NovaReceitaInput) => Promise<Receita>
   syncParcelasDoEvento: (input: SyncParcelasInput) => Promise<void>
   updateReceita: (id: string, patch: BaixaReceitaInput) => Promise<void>
+  editarReceita: (id: string, patch: EditarReceitaInput) => Promise<void>
+  deleteReceita: (id: string) => Promise<void>
 }
 
 const ReceitasContext = createContext<ReceitasContextValue | null>(null)
@@ -136,7 +172,7 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { load() }, [load])
 
-  async function addReceita(input: NovaReceitaInput) {
+  async function addReceita(input: NovaReceitaInput): Promise<Receita> {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -160,6 +196,8 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
         status: input.status,
         metodo_pagamento: input.metodoPagamento ?? null,
         observacoes: input.observacoes ?? null,
+        tipo_entrada: input.tipoEntrada ?? 'evento',
+        socio_responsavel: input.socioResponsavel ?? null,
         created_by: user?.id ?? null,
       })
       .select(SELECT)
@@ -169,10 +207,14 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
     const nova = fromRow(data as unknown as ReceitaRow)
     setReceitas(prev => [nova, ...prev])
     try {
-      await logAtividade({ tipo: 'financeiro', acao: 'Receita lançada', detalhes: `${nova.categoriaNome} — ${nova.descricao}`, espaco: nova.espaco })
+      const acao = nova.tipoEntrada === 'aporte_societario' ? 'Aporte societário lançado'
+        : nova.tipoEntrada === 'outras_entradas' ? 'Entrada lançada'
+        : 'Receita lançada'
+      await logAtividade({ tipo: 'financeiro', acao, detalhes: `${nova.categoriaNome} — ${nova.descricao}`, espaco: nova.espaco })
     } catch {
       // log é secundário, não deve impedir o lançamento da receita
     }
+    return nova
   }
 
   async function syncParcelasDoEvento(input: SyncParcelasInput) {
@@ -208,6 +250,7 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
         valor: parcela.valor,
         parcela_numero: parcela.numero,
         parcela_label: parcela.label,
+        tipo_entrada: 'evento',
       }
       if (match) {
         await supabase.from('receitas').update(payload).eq('id', match.id)
@@ -245,8 +288,61 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function editarReceita(id: string, patch: EditarReceitaInput) {
+    const supabase = createClient()
+    let espacoId: string | null = null
+    if (patch.espaco) {
+      const { data: espacoRow } = await supabase.from('espacos').select('id').eq('nome', patch.espaco).single()
+      espacoId = espacoRow?.id ?? null
+    }
+
+    const { data, error } = await supabase
+      .from('receitas')
+      .update({
+        categoria_id: patch.categoriaId,
+        espaco_id: espacoId,
+        cliente: patch.cliente ?? null,
+        descricao: patch.descricao,
+        data: patch.data,
+        data_recebimento: patch.dataRecebimento ?? null,
+        valor: patch.valor,
+        status: patch.status,
+        metodo_pagamento: patch.metodoPagamento ?? null,
+        observacoes: patch.observacoes ?? null,
+        tipo_entrada: patch.tipoEntrada,
+        socio_responsavel: patch.socioResponsavel ?? null,
+      })
+      .eq('id', id)
+      .select(SELECT)
+      .single()
+
+    if (error) throw error
+    const atualizada = fromRow(data as unknown as ReceitaRow)
+    setReceitas(prev => prev.map(r => (r.id === id ? atualizada : r)))
+    try {
+      await logAtividade({ tipo: 'financeiro', acao: 'Entrada editada', detalhes: `${atualizada.categoriaNome} — ${atualizada.descricao}`, espaco: atualizada.espaco })
+    } catch {
+      // log é secundário, não deve impedir a edição
+    }
+  }
+
+  async function deleteReceita(id: string) {
+    const alvo = receitas.find(r => r.id === id)
+    const supabase = createClient()
+    const { error } = await supabase.from('receitas').delete().eq('id', id)
+    if (error) throw error
+    setReceitas(prev => prev.filter(r => r.id !== id))
+    if (alvo) {
+      try {
+        await logAtividade({ tipo: 'financeiro', acao: 'Entrada excluída', detalhes: `${alvo.categoriaNome} — ${alvo.descricao}`, espaco: alvo.espaco })
+      } catch {
+        // log é secundário, não deve impedir a exclusão já concluída
+      }
+    }
+  }
+
   return (
-    <ReceitasContext.Provider value={{ receitas, categorias, loading, addReceita, syncParcelasDoEvento, updateReceita }}>
+    <ReceitasContext.Provider value={{ receitas, categorias, loading, addReceita, syncParcelasDoEvento, updateReceita, editarReceita, deleteReceita }}>
       {children}
     </ReceitasContext.Provider>
   )
