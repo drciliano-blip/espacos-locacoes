@@ -5,7 +5,7 @@ import { X, Save, Pencil, Paperclip, Camera, Trash2, Handshake } from 'lucide-re
 import { useEspacos } from '@/contexts/EspacosContext'
 import { parseCurrencyBR, formatCurrency } from '@/lib/utils'
 import { saveFile } from '@/lib/file-storage'
-import { DIVISAO_SOCIOS } from '@/lib/socios-config'
+import { DIVISAO_SOCIOS, SOCIOS_OBRA } from '@/lib/socios-config'
 import type { CategoriaReceita, EditarReceitaInput, Receita, TipoEntrada } from '@/contexts/ReceitasContext'
 import type { FormaPagamento } from '@/types'
 
@@ -21,6 +21,7 @@ const TIPO_ENTRADA_LABEL: Record<TipoEntrada, string> = {
   aporte_societario: 'Aporte Societário',
   outras_entradas: 'Outras Entradas',
   retorno_fundo_caixa: 'Retorno do Fundo de Caixa',
+  aporte_obra: 'Aporte para Obra',
 }
 
 interface Props {
@@ -55,8 +56,11 @@ export default function EditarEntradaModal({ receita, categorias, onClose, onSav
   const [confirmarExclusao, setConfirmarExclusao] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
-  const isAporte = tipoEntrada === 'aporte_societario'
-  const sociosDoEspaco = espaco ? (DIVISAO_SOCIOS[espaco] ?? []) : []
+  const isAporteObra = tipoEntrada === 'aporte_obra'
+  const isAporte = tipoEntrada === 'aporte_societario' || isAporteObra
+  const sociosDoEspaco: string[] = !espaco ? [] : isAporteObra
+    ? (SOCIOS_OBRA[espaco] ?? [])
+    : (DIVISAO_SOCIOS[espaco] ?? []).map(s => s.nome)
 
   const errors = {
     descricao: !descricao.trim(),
@@ -96,7 +100,7 @@ export default function EditarEntradaModal({ receita, categorias, onClose, onSav
             entityId: receita.id,
             entityName: descricao.trim(),
             espaco: espaco || undefined,
-            categoria: isAporte ? 'comprovante_aporte' : 'comprovante',
+            categoria: isAporteObra ? 'comprovante_aporte_obra' : isAporte ? 'comprovante_aporte' : 'comprovante',
           })
         } catch {
           setErro('Entrada atualizada, mas não foi possível anexar o novo comprovante. Tente novamente pela lista de documentos.')
@@ -174,7 +178,7 @@ export default function EditarEntradaModal({ receita, categorias, onClose, onSav
                   className={`w-full cursor-pointer rounded-lg border ${submitted && errors.socioResponsavel ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none disabled:opacity-60`}
                 >
                   <option value="">{espaco ? '— Selecione —' : 'Selecione o espaço primeiro'}</option>
-                  {sociosDoEspaco.map(s => <option key={s.nome} value={s.nome}>{s.nome}</option>)}
+                  {sociosDoEspaco.map(nome => <option key={nome} value={nome}>{nome}</option>)}
                 </select>
               </div>
             ) : (

@@ -1,12 +1,12 @@
 'use client'
 
 import { useMemo } from 'react'
-import { ArrowUpCircle, ArrowDownCircle, Wallet, Handshake, PlusCircle, Landmark, Vault, ArrowLeftRight } from 'lucide-react'
+import { ArrowUpCircle, ArrowDownCircle, Wallet, Handshake, PlusCircle, Landmark, Vault, ArrowLeftRight, HardHat, Info } from 'lucide-react'
 import { useReceitas, isReceitaOperacional } from '@/contexts/ReceitasContext'
-import { useContasPagar, isDespesaOperacional } from '@/contexts/ContasPagarContext'
+import { useContasPagar, isDespesaOperacional, isDespesaObra } from '@/contexts/ContasPagarContext'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { formatCurrency } from '@/lib/utils'
-import { DIVISAO_SOCIOS } from '@/lib/socios-config'
+import { DIVISAO_SOCIOS, SOCIOS_OBRA, INVESTIMENTOS_SOCIETARIOS } from '@/lib/socios-config'
 import { DespesasTable } from './LancamentosTables'
 import type { Receita } from '@/contexts/ReceitasContext'
 import type { ContaPagar } from '@/types'
@@ -97,6 +97,39 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
     ? espacosConfig.filter(e => selectedSpaces.includes(e.nome))
     : espacosConfig
 
+  // Fechamento da Obra é um controle à parte, nunca misturado com a operação:
+  // só entra aporte para obra (entrada) e despesa categoria "obra" (saída). É
+  // acumulado desde o início (não trava no período do relatório), porque é o
+  // fechamento de um projeto, não um resultado mensal. Só aparece pra espaço
+  // que tenha sócios de obra configurados ou algum lançamento de obra — nunca
+  // pra espaço sem nenhuma obra em andamento.
+  const obraPorEspaco = useMemo(() => {
+    const nomesComObra = new Set<string>([
+      ...Object.keys(SOCIOS_OBRA),
+      ...saidasAllTime.filter(isDespesaObra).map(c => c.espaco),
+      ...entradasAllTime.filter(r => r.tipoEntrada === 'aporte_obra' && r.espaco).map(r => r.espaco as string),
+    ])
+    return espacos.filter(e => nomesComObra.has(e.nome)).map(e => {
+      const despesasEspaco = saidasAllTime.filter(c => c.espaco === e.nome && isDespesaObra(c))
+      const aportesEspaco = entradasAllTime.filter(r => r.espaco === e.nome && r.tipoEntrada === 'aporte_obra')
+      const totalDespesas = despesasEspaco.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0)
+      const totalAportes = aportesEspaco.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)
+      const saldo = totalAportes - totalDespesas
+      const porSocioMap = new Map<string, number>()
+      for (const nome of SOCIOS_OBRA[e.nome] ?? []) porSocioMap.set(nome, 0)
+      for (const r of aportesEspaco) {
+        if (r.status !== 'pago' || !r.socioResponsavel) continue
+        porSocioMap.set(r.socioResponsavel, (porSocioMap.get(r.socioResponsavel) ?? 0) + r.valor)
+      }
+      const porSocio = Array.from(porSocioMap.entries()).map(([nome, valor]) => ({ nome, valor }))
+      return {
+        nome: e.nome, totalDespesas, totalAportes, saldo, porSocio,
+        despesasCount: despesasEspaco.length, aportesCount: aportesEspaco.length,
+        investimentos: INVESTIMENTOS_SOCIETARIOS[e.nome] ?? [],
+      }
+    })
+  }, [espacos, saidasAllTime, entradasAllTime])
+
   const porEspaco = useMemo(() => espacos.map(e => {
     // Divisão de lucro entre sócios usa só receita operacional (de evento) e
     // despesa operacional — aporte/outras entradas, retirada de sócio e Fundo de
@@ -135,7 +168,7 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
             <div className="flex items-center gap-2 mb-1"><ArrowDownCircle className="h-4 w-4 shrink-0 text-red-500" /><span className="text-xs text-red-600 font-medium">Despesas Operacionais</span></div>
             <p className="text-lg font-bold text-red-600 break-words">{formatCurrency(totalSaidas)}</p>
             <p className="text-xs text-app-subtle mt-1">
-              Operacional {formatCurrency(totalPorCategoria('operacional'))} · Obra {formatCurrency(totalPorCategoria('obra'))} · Financeiro {formatCurrency(totalPorCategoria('financeiro'))}
+              Operacional {formatCurrency(totalPorCategoria('operacional'))} · Financeiro {formatCurrency(totalPorCategoria('financeiro'))}
             </p>
           </div>
           <div className={`min-w-0 rounded-xl border p-4 ${resultado >= 0 ? 'border-[#25D366]/25 bg-[#25D366]/5' : 'border-red-500/20 bg-red-500/5'}`}>
@@ -196,6 +229,66 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
           </div>
         </div>
       </section>
+
+      {/* Fechamento da Obra — controle à parte, nunca misturado com a operação */}
+      {obraPorEspaco.length > 0 && (
+        <section className="space-y-3">
+          <h4 className="text-xs font-semibold text-app-muted uppercase tracking-wide">Fechamento da Obra</h4>
+          <div className="space-y-3">
+            {obraPorEspaco.map(o => (
+              <div key={o.nome} className="rounded-lg border border-orange-500/25 bg-orange-500/5 p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-app-text flex items-center gap-1.5">
+                    <HardHat className="h-4 w-4 text-orange-500" />
+                    {o.nome}
+                  </p>
+                  <p className="text-xs text-app-subtle">{o.aportesCount} aporte(s) · {o.despesasCount} despesa(s) de obra — acumulado</p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <p className="text-app-subtle">Aportes para Obra</p>
+                    <p className="font-semibold text-violet-600">{formatCurrency(o.totalAportes)}</p>
+                  </div>
+                  <div>
+                    <p className="text-app-subtle">Despesas de Obra</p>
+                    <p className="font-semibold text-red-500">{formatCurrency(o.totalDespesas)}</p>
+                  </div>
+                  <div>
+                    <p className="text-app-subtle">Saldo da Obra</p>
+                    <p className={`font-semibold ${o.saldo >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>{formatCurrency(o.saldo)}</p>
+                  </div>
+                </div>
+
+                {o.porSocio.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-app-muted mb-1.5">Aporte realizado por cada sócio</p>
+                    <div className="flex flex-wrap gap-2">
+                      {o.porSocio.map(s => (
+                        <span key={s.nome} className="flex items-center gap-1.5 rounded-full bg-app-surface2 border border-app-border2/60 px-2.5 py-1 text-xs">
+                          <span className="text-app-text font-medium">{s.nome}</span>
+                          <span className="font-semibold text-violet-600">{formatCurrency(s.valor)}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {o.investimentos.length > 0 && (
+                  <div className="rounded-lg bg-app-surface2/60 border border-app-border2/60 px-3 py-2 space-y-1">
+                    <p className="text-xs font-medium text-app-muted flex items-center gap-1.5"><Info className="h-3.5 w-3.5" /> Quadro Societário</p>
+                    {o.investimentos.map((inv, i) => (
+                      <p key={i} className="text-xs text-app-subtle">
+                        <span className="text-app-text font-medium">{inv.socio}</span> — {inv.descricao}: {formatCurrency(inv.valor)} (informativo, não é receita nem entra no fechamento da obra)
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Relatório por espaço */}
       <div className="space-y-4">

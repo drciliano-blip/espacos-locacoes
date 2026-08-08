@@ -5,7 +5,7 @@ import { X, Save, DollarSign, Paperclip, Camera, Handshake } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { parseCurrencyBR } from '@/lib/utils'
 import { saveFile } from '@/lib/file-storage'
-import { DIVISAO_SOCIOS } from '@/lib/socios-config'
+import { DIVISAO_SOCIOS, SOCIOS_OBRA } from '@/lib/socios-config'
 import type { CategoriaReceita, NovaReceitaInput, TipoEntrada } from '@/contexts/ReceitasContext'
 import type { FormaPagamento } from '@/types'
 
@@ -21,6 +21,7 @@ const TIPO_ENTRADA_LABEL: Record<TipoEntrada, string> = {
   aporte_societario: 'Aporte Societário',
   outras_entradas: 'Outras Entradas',
   retorno_fundo_caixa: 'Retorno do Fundo de Caixa',
+  aporte_obra: 'Aporte para Obra',
 }
 
 interface Props {
@@ -82,9 +83,13 @@ export default function NovaReceitaModal({
     setDraft(d => ({ ...d, [k]: v }))
   }
 
-  const isAporte = draft.tipoEntrada === 'aporte_societario'
+  const isAporteSocietario = draft.tipoEntrada === 'aporte_societario'
+  const isAporteObra = draft.tipoEntrada === 'aporte_obra'
+  const isAporte = isAporteSocietario || isAporteObra
   const isRetornoFundo = draft.tipoEntrada === 'retorno_fundo_caixa'
-  const sociosDoEspaco = draft.espaco ? (DIVISAO_SOCIOS[draft.espaco] ?? []) : []
+  const sociosDoEspaco: string[] = !draft.espaco ? [] : isAporteObra
+    ? (SOCIOS_OBRA[draft.espaco] ?? [])
+    : (DIVISAO_SOCIOS[draft.espaco] ?? []).map(s => s.nome)
 
   const errors = isAporte
     ? {
@@ -129,7 +134,7 @@ export default function NovaReceitaModal({
         valor: parseCurrencyBR(draft.valor),
         status: 'pago',
         observacoes: draft.observacoes.trim() || undefined,
-        tipoEntrada: 'aporte_societario',
+        tipoEntrada: isAporteObra ? 'aporte_obra' : 'aporte_societario',
         socioResponsavel: draft.socioResponsavel,
       } : isRetornoFundo ? {
         categoriaId: categoriaAporte,
@@ -164,7 +169,7 @@ export default function NovaReceitaModal({
             entityId: nova.id,
             entityName: draft.descricao.trim(),
             espaco: draft.espaco || undefined,
-            categoria: isAporte ? 'comprovante_aporte' : isRetornoFundo ? 'comprovante_retorno_fundo' : 'comprovante',
+            categoria: isAporteObra ? 'comprovante_aporte_obra' : isAporteSocietario ? 'comprovante_aporte' : isRetornoFundo ? 'comprovante_retorno_fundo' : 'comprovante',
           })
         } catch {
           setErro('Entrada salva, mas não foi possível anexar o comprovante automaticamente. Anexe depois pela lista.')
@@ -208,9 +213,14 @@ export default function NovaReceitaModal({
                   <option key={t} value={t}>{TIPO_ENTRADA_LABEL[t]}</option>
                 ))}
               </select>
-              {isAporte && (
+              {isAporteSocietario && (
                 <p className="text-xs text-app-subtle mt-1">
                   Não conta como faturamento — aumenta o caixa, mas fica separado nos relatórios.
+                </p>
+              )}
+              {isAporteObra && (
+                <p className="text-xs text-app-subtle mt-1">
+                  Não conta como faturamento nem como receita operacional — entra só no Fechamento da Obra.
                 </p>
               )}
               {isRetornoFundo && (
@@ -305,7 +315,7 @@ export default function NovaReceitaModal({
                   className={`w-full cursor-pointer rounded-lg border ${submitted && errors.socioResponsavel ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none disabled:opacity-60 disabled:cursor-default`}
                 >
                   <option value="">{draft.espaco ? '— Selecione —' : 'Selecione o espaço primeiro'}</option>
-                  {sociosDoEspaco.map(s => <option key={s.nome} value={s.nome}>{s.nome}</option>)}
+                  {sociosDoEspaco.map(nome => <option key={nome} value={nome}>{nome}</option>)}
                 </select>
               </div>
 

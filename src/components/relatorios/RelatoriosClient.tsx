@@ -6,7 +6,7 @@ import { getPeriodRange } from '@/lib/relatorios-utils'
 import { formatCurrency } from '@/lib/utils'
 import { useEventos } from '@/contexts/EventosContext'
 import { useReceitas, isReceitaOperacional } from '@/contexts/ReceitasContext'
-import { useContasPagar, isDespesaOperacional } from '@/contexts/ContasPagarContext'
+import { useContasPagar, isDespesaOperacional, isDespesaObra } from '@/contexts/ContasPagarContext'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useRepasses } from '@/contexts/RepassesContext'
 import { useCurrentUser } from '@/contexts/UserContext'
@@ -92,9 +92,11 @@ export default function RelatoriosClient() {
   const aportes = useMemo(() => entradas.filter(r => r.tipoEntrada === 'aporte_societario'), [entradas])
   const outrasEntradas = useMemo(() => entradas.filter(r => r.tipoEntrada === 'outras_entradas'), [entradas])
   const retornosFundo = useMemo(() => entradas.filter(r => r.tipoEntrada === 'retorno_fundo_caixa'), [entradas])
+  const aportesObra = useMemo(() => entradas.filter(r => r.tipoEntrada === 'aporte_obra'), [entradas])
   const despesasOperacionais = useMemo(() => saidas.filter(isDespesaOperacional), [saidas])
   const retiradasSocio = useMemo(() => saidas.filter(c => c.categoria === 'retirada_socio'), [saidas])
   const transferenciasFundo = useMemo(() => saidas.filter(c => c.categoria === 'fundo_caixa'), [saidas])
+  const despesasObra = useMemo(() => saidas.filter(isDespesaObra), [saidas])
 
   // Repasse para os sócios do período — lucro (receita operacional paga - despesa
   // operacional paga) de cada espaço, dividido pelas regras cadastradas em
@@ -126,6 +128,8 @@ export default function RelatoriosClient() {
     const totalDespesasPeriodo = despesasOperacionais.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0)
     const totalRetiradasPeriodo = retiradasSocio.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0)
     const totalTransferenciasPeriodo = transferenciasFundo.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0)
+    const totalAportesObraPeriodo = aportesObra.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)
+    const totalDespesasObraPeriodo = despesasObra.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0)
 
     const resumoSheet: ExportSheet = {
       name: 'Relatório Mensal',
@@ -145,6 +149,10 @@ export default function RelatoriosClient() {
         ['Outras Entradas', totalOutrasPeriodo],
         ['Transferências para o Fundo de Caixa (período)', totalTransferenciasPeriodo],
         ['Retornos do Fundo de Caixa (período)', totalRetornosFundoPeriodo],
+        [],
+        ['Fechamento da Obra (período — o saldo acumulado está na tela)'],
+        ['Aportes para Obra (período)', totalAportesObraPeriodo],
+        ['Despesas de Obra (período)', totalDespesasObraPeriodo],
         [],
         ['Espaço', 'Receitas Operacionais', 'Despesas Operacionais', 'Resultado'],
         ...espacosParaTabela.map(e => {
@@ -221,6 +229,19 @@ export default function RelatoriosClient() {
       ],
     }
 
+    const obraSheet: ExportSheet = {
+      name: 'Fechamento da Obra',
+      rows: [
+        ['Tipo', 'Data', 'Descrição', 'Sócio/Fornecedor', 'Espaço', 'Valor', 'Status', 'Observações'],
+        ...aportesObra.map(r => [
+          'Aporte para Obra', r.data, r.descricao, r.socioResponsavel ?? '', r.espaco ?? '', r.valor, r.status, r.observacoes ?? '',
+        ]),
+        ...despesasObra.map(c => [
+          'Despesa de Obra', c.dataVencimento, c.descricao, c.fornecedor ?? '', c.espaco, c.valor, c.status, c.observacoes ?? '',
+        ]),
+      ],
+    }
+
     const repasseSheet: ExportSheet = {
       name: 'Repasse para os Sócios',
       rows: [
@@ -230,7 +251,7 @@ export default function RelatoriosClient() {
     }
 
     downloadWorkbook(
-      [resumoSheet, receitasSheet, aportesSheet, outrasEntradasSheet, despesasSheet, retiradasSheet, fundoCaixaSheet, repasseSheet],
+      [resumoSheet, receitasSheet, aportesSheet, outrasEntradasSheet, despesasSheet, retiradasSheet, fundoCaixaSheet, obraSheet, repasseSheet],
       `relatorio-${filters.dataInicio}-a-${filters.dataFim}.xlsx`,
     )
   }
@@ -302,10 +323,11 @@ export default function RelatoriosClient() {
       />
 
       {/* 3. Despesas Discriminadas — sempre aberta, sem botão de expandir/recolher.
-          Só despesa operacional de verdade (Operacional/Obra/Financeiro) — Retirada
-          de Sócio e Fundo de Caixa têm tabelas próprias abaixo, porque não são
-          despesa. "Evento relacionado" e "forma de pagamento" não existem no
-          cadastro de contas a pagar hoje, por isso não aparecem aqui. */}
+          Só despesa operacional de verdade (Operacional/Financeiro) — Retirada de
+          Sócio, Fundo de Caixa e Obra têm tabelas próprias abaixo/adiante, porque
+          nenhuma delas é despesa operacional. "Evento relacionado" e "forma de
+          pagamento" não existem no cadastro de contas a pagar hoje, por isso não
+          aparecem aqui. */}
       <FullTable
         titulo="Despesas Discriminadas"
         headers={['Data Vencimento', 'Descrição', 'Fornecedor', 'Categoria', 'Tipo de Despesa', 'Espaço', 'Valor', 'Status', 'Data Pagamento', 'Observações']}
@@ -350,6 +372,29 @@ export default function RelatoriosClient() {
         ])}
         totalLabel="Total Retornado no Período"
         totalValor={formatCurrency(retornosFundo.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0))}
+      />
+
+      {/* Fechamento da Obra — nunca misturado com a operação. O saldo acumulado
+          (desde o início, não só do período) está na seção "Fechamento da Obra"
+          do Relatório Mensal, no topo da página. */}
+      <FullTable
+        titulo="Aportes para Obra"
+        headers={['Data', 'Sócio', 'Espaço', 'Descrição/Motivo', 'Valor', 'Observações']}
+        rows={aportesObra.map(r => [
+          r.data.split('-').reverse().join('/'), r.socioResponsavel ?? '—', r.espaco ?? '—', r.descricao, formatCurrency(r.valor), r.observacoes ?? '—',
+        ])}
+        totalLabel="Total Aportado no Período"
+        totalValor={formatCurrency(aportesObra.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0))}
+      />
+      <FullTable
+        titulo="Despesas de Obra"
+        headers={['Data Vencimento', 'Descrição', 'Fornecedor', 'Espaço', 'Valor', 'Status', 'Data Pagamento', 'Observações']}
+        rows={despesasObra.map(c => [
+          c.dataVencimento.split('-').reverse().join('/'), c.descricao, c.fornecedor ?? '—', c.espaco,
+          formatCurrency(c.valor), c.status, c.dataPagamento ? c.dataPagamento.split('-').reverse().join('/') : '—', c.observacoes ?? '—',
+        ])}
+        totalLabel="Total Gasto no Período"
+        totalValor={formatCurrency(despesasObra.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0))}
       />
 
       {/* 4. Repasse para os Sócios */}
