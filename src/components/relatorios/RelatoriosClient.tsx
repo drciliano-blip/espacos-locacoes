@@ -5,12 +5,13 @@ import FilterBar, { type RelatorioFilters, type Periodo } from './FilterBar'
 import { getPeriodRange } from '@/lib/relatorios-utils'
 import { formatCurrency } from '@/lib/utils'
 import { useEventos } from '@/contexts/EventosContext'
-import { useReceitas, isReceitaOperacional } from '@/contexts/ReceitasContext'
-import { useContasPagar, isDespesaOperacional, isDespesaObra } from '@/contexts/ContasPagarContext'
+import { useReceitas } from '@/contexts/ReceitasContext'
+import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useRepasses } from '@/contexts/RepassesContext'
 import { useCurrentUser } from '@/contexts/UserContext'
 import { DIVISAO_SOCIOS } from '@/lib/socios-config'
+import { calcularFechamento } from '@/lib/fechamento-calc'
 import { parseCurrencyBR } from '@/lib/utils'
 import { X } from 'lucide-react'
 import { downloadWorkbook, type ExportSheet } from '@/lib/xlsx-export'
@@ -70,44 +71,32 @@ export default function RelatoriosClient() {
 
   const eventosPorId = useMemo(() => new Map(eventos.map(e => [e.id, e])), [eventos])
 
-  const entradas = useMemo(() => receitas.filter(r => {
-    const matchEspaco = !selectedSpaces || (r.espaco && selectedSpaces.includes(r.espaco))
-    const matchInicio = !filters.dataInicio || r.data >= filters.dataInicio
-    const matchFim = !filters.dataFim || r.data <= filters.dataFim
-    return matchEspaco && matchInicio && matchFim
-  }), [receitas, selectedSpaces, filters.dataInicio, filters.dataFim])
+  // Toda a aritmética (o que é operacional, obra, societário, Fundo de Caixa)
+  // vem de fechamento-calc.ts — a mesma função que alimenta o Relatório Mensal
+  // e a aba Fechamento, pra garantir que nenhuma tela mostre números diferentes.
+  const {
+    entradasOperacionais, despesasOperacionais,
+    aportes, retiradasSocio,
+    outrasEntradas, transferenciasFundo, retornosFundo,
+    aportesObra, despesasObra,
+  } = useMemo(
+    () => calcularFechamento(receitas, contasPagar, { selectedSpaces, dataInicio: filters.dataInicio, dataFim: filters.dataFim }, espacosParaTabela),
+    [receitas, contasPagar, selectedSpaces, filters.dataInicio, filters.dataFim, espacosParaTabela],
+  )
 
-  const saidas = useMemo(() => contasPagar.filter(c => {
-    const matchEspaco = !selectedSpaces || selectedSpaces.includes(c.espaco)
-    const matchInicio = !filters.dataInicio || c.dataVencimento >= filters.dataInicio
-    const matchFim = !filters.dataFim || c.dataVencimento <= filters.dataFim
-    return matchEspaco && matchInicio && matchFim
-  }), [contasPagar, selectedSpaces, filters.dataInicio, filters.dataFim])
-
-  // Aporte societário, outras entradas manuais e retorno do Fundo de Caixa não contam
-  // como faturamento — só receita de evento entra em "Receitas Discriminadas", lucro
-  // e divisão de sócios. Retirada de sócio e transferência pro Fundo de Caixa não
-  // contam como despesa — são movimentação societária/de caixa, separadas do resultado.
-  const entradasOperacionais = useMemo(() => entradas.filter(isReceitaOperacional), [entradas])
-  const aportes = useMemo(() => entradas.filter(r => r.tipoEntrada === 'aporte_societario'), [entradas])
-  const outrasEntradas = useMemo(() => entradas.filter(r => r.tipoEntrada === 'outras_entradas'), [entradas])
-  const retornosFundo = useMemo(() => entradas.filter(r => r.tipoEntrada === 'retorno_fundo_caixa'), [entradas])
-  const aportesObra = useMemo(() => entradas.filter(r => r.tipoEntrada === 'aporte_obra'), [entradas])
-  const despesasOperacionais = useMemo(() => saidas.filter(isDespesaOperacional), [saidas])
-  const retiradasSocio = useMemo(() => saidas.filter(c => c.categoria === 'retirada_socio'), [saidas])
-  const transferenciasFundo = useMemo(() => saidas.filter(c => c.categoria === 'fundo_caixa'), [saidas])
-  const despesasObra = useMemo(() => saidas.filter(isDespesaObra), [saidas])
-
-  // Repasse para os sócios do período — lucro (receita operacional paga - despesa
-  // operacional paga) de cada espaço, dividido pelas regras cadastradas em
-  // DIVISAO_SOCIOS. "Já repassado" soma os lançamentos reais de repasse (tela de
-  // Fluxo de Caixa) dentro do mesmo período.
+  // Repasse para os sócios do período — usa o Disponível para Distribuição
+  // (lucro operacional do espaço menos o que foi separado pro Fundo de Caixa no
+  // período, mais o que voltou dele), nunca o lucro bruto — senão dinheiro já
+  // reservado seria repassado também. "Já repassado" soma os lançamentos reais
+  // de repasse (tela de Fluxo de Caixa) dentro do mesmo período.
   const repasseSociosRows = useMemo(() => {
     const rows: { espaco: string; socio: string; percentual: number; lucro: number; valorDevido: number; jaRepassado: number; valorPendente: number }[] = []
     for (const e of espacosParaTabela) {
       const receitaTotal = entradasOperacionais.filter(r => r.status === 'pago' && r.espaco === e.nome).reduce((s, r) => s + r.valor, 0)
       const despesaTotal = despesasOperacionais.filter(c => c.status === 'pago' && c.espaco === e.nome).reduce((s, c) => s + c.valor, 0)
-      const lucro = receitaTotal - despesaTotal
+      const transferenciasEspaco = transferenciasFundo.filter(c => c.status === 'pago' && c.espaco === e.nome).reduce((s, c) => s + c.valor, 0)
+      const retornosEspaco = retornosFundo.filter(r => r.status === 'pago' && r.espaco === e.nome).reduce((s, r) => s + r.valor, 0)
+      const lucro = receitaTotal - despesaTotal - transferenciasEspaco + retornosEspaco
       const socios = DIVISAO_SOCIOS[e.nome] ?? []
       for (const s of socios) {
         const valorDevido = lucro * (s.percentual / 100)
@@ -118,7 +107,7 @@ export default function RelatoriosClient() {
       }
     }
     return rows
-  }, [espacosParaTabela, entradasOperacionais, despesasOperacionais, repasses, filters.dataInicio, filters.dataFim])
+  }, [espacosParaTabela, entradasOperacionais, despesasOperacionais, transferenciasFundo, retornosFundo, repasses, filters.dataInicio, filters.dataFim])
 
   function handleExportExcel() {
     const totalEntradasPeriodo = entradasOperacionais.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)

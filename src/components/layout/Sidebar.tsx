@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronRight,
   BarChart2,
+  Landmark,
   Receipt,
   Users,
   Calculator,
@@ -26,6 +27,7 @@ import type { NivelAcesso } from '@/types'
 const navItemsBefore = [
   { href: '/dashboard',      label: 'Dashboard',     icon: LayoutDashboard, page: 'dashboard' },
   { href: '/relatorios',     label: 'Relatórios',    icon: BarChart2,       page: 'relatorios' },
+  { href: '/fechamento',     label: 'Fechamento',    icon: Landmark,        page: 'fechamento' },
   { href: '/agenda',         label: 'Agenda',        icon: CalendarDays,    page: 'agenda' },
   { href: '/calculadora-staff', label: 'Calculadora de Staff', icon: Calculator, page: 'calculadora-staff' },
   { href: '/contas-a-pagar', label: 'Contas a Pagar',icon: Receipt,         page: 'contas-a-pagar' },

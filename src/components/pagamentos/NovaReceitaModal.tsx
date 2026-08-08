@@ -32,6 +32,10 @@ interface Props {
   espacoPadrao?: string
   clientePadrao?: string
   excludeSlugs?: string[]
+  // Abre já travado num tipo específico (ex: "+" de Aporte Societário em
+  // Relatórios) — esconde o seletor de tipo, igual já acontece quando vem de
+  // dentro de um evento.
+  fixedTipoEntrada?: TipoEntrada
 }
 
 interface Draft {
@@ -57,12 +61,12 @@ function emptyDraft(categoriaId: string, espaco: string, cliente: string, tipoEn
 }
 
 export default function NovaReceitaModal({
-  categorias, onClose, onSave, eventoId, espacoPadrao, clientePadrao, excludeSlugs,
+  categorias, onClose, onSave, eventoId, espacoPadrao, clientePadrao, excludeSlugs, fixedTipoEntrada,
 }: Props) {
   const { espacosNomes } = useEspacos()
-  // Aberta de dentro de um evento — o tipo já é implicitamente "Receita de Evento",
-  // não faz sentido perguntar de novo.
-  const permiteEscolherTipo = !eventoId
+  // Aberta de dentro de um evento, ou com um tipo já travado (ex: "+" de Aporte
+  // Societário em Relatórios) — o tipo já está implícito, não faz sentido perguntar.
+  const permiteEscolherTipo = !eventoId && !fixedTipoEntrada
   const categoriasDisponiveis = excludeSlugs
     ? categorias.filter(c => !excludeSlugs.includes(c.slug))
     : categorias
@@ -70,7 +74,7 @@ export default function NovaReceitaModal({
     categoriasDisponiveis[0]?.id ?? '',
     espacoPadrao ?? '',
     clientePadrao ?? '',
-    'evento',
+    fixedTipoEntrada ?? 'evento',
   ))
   const [comprovante, setComprovante] = useState<File | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)

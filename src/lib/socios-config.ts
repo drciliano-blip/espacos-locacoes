@@ -15,8 +15,9 @@ export const DIVISAO_SOCIOS: Record<string, SocioSplit[]> = {
     { nome: 'Marcelo MZ', percentual: 20 },
   ],
   'Complexo Jussara': [
-    { nome: 'GCR', percentual: 63 },
-    { nome: 'FJ Cines Ltda', percentual: 27 },
+    { nome: 'Camilo', percentual: 31.5 },
+    { nome: 'Alex', percentual: 31.5 },
+    { nome: 'Giscard', percentual: 27 },
     { nome: 'Trupe Labels', percentual: 10 },
   ],
   'Espaço Solon': [
@@ -34,7 +35,17 @@ export const DIVISAO_SOCIOS: Record<string, SocioSplit[]> = {
 // Complexo Jussara, que tem 10% de participação societária/operacional mas
 // 0% de responsabilidade na obra). Espaço sem entrada aqui não tem obra.
 export const SOCIOS_OBRA: Record<string, string[]> = {
-  'Complexo Jussara': ['GCR', 'FJ Cines Ltda'],
+  'Complexo Jussara': ['Camilo', 'Alex', 'Giscard'],
+}
+
+// Agrupamentos de exibição — soma sócios individuais num "consolidado" só pra
+// mostrar na tela (ex: GCR = Camilo + Alex). Nunca reagrupa lançamento
+// nenhum: aporte/retirada continuam vinculados exatamente a quem
+// aportou/retirou, isso aqui é só um total calculado a mais.
+export const GRUPOS_SOCIOS: Record<string, Record<string, string[]>> = {
+  'Complexo Jussara': {
+    'GCR': ['Camilo', 'Alex'],
+  },
 }
 
 // Investimentos societários pontuais (ex: compra de participação) — só um

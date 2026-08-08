@@ -1,15 +1,44 @@
 'use client'
 
-import { useMemo } from 'react'
-import { ArrowUpCircle, ArrowDownCircle, Wallet, Handshake, PlusCircle, Landmark, Vault, ArrowLeftRight, HardHat, Info } from 'lucide-react'
-import { useReceitas, isReceitaOperacional } from '@/contexts/ReceitasContext'
-import { useContasPagar, isDespesaOperacional, isDespesaObra } from '@/contexts/ContasPagarContext'
+import { useMemo, useState } from 'react'
+import { ArrowUpCircle, ArrowDownCircle, Wallet, Handshake, PlusCircle, Landmark, Vault, ArrowLeftRight, HardHat, Info, Plus } from 'lucide-react'
+import { useReceitas } from '@/contexts/ReceitasContext'
+import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { useEspacos } from '@/contexts/EspacosContext'
+import { useCurrentUser } from '@/contexts/UserContext'
 import { formatCurrency } from '@/lib/utils'
-import { DIVISAO_SOCIOS, SOCIOS_OBRA, INVESTIMENTOS_SOCIETARIOS } from '@/lib/socios-config'
+import { DIVISAO_SOCIOS, GRUPOS_SOCIOS } from '@/lib/socios-config'
+import { calcularFechamento } from '@/lib/fechamento-calc'
 import { DespesasTable } from './LancamentosTables'
+import NovaReceitaModal from '@/components/pagamentos/NovaReceitaModal'
+import NovaRetiradaSocioModal from './NovaRetiradaSocioModal'
+import LancamentoSocioListModal, { type LancamentoSocioRow } from './LancamentoSocioListModal'
+import Toast from '@/components/shared/Toast'
 import type { Receita } from '@/contexts/ReceitasContext'
 import type { ContaPagar } from '@/types'
+
+// Soma um grupo de lançamentos {nome (sócio), valor} por sócio individual, e
+// calcula "consolidados" opcionais (ex: GCR = Camilo + Alex) por cima disso —
+// nunca reagrupa o lançamento em si, só o total exibido.
+function buildSocioBreakdown(
+  items: { nome: string; valor: number }[],
+  espacosEmEscopo: string[],
+): { porSocio: { nome: string; valor: number }[]; grupos: { nome: string; valor: number }[] } {
+  const porSocioMap = new Map<string, number>()
+  for (const it of items) porSocioMap.set(it.nome, (porSocioMap.get(it.nome) ?? 0) + it.valor)
+
+  const gruposMap = new Map<string, number>()
+  for (const espaco of espacosEmEscopo) {
+    for (const [grupo, membros] of Object.entries(GRUPOS_SOCIOS[espaco] ?? {})) {
+      const soma = membros.reduce((s, m) => s + (porSocioMap.get(m) ?? 0), 0)
+      if (soma !== 0) gruposMap.set(grupo, (gruposMap.get(grupo) ?? 0) + soma)
+    }
+  }
+  return {
+    porSocio: Array.from(porSocioMap.entries()).map(([nome, valor]) => ({ nome, valor })),
+    grupos: Array.from(gruposMap.entries()).map(([nome, valor]) => ({ nome, valor })),
+  }
+}
 
 interface Props {
   selectedSpaces?: string[]
@@ -18,117 +47,65 @@ interface Props {
 }
 
 export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dataFim }: Props) {
-  const { receitas } = useReceitas()
-  const { contas: contasPagar } = useContasPagar()
+  const { receitas, addReceita, categorias } = useReceitas()
+  const { contas: contasPagar, addConta } = useContasPagar()
   const { espacosConfig } = useEspacos()
+  const { role } = useCurrentUser()
+  const podeLancar = role === 'admin' || role === 'financeiro'
 
-  const entradas = useMemo(() => receitas.filter(r => {
-    const matchEspaco = !selectedSpaces?.length || (r.espaco && selectedSpaces.includes(r.espaco))
-    const matchInicio = !dataInicio || r.data >= dataInicio
-    const matchFim    = !dataFim    || r.data <= dataFim
-    return matchEspaco && matchInicio && matchFim
-  }), [receitas, selectedSpaces, dataInicio, dataFim])
-
-  const saidas = useMemo(() => contasPagar.filter(c => {
-    const matchEspaco = !selectedSpaces?.length || selectedSpaces.includes(c.espaco)
-    const matchInicio = !dataInicio || c.dataVencimento >= dataInicio
-    const matchFim    = !dataFim    || c.dataVencimento <= dataFim
-    return matchEspaco && matchInicio && matchFim
-  }), [contasPagar, selectedSpaces, dataInicio, dataFim])
-
-  // Aporte societário, outras entradas manuais e retorno do Fundo de Caixa NÃO contam
-  // como faturamento/receita operacional. Retirada de sócio e transferência pro Fundo
-  // de Caixa NÃO contam como despesa — são movimentações societárias/de caixa, não
-  // custo do negócio. Isso é o que separa "Resultado Operacional" de "Movimentações
-  // Societárias" e "Controle de Caixa" nos relatórios.
-  const entradasOperacionais = useMemo(() => entradas.filter(isReceitaOperacional), [entradas])
-  const aportes = useMemo(() => entradas.filter(r => r.tipoEntrada === 'aporte_societario'), [entradas])
-  const outrasEntradas = useMemo(() => entradas.filter(r => r.tipoEntrada === 'outras_entradas'), [entradas])
-  const retornosFundo = useMemo(() => entradas.filter(r => r.tipoEntrada === 'retorno_fundo_caixa'), [entradas])
-
-  const despesasOperacionais = useMemo(() => saidas.filter(isDespesaOperacional), [saidas])
-  const retiradasSocio = useMemo(() => saidas.filter(c => c.categoria === 'retirada_socio'), [saidas])
-  const transferenciasFundo = useMemo(() => saidas.filter(c => c.categoria === 'fundo_caixa'), [saidas])
-
-  const totalEntradas = entradasOperacionais.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)
-  const totalAportes = aportes.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)
-  const totalOutrasEntradas = outrasEntradas.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)
-  const totalRetornosFundo = retornosFundo.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)
-  const totalCaixa = totalEntradas + totalAportes + totalOutrasEntradas
-
-  const totalSaidas = despesasOperacionais.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0)
-  const totalPorCategoria = (categoria: string) =>
-    despesasOperacionais.filter(c => c.categoria === categoria && c.status === 'pago').reduce((s, c) => s + c.valor, 0)
-  const totalRetiradasSocio = retiradasSocio.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0)
-  const totalTransferenciasFundo = transferenciasFundo.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0)
-
-  const resultado = totalEntradas - totalSaidas
-
-  // Saldo do Fundo de Caixa e saldo disponível fora dele são cumulativos (desde
-  // sempre), não travados ao período filtrado — senão o saldo "reiniciaria" toda
-  // vez que o usuário trocasse o período do relatório. Só respeitam o filtro de
-  // espaço, igual ao resto da tela.
-  const entradasAllTime = useMemo(() => receitas.filter(r =>
-    !selectedSpaces?.length || (r.espaco && selectedSpaces.includes(r.espaco))
-  ), [receitas, selectedSpaces])
-  const saidasAllTime = useMemo(() => contasPagar.filter(c =>
-    !selectedSpaces?.length || selectedSpaces.includes(c.espaco)
-  ), [contasPagar, selectedSpaces])
-
-  const somaPaga = (valor: number, cond: boolean) => cond ? valor : 0
-  const sumPago = <T,>(arr: T[], pred: (x: T) => boolean, valor: (x: T) => number, status: (x: T) => string) =>
-    arr.reduce((s, x) => s + somaPaga(valor(x), pred(x) && status(x) === 'pago'), 0)
-
-  const fundoTransfersAllTime = sumPago(saidasAllTime, c => c.categoria === 'fundo_caixa', c => c.valor, c => c.status)
-  const fundoReturnsAllTime = sumPago(entradasAllTime, r => r.tipoEntrada === 'retorno_fundo_caixa', r => r.valor, r => r.status)
-  const saldoFundoAtual = fundoTransfersAllTime - fundoReturnsAllTime
-
-  const entradasOperAllTime = sumPago(entradasAllTime, isReceitaOperacional, r => r.valor, r => r.status)
-  const outrasAllTime = sumPago(entradasAllTime, r => r.tipoEntrada === 'outras_entradas', r => r.valor, r => r.status)
-  const aportesAllTime = sumPago(entradasAllTime, r => r.tipoEntrada === 'aporte_societario', r => r.valor, r => r.status)
-  const despesasOperAllTime = sumPago(saidasAllTime, isDespesaOperacional, c => c.valor, c => c.status)
-  const retiradasAllTime = sumPago(saidasAllTime, c => c.categoria === 'retirada_socio', c => c.valor, c => c.status)
-
-  const saldoDisponivelForaFundo =
-    entradasOperAllTime + outrasAllTime + aportesAllTime + fundoReturnsAllTime
-    - despesasOperAllTime - retiradasAllTime - fundoTransfersAllTime
+  const [novoAporteOpen, setNovoAporteOpen] = useState(false)
+  const [novaRetiradaOpen, setNovaRetiradaOpen] = useState(false)
+  const [drillDown, setDrillDown] = useState<null | 'aportes' | 'retiradas'>(null)
+  const [toastMsg, setToastMsg] = useState<string | null>(null)
+  function showToast(msg: string) {
+    setToastMsg(msg)
+    setTimeout(() => setToastMsg(null), 3500)
+  }
 
   const espacos = selectedSpaces?.length
     ? espacosConfig.filter(e => selectedSpaces.includes(e.nome))
     : espacosConfig
 
-  // Fechamento da Obra é um controle à parte, nunca misturado com a operação:
-  // só entra aporte para obra (entrada) e despesa categoria "obra" (saída). É
-  // acumulado desde o início (não trava no período do relatório), porque é o
-  // fechamento de um projeto, não um resultado mensal. Só aparece pra espaço
-  // que tenha sócios de obra configurados ou algum lançamento de obra — nunca
-  // pra espaço sem nenhuma obra em andamento.
-  const obraPorEspaco = useMemo(() => {
-    const nomesComObra = new Set<string>([
-      ...Object.keys(SOCIOS_OBRA),
-      ...saidasAllTime.filter(isDespesaObra).map(c => c.espaco),
-      ...entradasAllTime.filter(r => r.tipoEntrada === 'aporte_obra' && r.espaco).map(r => r.espaco as string),
-    ])
-    return espacos.filter(e => nomesComObra.has(e.nome)).map(e => {
-      const despesasEspaco = saidasAllTime.filter(c => c.espaco === e.nome && isDespesaObra(c))
-      const aportesEspaco = entradasAllTime.filter(r => r.espaco === e.nome && r.tipoEntrada === 'aporte_obra')
-      const totalDespesas = despesasEspaco.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0)
-      const totalAportes = aportesEspaco.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)
-      const saldo = totalAportes - totalDespesas
-      const porSocioMap = new Map<string, number>()
-      for (const nome of SOCIOS_OBRA[e.nome] ?? []) porSocioMap.set(nome, 0)
-      for (const r of aportesEspaco) {
-        if (r.status !== 'pago' || !r.socioResponsavel) continue
-        porSocioMap.set(r.socioResponsavel, (porSocioMap.get(r.socioResponsavel) ?? 0) + r.valor)
-      }
-      const porSocio = Array.from(porSocioMap.entries()).map(([nome, valor]) => ({ nome, valor }))
-      return {
-        nome: e.nome, totalDespesas, totalAportes, saldo, porSocio,
-        despesasCount: despesasEspaco.length, aportesCount: aportesEspaco.length,
-        investimentos: INVESTIMENTOS_SOCIETARIOS[e.nome] ?? [],
-      }
-    })
-  }, [espacos, saidasAllTime, entradasAllTime])
+  // Toda a aritmética (o que é operacional, obra, societário, Fundo de Caixa)
+  // vem de fechamento-calc.ts — a mesma função que alimenta a aba Fechamento,
+  // pra garantir que as duas telas nunca mostrem números diferentes.
+  const {
+    entradasOperacionais, totalEntradas, despesasOperacionais, totalSaidas,
+    totalPorCategoriaDespesa: totalPorCategoria, resultado,
+    aportes, totalAportes, retiradasSocio, totalRetiradasSocio,
+    outrasEntradas, totalOutrasEntradas, transferenciasFundo, totalTransferenciasFundo,
+    retornosFundo, totalRetornosFundo,
+    saldoFundoAtual, saldoDisponivelForaFundo,
+    obraPorEspaco,
+  } = useMemo(
+    () => calcularFechamento(receitas, contasPagar, { selectedSpaces, dataInicio, dataFim }, espacos),
+    [receitas, contasPagar, selectedSpaces, dataInicio, dataFim, espacos],
+  )
+
+  const totalCaixa = totalEntradas + totalAportes + totalOutrasEntradas
+
+  const nomesEspacosEmEscopo = useMemo(() => espacos.map(e => e.nome), [espacos])
+
+  const aportesPorSocio = useMemo(() => buildSocioBreakdown(
+    aportes.filter(r => r.status === 'pago' && r.socioResponsavel).map(r => ({ nome: r.socioResponsavel as string, valor: r.valor })),
+    nomesEspacosEmEscopo,
+  ), [aportes, nomesEspacosEmEscopo])
+
+  const retiradasPorSocio = useMemo(() => buildSocioBreakdown(
+    retiradasSocio.filter(c => c.status === 'pago' && c.fornecedor).map(c => ({ nome: c.fornecedor as string, valor: c.valor })),
+    nomesEspacosEmEscopo,
+  ), [retiradasSocio, nomesEspacosEmEscopo])
+
+  const aportesRows: LancamentoSocioRow[] = aportes.map(r => ({
+    id: r.id, data: r.data, socio: r.socioResponsavel ?? '—', espaco: r.espaco ?? '—',
+    valor: r.valor, descricao: r.descricao, observacoes: r.observacoes,
+  }))
+  const retiradasRows: LancamentoSocioRow[] = retiradasSocio.map(c => ({
+    id: c.id, data: c.dataPagamento ?? c.dataVencimento, socio: c.fornecedor ?? '—', espaco: c.espaco,
+    valor: c.valor, descricao: c.descricao, observacoes: c.observacoes,
+  }))
+
+  const espacoUnico = selectedSpaces?.length === 1 ? selectedSpaces[0] : undefined
 
   const porEspaco = useMemo(() => espacos.map(e => {
     // Divisão de lucro entre sócios usa só receita operacional (de evento) e
@@ -140,13 +117,18 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
     const receitaTotal = entradasEspaco.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)
     const despesaTotal = saidasEspaco.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0)
     const lucro = receitaTotal - despesaTotal
-    // Se o espaço não estiver configurado em DIVISAO_SOCIOS, presume-se que não tem sócio.
-    const socios = (DIVISAO_SOCIOS[e.nome] ?? []).map(s => ({ ...s, valor: lucro * (s.percentual / 100) }))
     const aportesEspaco = aportes.filter(r => r.espaco === e.nome && r.status === 'pago').reduce((s, r) => s + r.valor, 0)
     const retiradasEspaco = retiradasSocio.filter(c => c.espaco === e.nome && c.status === 'pago').reduce((s, c) => s + c.valor, 0)
     const transferenciasEspaco = transferenciasFundo.filter(c => c.espaco === e.nome && c.status === 'pago').reduce((s, c) => s + c.valor, 0)
-    return { nome: e.nome, entradasEspaco, saidasEspaco, receitaTotal, despesaTotal, lucro, socios, aportesEspaco, retiradasEspaco, transferenciasEspaco }
-  }), [espacos, entradasOperacionais, despesasOperacionais, aportes, retiradasSocio, transferenciasFundo])
+    const retornosEspaco = retornosFundo.filter(r => r.espaco === e.nome && r.status === 'pago').reduce((s, r) => s + r.valor, 0)
+    // Repasse aos sócios usa o Disponível para Distribuição (resultado menos o
+    // que foi separado pro Fundo de Caixa no período, mais o que voltou dele) —
+    // nunca o lucro bruto, senão dinheiro já reservado seria repassado também.
+    const disponivelEspaco = lucro - transferenciasEspaco + retornosEspaco
+    // Se o espaço não estiver configurado em DIVISAO_SOCIOS, presume-se que não tem sócio.
+    const socios = (DIVISAO_SOCIOS[e.nome] ?? []).map(s => ({ ...s, valor: disponivelEspaco * (s.percentual / 100) }))
+    return { nome: e.nome, entradasEspaco, saidasEspaco, receitaTotal, despesaTotal, lucro, disponivelEspaco, socios, aportesEspaco, retiradasEspaco, transferenciasEspaco }
+  }), [espacos, entradasOperacionais, despesasOperacionais, aportes, retiradasSocio, transferenciasFundo, retornosFundo])
 
   const saidasGerais = despesasOperacionais.filter(c => c.espaco === 'Todos')
   const totalSaidasGerais = saidasGerais.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0)
@@ -184,14 +166,66 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
         <h4 className="text-xs font-semibold text-app-muted uppercase tracking-wide">Movimentações Societárias</h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="min-w-0 rounded-xl border border-violet-500/20 bg-violet-500/5 p-4">
-            <div className="flex items-center gap-2 mb-1"><Handshake className="h-4 w-4 shrink-0 text-violet-500" /><span className="text-xs text-violet-600 font-medium">Aportes Societários</span></div>
-            <p className="text-lg font-bold text-violet-600 break-words">{formatCurrency(totalAportes)}</p>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <div className="flex items-center gap-2"><Handshake className="h-4 w-4 shrink-0 text-violet-500" /><span className="text-xs text-violet-600 font-medium">Aportes Societários</span></div>
+              {podeLancar && (
+                <button onClick={() => setNovoAporteOpen(true)} title="Novo aporte"
+                  className="flex h-5 w-5 items-center justify-center rounded-full bg-violet-500/15 text-violet-600 hover:bg-violet-500/25 transition-colors">
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            <button onClick={() => setDrillDown('aportes')} className="text-lg font-bold text-violet-600 break-words hover:underline text-left">
+              {formatCurrency(totalAportes)}
+            </button>
             <p className="text-xs text-app-subtle mt-1">{aportes.length} lançamentos — não conta como faturamento nem despesa</p>
+            {(aportesPorSocio.porSocio.length > 0 || aportesPorSocio.grupos.length > 0) && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {aportesPorSocio.porSocio.map(s => (
+                  <span key={s.nome} className="flex items-center gap-1 rounded-full bg-app-surface2 border border-app-border2/60 px-2 py-0.5 text-[11px]">
+                    <span className="text-app-text font-medium">{s.nome}</span>
+                    <span className="text-violet-600 font-semibold">{formatCurrency(s.valor)}</span>
+                  </span>
+                ))}
+                {aportesPorSocio.grupos.map(g => (
+                  <span key={g.nome} className="flex items-center gap-1 rounded-full border border-dashed border-violet-400/50 px-2 py-0.5 text-[11px]">
+                    <span className="text-app-subtle">{g.nome} consolidado</span>
+                    <span className="text-violet-600 font-semibold">{formatCurrency(g.valor)}</span>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           <div className="min-w-0 rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/5 p-4">
-            <div className="flex items-center gap-2 mb-1"><Landmark className="h-4 w-4 shrink-0 text-fuchsia-500" /><span className="text-xs text-fuchsia-600 font-medium">Retiradas de Sócios</span></div>
-            <p className="text-lg font-bold text-fuchsia-600 break-words">{formatCurrency(totalRetiradasSocio)}</p>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <div className="flex items-center gap-2"><Landmark className="h-4 w-4 shrink-0 text-fuchsia-500" /><span className="text-xs text-fuchsia-600 font-medium">Retiradas de Sócios</span></div>
+              {podeLancar && (
+                <button onClick={() => setNovaRetiradaOpen(true)} title="Nova retirada"
+                  className="flex h-5 w-5 items-center justify-center rounded-full bg-fuchsia-500/15 text-fuchsia-600 hover:bg-fuchsia-500/25 transition-colors">
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            <button onClick={() => setDrillDown('retiradas')} className="text-lg font-bold text-fuchsia-600 break-words hover:underline text-left">
+              {formatCurrency(totalRetiradasSocio)}
+            </button>
             <p className="text-xs text-app-subtle mt-1">{retiradasSocio.length} lançamentos — não conta como despesa</p>
+            {(retiradasPorSocio.porSocio.length > 0 || retiradasPorSocio.grupos.length > 0) && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {retiradasPorSocio.porSocio.map(s => (
+                  <span key={s.nome} className="flex items-center gap-1 rounded-full bg-app-surface2 border border-app-border2/60 px-2 py-0.5 text-[11px]">
+                    <span className="text-app-text font-medium">{s.nome}</span>
+                    <span className="text-fuchsia-600 font-semibold">{formatCurrency(s.valor)}</span>
+                  </span>
+                ))}
+                {retiradasPorSocio.grupos.map(g => (
+                  <span key={g.nome} className="flex items-center gap-1 rounded-full border border-dashed border-fuchsia-400/50 px-2 py-0.5 text-[11px]">
+                    <span className="text-app-subtle">{g.nome} consolidado</span>
+                    <span className="text-fuchsia-600 font-semibold">{formatCurrency(g.valor)}</span>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -316,6 +350,47 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
           </div>
         </details>
       )}
+
+      {novoAporteOpen && (
+        <NovaReceitaModal
+          categorias={categorias}
+          fixedTipoEntrada="aporte_societario"
+          espacoPadrao={espacoUnico}
+          onClose={() => setNovoAporteOpen(false)}
+          onSave={async input => {
+            const nova = await addReceita(input)
+            showToast('Aporte societário registrado.')
+            return nova
+          }}
+        />
+      )}
+
+      {novaRetiradaOpen && (
+        <NovaRetiradaSocioModal
+          onClose={() => setNovaRetiradaOpen(false)}
+          onSave={addConta}
+          onSaved={() => showToast('Retirada de sócio registrada.')}
+        />
+      )}
+
+      {drillDown === 'aportes' && (
+        <LancamentoSocioListModal
+          titulo="Aportes Societários"
+          rows={aportesRows}
+          fileModule="receitas"
+          onClose={() => setDrillDown(null)}
+        />
+      )}
+      {drillDown === 'retiradas' && (
+        <LancamentoSocioListModal
+          titulo="Retiradas de Sócios"
+          rows={retiradasRows}
+          fileModule="contas"
+          onClose={() => setDrillDown(null)}
+        />
+      )}
+
+      <Toast message={toastMsg} />
     </div>
   )
 }
@@ -327,13 +402,14 @@ interface EspacoReportCardProps {
   receitaTotal: number
   despesaTotal: number
   lucro: number
+  disponivelEspaco: number
   socios: { nome: string; percentual: number; valor: number }[]
   aportesEspaco: number
   retiradasEspaco: number
   transferenciasEspaco: number
 }
 
-function EspacoReportCard({ nome, entradasEspaco, saidasEspaco, receitaTotal, despesaTotal, lucro, socios, aportesEspaco, retiradasEspaco, transferenciasEspaco }: EspacoReportCardProps) {
+function EspacoReportCard({ nome, entradasEspaco, saidasEspaco, receitaTotal, despesaTotal, lucro, disponivelEspaco, socios, aportesEspaco, retiradasEspaco, transferenciasEspaco }: EspacoReportCardProps) {
   return (
     <div className="rounded-lg border border-app-border2/60 bg-app-bg p-4 space-y-3">
       <div className="flex items-center justify-between gap-2">
@@ -375,10 +451,16 @@ function EspacoReportCard({ nome, entradasEspaco, saidasEspaco, receitaTotal, de
         <span className="text-xs font-medium text-app-muted">Resultado</span>
         <span className={`text-sm font-bold ${lucro >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>{formatCurrency(lucro)}</span>
       </div>
+      {disponivelEspaco !== lucro && (
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-app-subtle">Disponível pra distribuição (após Fundo de Caixa)</span>
+          <span className="text-xs font-semibold text-app-text">{formatCurrency(disponivelEspaco)}</span>
+        </div>
+      )}
 
       {/* Repasse para os sócios */}
       <div>
-        <p className="text-xs font-medium text-app-muted mb-1.5">Repasse para os sócios</p>
+        <p className="text-xs font-medium text-app-muted mb-1.5">Repasse para os sócios — sobre o disponível pra distribuição</p>
         {socios.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {socios.map(s => (
