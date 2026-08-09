@@ -122,16 +122,18 @@ const categoriaBadge: Record<CategoriaContaPagar, string> = {
   retirada_socio: 'bg-violet-500/10 text-violet-600', fundo_caixa: 'bg-amber-500/10 text-amber-600', reembolso_evento: 'bg-rose-500/10 text-rose-600',
 }
 
-const SUBCATEGORIAS: string[] = ['aluguel', 'energia', 'internet', 'funcionários', 'manutenção', 'fornecedores', 'extras', 'outros']
+const SUBCATEGORIAS: string[] = ['aluguel', 'energia', 'internet', 'funcionários', 'manutenção', 'fornecedores', 'extras', 'outros', 'despesa_a_comprovar']
 const subcategoriaLabel: Record<string, string> = {
   aluguel: 'Aluguel', energia: 'Energia', internet: 'Internet', funcionários: 'Funcionários',
   manutenção: 'Manutenção', fornecedores: 'Fornecedores', extras: 'Extras', outros: 'Outros',
+  despesa_a_comprovar: 'Despesa a ser comprovada',
 }
 const subcategoriaBadge: Record<string, string> = {
   aluguel: 'bg-violet-500/10 text-violet-600', energia: 'bg-yellow-500/10 text-yellow-600',
   internet: 'bg-sky-500/10 text-sky-600', funcionários: 'bg-blue-500/10 text-blue-600',
   manutenção: 'bg-orange-500/10 text-orange-600', fornecedores: 'bg-teal-500/10 text-teal-600',
   extras: 'bg-zinc-500/10 text-zinc-600', outros: 'bg-slate-500/10 text-slate-600',
+  despesa_a_comprovar: 'bg-red-500/10 text-red-600',
 }
 
 interface FormState {

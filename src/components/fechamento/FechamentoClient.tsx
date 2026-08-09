@@ -27,7 +27,7 @@ function getDefaultFilters(): RelatorioFilters {
   return { periodo: 'anual', espacos: [], dataInicio: inicio, dataFim: fim }
 }
 
-// A aba Fechamento é o centro financeiro consolidado — sempre separando os
+// A aba Financeiro é o centro financeiro consolidado — sempre separando os
 // quatro conceitos que nunca podem se misturar automaticamente: Operação,
 // Obra, Societário e Reservas. Toda a aritmética vem de fechamento-calc.ts,
 // a mesma função usada em Relatórios, pra garantir números idênticos.
@@ -151,9 +151,9 @@ export default function FechamentoClient() {
         </div>
       )}
 
-      {/* Resumo do Fechamento */}
+      {/* Resumo Financeiro */}
       <div className="rounded-2xl border border-app-border bg-app-surface p-5">
-        <h3 className="text-sm font-semibold text-app-text mb-3">Resumo do Fechamento</h3>
+        <h3 className="text-sm font-semibold text-app-text mb-3">Resumo Financeiro</h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <ResumoStat label="Aportes Societários" valor={fechamento.totalAportes} cor="text-violet-600" />
           <ResumoStat label="Receitas Operacionais" valor={fechamento.totalEntradas} cor="text-emerald-600" />

@@ -8,6 +8,7 @@ const MESES_LABEL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
 const SUBCATEGORIA_LABEL: Record<string, string> = {
   aluguel: 'Aluguel', energia: 'Energia', internet: 'Internet', funcionários: 'Funcionários',
   manutenção: 'Manutenção', fornecedores: 'Fornecedores', extras: 'Extras', outros: 'Outros',
+  despesa_a_comprovar: 'Despesa a ser comprovada',
 }
 
 export interface DivisaoSocioMes {

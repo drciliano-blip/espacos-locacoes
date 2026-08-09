@@ -73,7 +73,7 @@ export default function RelatoriosClient() {
 
   // Toda a aritmética (o que é operacional, obra, societário, Fundo de Caixa)
   // vem de fechamento-calc.ts — a mesma função que alimenta o Relatório Mensal
-  // e a aba Fechamento, pra garantir que nenhuma tela mostre números diferentes.
+  // e a aba Financeiro, pra garantir que nenhuma tela mostre números diferentes.
   const {
     entradasOperacionais, despesasOperacionais,
     aportes, retiradasSocio,

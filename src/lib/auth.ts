@@ -7,7 +7,7 @@ export const ROLE_PERMISSIONS: Record<NivelAcesso, string[]> = {
   visualizador: ['dashboard'],
   // Somente leitura, e restrito aos espaços vinculados a ele via RLS —
   // o filtro de dados por espaço acontece no banco, isso aqui só libera as páginas.
-  // Fechamento mostra dado societário sensível (aporte/retirada por sócio) —
+  // Financeiro mostra dado societário sensível (aporte/retirada por sócio) —
   // mesma visibilidade de Relatórios.
   socio: ['dashboard', 'agenda', 'eventos', 'relatorios', 'fechamento', 'espacos'],
 }

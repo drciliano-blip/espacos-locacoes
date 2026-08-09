@@ -69,7 +69,7 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
     : espacosConfig
 
   // Toda a aritmética (o que é operacional, obra, societário, Fundo de Caixa)
-  // vem de fechamento-calc.ts — a mesma função que alimenta a aba Fechamento,
+  // vem de fechamento-calc.ts — a mesma função que alimenta a aba Financeiro,
   // pra garantir que as duas telas nunca mostrem números diferentes.
   const {
     entradasOperacionais, totalEntradas, despesasOperacionais, totalSaidas,
