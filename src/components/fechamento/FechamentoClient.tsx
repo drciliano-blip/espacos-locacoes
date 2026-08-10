@@ -41,11 +41,18 @@ export default function FechamentoClient() {
   const podeLancar = role === 'admin' || role === 'financeiro'
 
   const [filters, setFilters] = useState<RelatorioFilters>(getDefaultFilters)
-  const [socioFiltro, setSocioFiltro] = useState('')
   const [novoFundoOpen, setNovoFundoOpen] = useState(false)
   const [novoAporteOpen, setNovoAporteOpen] = useState(false)
   const [novaRetiradaOpen, setNovaRetiradaOpen] = useState(false)
-  const [drillDown, setDrillDown] = useState<null | 'aportes' | 'retiradas'>(null)
+  // Filtro de período específico da área de Sócios — independente do período
+  // geral da página (que rege Resultado Operacional/Obra/etc). Sem filtro
+  // (modo 'historico') mostra o total acumulado desde sempre de cada sócio.
+  const [socioPeriodoModo, setSocioPeriodoModo] = useState<'historico' | 'mes' | 'ano' | 'personalizado'>('historico')
+  const [socioMes, setSocioMes] = useState(() => new Date().toISOString().slice(0, 7))
+  const [socioAno, setSocioAno] = useState(() => String(new Date().getFullYear()))
+  const [socioDataInicioCustom, setSocioDataInicioCustom] = useState('')
+  const [socioDataFimCustom, setSocioDataFimCustom] = useState('')
+  const [drillDown, setDrillDown] = useState<{ tipo: 'aportes' | 'retiradas'; titulo: string; nomes: string[] } | null>(null)
   const [editandoAporteId, setEditandoAporteId] = useState<string | null>(null)
   const [editandoRetiradaId, setEditandoRetiradaId] = useState<string | null>(null)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
@@ -81,19 +88,49 @@ export default function FechamentoClient() {
     return Array.from(nomes)
   }, [espacos])
 
-  const aportesFiltrados = socioFiltro ? fechamento.aportes.filter(r => r.socioResponsavel === socioFiltro) : fechamento.aportes
-  const retiradasFiltradas = socioFiltro ? fechamento.retiradasSocio.filter(c => c.fornecedor === socioFiltro) : fechamento.retiradasSocio
+  function ultimoDiaDoMes(anoMes: string): string {
+    const [ano, mes] = anoMes.split('-').map(Number)
+    const dia = new Date(ano, mes, 0).getDate()
+    return `${anoMes}-${String(dia).padStart(2, '0')}`
+  }
+
+  const { socioDataInicio, socioDataFim } = useMemo(() => {
+    if (socioPeriodoModo === 'mes') return { socioDataInicio: `${socioMes}-01`, socioDataFim: ultimoDiaDoMes(socioMes) }
+    if (socioPeriodoModo === 'ano') return { socioDataInicio: `${socioAno}-01-01`, socioDataFim: `${socioAno}-12-31` }
+    if (socioPeriodoModo === 'personalizado') return { socioDataInicio: socioDataInicioCustom || undefined, socioDataFim: socioDataFimCustom || undefined }
+    return { socioDataInicio: undefined, socioDataFim: undefined }
+  }, [socioPeriodoModo, socioMes, socioAno, socioDataInicioCustom, socioDataFimCustom])
+
+  // Aportes/retiradas em escopo pro painel de Sócios — respeita o espaço
+  // selecionado no filtro geral da página e o período próprio de Sócios (sem
+  // filtro = histórico completo). Independente do período do FilterBar do
+  // topo, que rege as outras seções (Resultado Operacional, Obra, etc).
+  const aportesSocioEscopo = useMemo(() => receitas.filter(r => {
+    if (r.tipoEntrada !== 'aporte_societario') return false
+    if (selectedSpaces?.length && (!r.espaco || !selectedSpaces.includes(r.espaco))) return false
+    if (socioDataInicio && r.data < socioDataInicio) return false
+    if (socioDataFim && r.data > socioDataFim) return false
+    return true
+  }), [receitas, selectedSpaces, socioDataInicio, socioDataFim])
+
+  const retiradasSocioEscopo = useMemo(() => contasPagar.filter(c => {
+    if (c.categoria !== 'retirada_socio') return false
+    if (selectedSpaces?.length && !selectedSpaces.includes(c.espaco)) return false
+    const data = c.dataPagamento ?? c.dataVencimento
+    if (socioDataInicio && data < socioDataInicio) return false
+    if (socioDataFim && data > socioDataFim) return false
+    return true
+  }), [contasPagar, selectedSpaces, socioDataInicio, socioDataFim])
 
   // Total de Aportes/Retiradas/Saldo por sócio — soma TODOS os lançamentos
-  // (não só o último), já respeitando espaço/período do filtro ativo (mesmo
-  // conjunto de registros que "Ver Aportes"/"Ver Retiradas" mostram). Nunca
-  // substitui o histórico — é só um total calculado por cima dele, que se
-  // recalcula sozinho a cada aporte/retirada criado, editado ou excluído
-  // porque lê direto do ReceitasContext/ContasPagarContext.
+  // pagos (não só o último) dentro do escopo acima. Nunca substitui o
+  // histórico — é só um total calculado por cima dele, que se recalcula
+  // sozinho a cada aporte/retirada criado, editado ou excluído porque lê
+  // direto do ReceitasContext/ContasPagarContext.
   const resumoPorSocio = useMemo(() => {
     const porSocio = nomesSociosDisponiveis.map(nome => {
-      const totalAportes = fechamento.aportes.filter(r => r.status === 'pago' && r.socioResponsavel === nome).reduce((s, r) => s + r.valor, 0)
-      const totalRetiradas = fechamento.retiradasSocio.filter(c => c.status === 'pago' && c.fornecedor === nome).reduce((s, c) => s + c.valor, 0)
+      const totalAportes = aportesSocioEscopo.filter(r => r.status === 'pago' && r.socioResponsavel === nome).reduce((s, r) => s + r.valor, 0)
+      const totalRetiradas = retiradasSocioEscopo.filter(c => c.status === 'pago' && c.fornecedor === nome).reduce((s, c) => s + c.valor, 0)
       return { nome, totalAportes, totalRetiradas, saldo: totalAportes - totalRetiradas }
     })
     const grupos = new Map<string, string[]>()
@@ -102,19 +139,25 @@ export default function FechamentoClient() {
       const membrosResumo = porSocio.filter(s => membros.includes(s.nome))
       const totalAportes = membrosResumo.reduce((s, m) => s + m.totalAportes, 0)
       const totalRetiradas = membrosResumo.reduce((s, m) => s + m.totalRetiradas, 0)
-      return { nome, totalAportes, totalRetiradas, saldo: totalAportes - totalRetiradas }
+      return { nome, membros, totalAportes, totalRetiradas, saldo: totalAportes - totalRetiradas }
     })
     return { porSocio, grupos: gruposResumo }
-  }, [nomesSociosDisponiveis, fechamento.aportes, fechamento.retiradasSocio, espacos])
+  }, [nomesSociosDisponiveis, aportesSocioEscopo, retiradasSocioEscopo, espacos])
 
-  const aportesRows: LancamentoSocioRow[] = aportesFiltrados.map(r => ({
-    id: r.id, data: r.data, socio: r.socioResponsavel ?? '—', espaco: r.espaco ?? '—',
-    valor: r.valor, descricao: r.descricao, observacoes: r.observacoes,
-  }))
-  const retiradasRows: LancamentoSocioRow[] = retiradasFiltradas.map(c => ({
-    id: c.id, data: c.dataPagamento ?? c.dataVencimento, socio: c.fornecedor ?? '—', espaco: c.espaco,
-    valor: c.valor, descricao: c.descricao, observacoes: c.observacoes,
-  }))
+  // Linhas do drill-down (Ver Aportes/Ver Retiradas) — sempre organizadas por
+  // data (receitas/contas já vêm ordenadas por data desc do contexto), só do(s)
+  // sócio(s) clicado(s). Mesmo escopo de espaço/período do resumo acima.
+  const drillDownRows: LancamentoSocioRow[] = useMemo(() => {
+    if (!drillDown) return []
+    if (drillDown.tipo === 'aportes') {
+      return aportesSocioEscopo
+        .filter(r => r.socioResponsavel && drillDown.nomes.includes(r.socioResponsavel))
+        .map(r => ({ id: r.id, data: r.data, socio: r.socioResponsavel ?? '—', espaco: r.espaco ?? '—', valor: r.valor, descricao: r.descricao, observacoes: r.observacoes }))
+    }
+    return retiradasSocioEscopo
+      .filter(c => c.fornecedor && drillDown.nomes.includes(c.fornecedor))
+      .map(c => ({ id: c.id, data: c.dataPagamento ?? c.dataVencimento, socio: c.fornecedor ?? '—', espaco: c.espaco, valor: c.valor, descricao: c.descricao, observacoes: c.observacoes }))
+  }, [drillDown, aportesSocioEscopo, retiradasSocioEscopo])
 
   // Fundos genéricos (Reservas) em escopo — um fundo sem espaço é da empresa
   // toda, então aparece independente do filtro de espaço; um fundo com espaço
@@ -139,17 +182,13 @@ export default function FechamentoClient() {
     const transferenciasEspaco = fechamento.transferenciasFundo.filter(c => c.status === 'pago' && c.espaco === e.nome).reduce((s, c) => s + c.valor, 0)
     const retornosEspaco = fechamento.retornosFundo.filter(r => r.status === 'pago' && r.espaco === e.nome).reduce((s, r) => s + r.valor, 0)
     const disponivel = receitaTotal - despesaTotal - transferenciasEspaco + retornosEspaco
-    const socios = (DIVISAO_SOCIOS[e.nome] ?? []).map(s => {
-      const aportado = fechamento.aportes.filter(r => r.status === 'pago' && r.espaco === e.nome && r.socioResponsavel === s.nome).reduce((sum, r) => sum + r.valor, 0)
-      const retirado = fechamento.retiradasSocio.filter(c => c.status === 'pago' && c.espaco === e.nome && c.fornecedor === s.nome).reduce((sum, c) => sum + c.valor, 0)
-      return { nome: s.nome, percentual: s.percentual, valorDevido: disponivel * (s.percentual / 100), aportado, retirado }
-    })
+    const socios = (DIVISAO_SOCIOS[e.nome] ?? []).map(s => ({
+      nome: s.nome, percentual: s.percentual, valorDevido: disponivel * (s.percentual / 100),
+    }))
     const grupos = Object.entries(GRUPOS_SOCIOS[e.nome] ?? {}).map(([grupo, membros]) => ({
       nome: grupo,
       percentual: socios.filter(s => membros.includes(s.nome)).reduce((sum, s) => sum + s.percentual, 0),
       valorDevido: socios.filter(s => membros.includes(s.nome)).reduce((sum, s) => sum + s.valorDevido, 0),
-      aportado: socios.filter(s => membros.includes(s.nome)).reduce((sum, s) => sum + s.aportado, 0),
-      retirado: socios.filter(s => membros.includes(s.nome)).reduce((sum, s) => sum + s.retirado, 0),
     }))
     return { nome: e.nome, disponivel, socios, grupos }
   }), [espacos, fechamento])
@@ -157,24 +196,6 @@ export default function FechamentoClient() {
   return (
     <div className="max-w-7xl mx-auto space-y-5">
       <FilterBar filters={filters} onChange={handleFiltersChange} />
-
-      {nomesSociosDisponiveis.length > 0 && (
-        <div className="rounded-xl border border-app-border bg-app-surface p-4">
-          <p className="text-xs font-medium text-app-subtle uppercase tracking-wider mb-2">Sócio</p>
-          <div className="flex flex-wrap gap-2">
-            <button onClick={() => setSocioFiltro('')}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium border transition-colors ${!socioFiltro ? 'border-violet-500/40 bg-violet-500/10 text-violet-300' : 'border-app-border2 bg-app-surface2 text-app-muted hover:text-app-text'}`}>
-              Todos
-            </button>
-            {nomesSociosDisponiveis.map(nome => (
-              <button key={nome} onClick={() => setSocioFiltro(nome)}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium border transition-colors ${socioFiltro === nome ? 'border-violet-500/40 bg-violet-500/10 text-violet-300' : 'border-app-border2 bg-app-surface2 text-app-muted hover:text-app-text'}`}>
-                {nome}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Resumo Financeiro */}
       <div className="rounded-2xl border border-app-border bg-app-surface p-5">
@@ -271,70 +292,93 @@ export default function FechamentoClient() {
         </div>
       </section>
 
-      {/* 5. Sócios */}
+      {/* 5. Sócios — organizado por sócio (não por data); o histórico
+          cronológico de cada um fica no "Ver Aportes"/"Ver Retiradas". */}
       <section className="rounded-2xl border border-app-border bg-app-surface p-5 space-y-4">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <h4 className="text-xs font-semibold text-app-muted uppercase tracking-wide">Sócios</h4>
-          <div className="flex items-center gap-2">
-            {podeLancar && (
+          {podeLancar && (
+            <div className="flex items-center gap-2">
+              <button onClick={() => setNovoAporteOpen(true)}
+                className="flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-600 hover:bg-violet-500/20 transition-colors">
+                <Plus className="h-3.5 w-3.5" />Aporte
+              </button>
+              <button onClick={() => setNovaRetiradaOpen(true)}
+                className="flex items-center gap-1.5 rounded-lg border border-fuchsia-500/30 bg-fuchsia-500/10 px-3 py-1.5 text-xs font-medium text-fuchsia-600 hover:bg-fuchsia-500/20 transition-colors">
+                <Plus className="h-3.5 w-3.5" />Retirada
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Filtro de período — próprio da área de Sócios */}
+        <div className="rounded-lg border border-app-border2/60 bg-app-bg p-3 space-y-2">
+          <p className="text-xs font-medium text-app-subtle uppercase tracking-wider">Período</p>
+          <div className="flex flex-wrap items-center gap-2">
+            {([
+              ['historico', 'Histórico completo'],
+              ['mes', 'Mês'],
+              ['ano', 'Ano'],
+              ['personalizado', 'Personalizado'],
+            ] as const).map(([modo, label]) => (
+              <button key={modo} onClick={() => setSocioPeriodoModo(modo)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium border transition-colors ${socioPeriodoModo === modo ? 'border-violet-500/40 bg-violet-500/10 text-violet-300' : 'border-app-border2 bg-app-surface2 text-app-muted hover:text-app-text'}`}>
+                {label}
+              </button>
+            ))}
+            {socioPeriodoModo === 'mes' && (
+              <input type="month" value={socioMes} onChange={e => setSocioMes(e.target.value)}
+                className="rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-xs text-app-text focus:outline-none" />
+            )}
+            {socioPeriodoModo === 'ano' && (
+              <input type="number" value={socioAno} onChange={e => setSocioAno(e.target.value)}
+                className="w-24 rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-xs text-app-text focus:outline-none" />
+            )}
+            {socioPeriodoModo === 'personalizado' && (
               <>
-                <button onClick={() => setNovoAporteOpen(true)}
-                  className="flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-600 hover:bg-violet-500/20 transition-colors">
-                  <Plus className="h-3.5 w-3.5" />Aporte
-                </button>
-                <button onClick={() => setNovaRetiradaOpen(true)}
-                  className="flex items-center gap-1.5 rounded-lg border border-fuchsia-500/30 bg-fuchsia-500/10 px-3 py-1.5 text-xs font-medium text-fuchsia-600 hover:bg-fuchsia-500/20 transition-colors">
-                  <Plus className="h-3.5 w-3.5" />Retirada
-                </button>
+                <input type="date" value={socioDataInicioCustom} onChange={e => setSocioDataInicioCustom(e.target.value)}
+                  className="rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-xs text-app-text focus:outline-none" />
+                <span className="text-xs text-app-subtle">até</span>
+                <input type="date" value={socioDataFimCustom} onChange={e => setSocioDataFimCustom(e.target.value)}
+                  className="rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-xs text-app-text focus:outline-none" />
               </>
             )}
-            <button onClick={() => setDrillDown('aportes')} className="rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors">
-              Ver aportes ({aportesRows.length})
-            </button>
-            <button onClick={() => setDrillDown('retiradas')} className="rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors">
-              Ver retiradas ({retiradasRows.length})
-            </button>
           </div>
         </div>
 
-        {(resumoPorSocio.porSocio.length > 0 || resumoPorSocio.grupos.length > 0) && (
-          <div className="rounded-lg border border-app-border2/60 bg-app-bg p-4 space-y-2">
-            <p className="text-sm font-semibold text-app-text">Aportes e Retiradas por Sócio</p>
-            <p className="text-xs text-app-subtle">
-              {selectedSpaces?.length ? `Consolidado — ${selectedSpaces.join(', ')}` : 'Consolidado de todos os espaços'}
-            </p>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-app-border">
-                    {['Sócio', 'Total de Aportes', 'Total de Retiradas', 'Saldo do Sócio'].map(h => (
-                      <th key={h} className="px-2 py-1.5 text-left font-medium text-app-subtle uppercase tracking-wide whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-app-border/50">
-                  {resumoPorSocio.porSocio.filter(s => !socioFiltro || s.nome === socioFiltro).map(s => (
-                    <tr key={s.nome}>
-                      <td className="px-2 py-1.5 font-medium text-app-text whitespace-nowrap">{s.nome}</td>
-                      <td className="px-2 py-1.5 text-violet-600 whitespace-nowrap">{formatCurrency(s.totalAportes)}</td>
-                      <td className="px-2 py-1.5 text-fuchsia-600 whitespace-nowrap">{formatCurrency(s.totalRetiradas)}</td>
-                      <td className={`px-2 py-1.5 font-semibold whitespace-nowrap ${s.saldo >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>{formatCurrency(s.saldo)}</td>
-                    </tr>
-                  ))}
-                  {resumoPorSocio.grupos.filter(g => g.totalAportes > 0 || g.totalRetiradas > 0).map(g => (
-                    <tr key={g.nome} className="bg-app-surface2/40">
-                      <td className="px-2 py-1.5 font-medium text-app-subtle whitespace-nowrap italic">{g.nome} consolidado</td>
-                      <td className="px-2 py-1.5 text-app-subtle whitespace-nowrap">{formatCurrency(g.totalAportes)}</td>
-                      <td className="px-2 py-1.5 text-app-subtle whitespace-nowrap">{formatCurrency(g.totalRetiradas)}</td>
-                      <td className="px-2 py-1.5 text-app-subtle font-semibold whitespace-nowrap">{formatCurrency(g.saldo)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+        {/* Resumo por sócio — nome, total de aportes, total de retiradas, saldo */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {resumoPorSocio.porSocio.map(s => (
+            <SocioResumoCard
+              key={s.nome}
+              nome={s.nome}
+              totalAportes={s.totalAportes}
+              totalRetiradas={s.totalRetiradas}
+              saldo={s.saldo}
+              onVerAportes={() => setDrillDown({ tipo: 'aportes', titulo: `Aportes — ${s.nome}`, nomes: [s.nome] })}
+              onVerRetiradas={() => setDrillDown({ tipo: 'retiradas', titulo: `Retiradas — ${s.nome}`, nomes: [s.nome] })}
+            />
+          ))}
+          {resumoPorSocio.grupos.filter(g => g.totalAportes > 0 || g.totalRetiradas > 0).map(g => (
+            <SocioResumoCard
+              key={g.nome}
+              nome={`${g.nome} consolidado`}
+              totalAportes={g.totalAportes}
+              totalRetiradas={g.totalRetiradas}
+              saldo={g.saldo}
+              consolidado
+              onVerAportes={() => setDrillDown({ tipo: 'aportes', titulo: `Aportes — ${g.nome} consolidado`, nomes: g.membros })}
+              onVerRetiradas={() => setDrillDown({ tipo: 'retiradas', titulo: `Retiradas — ${g.nome} consolidado`, nomes: g.membros })}
+            />
+          ))}
+        </div>
+        {resumoPorSocio.porSocio.length === 0 && (
+          <p className="text-sm text-app-subtle text-center py-4">Nenhum sócio configurado para os espaços filtrados.</p>
         )}
 
+        {/* Participação societária (% e valor devido) — segue o período geral
+            da página, não o período de Sócios acima, porque é sobre o
+            Disponível para Distribuição do período do relatório. */}
         {sociosPorEspaco.map(e => (
           <div key={e.nome} className="rounded-lg border border-app-border2/60 bg-app-bg p-4 space-y-2">
             <div className="flex items-center justify-between gap-2">
@@ -345,28 +389,24 @@ export default function FechamentoClient() {
               <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-app-border">
-                    {['Sócio', '%', 'Valor Devido', 'Aportado', 'Retirado'].map(h => (
+                    {['Sócio', '%', 'Valor Devido'].map(h => (
                       <th key={h} className="px-2 py-1.5 text-left font-medium text-app-subtle uppercase tracking-wide whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-app-border/50">
-                  {e.socios.filter(s => !socioFiltro || s.nome === socioFiltro).map(s => (
+                  {e.socios.map(s => (
                     <tr key={s.nome}>
                       <td className="px-2 py-1.5 font-medium text-app-text whitespace-nowrap">{s.nome}</td>
                       <td className="px-2 py-1.5 text-app-text2 whitespace-nowrap">{s.percentual}%</td>
                       <td className={`px-2 py-1.5 font-semibold whitespace-nowrap ${s.valorDevido >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>{formatCurrency(s.valorDevido)}</td>
-                      <td className="px-2 py-1.5 text-violet-600 whitespace-nowrap">{formatCurrency(s.aportado)}</td>
-                      <td className="px-2 py-1.5 text-fuchsia-600 whitespace-nowrap">{formatCurrency(s.retirado)}</td>
                     </tr>
                   ))}
-                  {e.grupos.filter(g => g.aportado > 0 || g.retirado > 0).map(g => (
+                  {e.grupos.map(g => (
                     <tr key={g.nome} className="bg-app-surface2/40">
                       <td className="px-2 py-1.5 font-medium text-app-subtle whitespace-nowrap italic">{g.nome} consolidado</td>
                       <td className="px-2 py-1.5 text-app-subtle whitespace-nowrap">{g.percentual}%</td>
                       <td className="px-2 py-1.5 text-app-subtle font-semibold whitespace-nowrap">{formatCurrency(g.valorDevido)}</td>
-                      <td className="px-2 py-1.5 text-app-subtle whitespace-nowrap">{formatCurrency(g.aportado)}</td>
-                      <td className="px-2 py-1.5 text-app-subtle whitespace-nowrap">{formatCurrency(g.retirado)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -374,9 +414,6 @@ export default function FechamentoClient() {
             </div>
           </div>
         ))}
-        {sociosPorEspaco.every(e => e.socios.length === 0) && (
-          <p className="text-sm text-app-subtle text-center py-4">Nenhum sócio configurado para os espaços filtrados.</p>
-        )}
       </section>
 
       {novoFundoOpen && (
@@ -409,13 +446,13 @@ export default function FechamentoClient() {
         />
       )}
 
-      {drillDown === 'aportes' && (
+      {drillDown && (
         <LancamentoSocioListModal
-          titulo="Aportes Societários"
-          rows={aportesRows}
-          fileModule="receitas"
+          titulo={drillDown.titulo}
+          rows={drillDownRows}
+          fileModule={drillDown.tipo === 'aportes' ? 'receitas' : 'contas'}
           onClose={() => setDrillDown(null)}
-          onEdit={id => setEditandoAporteId(id)}
+          onEdit={drillDown.tipo === 'aportes' ? id => setEditandoAporteId(id) : id => setEditandoRetiradaId(id)}
         />
       )}
 
@@ -437,16 +474,6 @@ export default function FechamentoClient() {
           />
         ) : null
       })()}
-      {drillDown === 'retiradas' && (
-        <LancamentoSocioListModal
-          titulo="Retiradas de Sócios"
-          rows={retiradasRows}
-          fileModule="contas"
-          onClose={() => setDrillDown(null)}
-          onEdit={id => setEditandoRetiradaId(id)}
-        />
-      )}
-
       {editandoRetiradaId && (() => {
         const contaEditando = contasPagar.find(c => c.id === editandoRetiradaId)
         return contaEditando ? (
@@ -475,6 +502,44 @@ function ResumoStat({ label, valor, cor }: { label: string; valor: number; cor: 
     <div className="min-w-0 rounded-lg border border-app-border2/60 bg-app-bg p-3">
       <p className="text-[11px] text-app-subtle">{label}</p>
       <p className={`text-sm font-bold break-words ${cor}`}>{formatCurrency(valor)}</p>
+    </div>
+  )
+}
+
+function SocioResumoCard({ nome, totalAportes, totalRetiradas, saldo, consolidado, onVerAportes, onVerRetiradas }: {
+  nome: string
+  totalAportes: number
+  totalRetiradas: number
+  saldo: number
+  consolidado?: boolean
+  onVerAportes: () => void
+  onVerRetiradas: () => void
+}) {
+  return (
+    <div className={`rounded-lg border p-4 space-y-3 ${consolidado ? 'border-dashed border-violet-400/50 bg-app-surface2/30' : 'border-app-border2/60 bg-app-bg'}`}>
+      <p className={`text-sm font-semibold ${consolidado ? 'text-app-subtle italic' : 'text-app-text'}`}>{nome}</p>
+      <div className="grid grid-cols-3 gap-2 text-xs">
+        <div>
+          <p className="text-app-subtle">Aportes</p>
+          <p className="font-semibold text-violet-600">{formatCurrency(totalAportes)}</p>
+        </div>
+        <div>
+          <p className="text-app-subtle">Retiradas</p>
+          <p className="font-semibold text-fuchsia-600">{formatCurrency(totalRetiradas)}</p>
+        </div>
+        <div>
+          <p className="text-app-subtle">Saldo</p>
+          <p className={`font-semibold ${saldo >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>{formatCurrency(saldo)}</p>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button onClick={onVerAportes} className="rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors">
+          Ver Aportes
+        </button>
+        <button onClick={onVerRetiradas} className="rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors">
+          Ver Retiradas
+        </button>
+      </div>
     </div>
   )
 }
