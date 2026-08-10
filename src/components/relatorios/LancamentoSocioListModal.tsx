@@ -52,40 +52,46 @@ export default function LancamentoSocioListModal({ titulo, rows, fileModule, onC
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="w-full max-w-3xl bg-app-surface rounded-2xl border border-app-border shadow-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-app-border sticky top-0 bg-app-surface z-10">
-          <div>
-            <h2 className="text-sm font-semibold text-app-text">{titulo}</h2>
-            <p className="text-xs text-app-subtle mt-0.5">{rows.length} lançamento(s) — total {formatCurrency(total)}</p>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-app-border sticky top-0 bg-app-surface z-10 gap-3">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-app-text truncate">{titulo}</h2>
+            <p className="text-xs text-app-subtle mt-0.5">{rows.length} lançamento{rows.length === 1 ? '' : 's'}, discriminados abaixo</p>
           </div>
-          <button onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-lg text-app-subtle hover:bg-app-surface2 transition-colors">
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="text-right">
+              <p className="text-[10px] text-app-subtle uppercase tracking-wide">Total somado</p>
+              <p className="text-base font-bold text-app-text">{formatCurrency(total)}</p>
+            </div>
+            <button onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-lg text-app-subtle hover:bg-app-surface2 transition-colors">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         <div className="p-6">
           {rows.length === 0 ? (
             <p className="text-sm text-app-subtle text-center py-6">Nenhum lançamento no período.</p>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-lg border border-app-border2/60">
               <table className="w-full text-xs border-collapse">
                 <thead>
-                  <tr className="border-b border-app-border">
+                  <tr className="border-b border-app-border bg-app-surface2">
                     {['Data', 'Sócio', 'Espaço', 'Valor', 'Descrição', 'Comprovante', ...(onEdit ? [''] : [])].map((h, i) => (
-                      <th key={h || `acao-${i}`} className="px-2 py-2 text-left font-medium text-app-subtle uppercase tracking-wide whitespace-nowrap">{h}</th>
+                      <th key={h || `acao-${i}`} className={`px-3 py-2.5 text-left font-medium text-app-subtle uppercase tracking-wide whitespace-nowrap ${h === 'Valor' ? 'text-right' : ''}`}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-app-border/50">
-                  {rows.map(r => {
+                  {rows.map((r, i) => {
                     const arquivos = filesPorLancamento.get(r.id) ?? []
                     return (
-                      <tr key={r.id}>
-                        <td className="px-2 py-2 text-app-text2 whitespace-nowrap">{r.data.split('-').reverse().join('/')}</td>
-                        <td className="px-2 py-2 text-app-text font-medium whitespace-nowrap">{r.socio}</td>
-                        <td className="px-2 py-2 text-app-text2 whitespace-nowrap">{r.espaco || '—'}</td>
-                        <td className="px-2 py-2 font-semibold text-app-text whitespace-nowrap">{formatCurrency(r.valor)}</td>
-                        <td className="px-2 py-2 text-app-text2 max-w-[240px] truncate">{r.descricao}{r.observacoes ? ` — ${r.observacoes}` : ''}</td>
-                        <td className="px-2 py-2 whitespace-nowrap">
+                      <tr key={r.id} className={i % 2 === 1 ? 'bg-app-surface2/30' : undefined}>
+                        <td className="px-3 py-2.5 text-app-text2 whitespace-nowrap">{r.data.split('-').reverse().join('/')}</td>
+                        <td className="px-3 py-2.5 text-app-text font-medium whitespace-nowrap">{r.socio}</td>
+                        <td className="px-3 py-2.5 text-app-text2 whitespace-nowrap">{r.espaco || '—'}</td>
+                        <td className="px-3 py-2.5 font-semibold text-app-text whitespace-nowrap text-right">{formatCurrency(r.valor)}</td>
+                        <td className="px-3 py-2.5 text-app-text2 max-w-[240px] truncate">{r.descricao}{r.observacoes ? ` — ${r.observacoes}` : ''}</td>
+                        <td className="px-3 py-2.5 whitespace-nowrap">
                           {arquivos.length > 0 ? (
                             <button
                               onClick={() => viewFile(arquivos[0].id)}
@@ -99,7 +105,7 @@ export default function LancamentoSocioListModal({ titulo, rows, fileModule, onC
                           )}
                         </td>
                         {onEdit && (
-                          <td className="px-2 py-2 whitespace-nowrap">
+                          <td className="px-3 py-2.5 whitespace-nowrap">
                             <button
                               onClick={() => onEdit(r.id)}
                               className="flex items-center gap-1 text-app-muted hover:text-app-text transition-colors"
@@ -113,6 +119,13 @@ export default function LancamentoSocioListModal({ titulo, rows, fileModule, onC
                     )
                   })}
                 </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-app-border bg-app-surface2/60">
+                    <td className="px-3 py-2.5 font-semibold text-app-text whitespace-nowrap" colSpan={3}>Total ({rows.length} lançamento{rows.length === 1 ? '' : 's'})</td>
+                    <td className="px-3 py-2.5 font-bold text-app-text whitespace-nowrap text-right">{formatCurrency(total)}</td>
+                    <td colSpan={onEdit ? 2 : 1} />
+                  </tr>
+                </tfoot>
               </table>
             </div>
           )}

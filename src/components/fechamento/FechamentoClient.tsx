@@ -12,7 +12,7 @@ import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useFundos } from '@/contexts/FundosContext'
 import { useCurrentUser } from '@/contexts/UserContext'
-import { DIVISAO_SOCIOS, GRUPOS_SOCIOS } from '@/lib/socios-config'
+import { DIVISAO_SOCIOS } from '@/lib/socios-config'
 import { formatCurrency } from '@/lib/utils'
 import FundoCard from './FundoCard'
 import NovoFundoModal from './NovoFundoModal'
@@ -133,16 +133,8 @@ export default function FechamentoClient() {
       const totalRetiradas = retiradasSocioEscopo.filter(c => c.status === 'pago' && c.fornecedor === nome).reduce((s, c) => s + c.valor, 0)
       return { nome, totalAportes, totalRetiradas, saldo: totalAportes - totalRetiradas }
     })
-    const grupos = new Map<string, string[]>()
-    for (const e of espacos) for (const [grupo, membros] of Object.entries(GRUPOS_SOCIOS[e.nome] ?? {})) grupos.set(grupo, membros)
-    const gruposResumo = Array.from(grupos.entries()).map(([nome, membros]) => {
-      const membrosResumo = porSocio.filter(s => membros.includes(s.nome))
-      const totalAportes = membrosResumo.reduce((s, m) => s + m.totalAportes, 0)
-      const totalRetiradas = membrosResumo.reduce((s, m) => s + m.totalRetiradas, 0)
-      return { nome, membros, totalAportes, totalRetiradas, saldo: totalAportes - totalRetiradas }
-    })
-    return { porSocio, grupos: gruposResumo }
-  }, [nomesSociosDisponiveis, aportesSocioEscopo, retiradasSocioEscopo, espacos])
+    return { porSocio }
+  }, [nomesSociosDisponiveis, aportesSocioEscopo, retiradasSocioEscopo])
 
   // Linhas do drill-down (Ver Aportes/Ver Retiradas) — sempre organizadas por
   // data (receitas/contas já vêm ordenadas por data desc do contexto), só do(s)
@@ -174,6 +166,13 @@ export default function FechamentoClient() {
   }, 0), [fundosEmEscopo, movimentacoes])
   const totalFundosReservas = fechamento.saldoFundoAtual + totalFundosGenericos
 
+  // Obra consolidada (todos os espaços em escopo) pro Resumo Financeiro — o
+  // aporte que financia a obra é o mesmo Aporte Societário, só que com
+  // destino "para obra" (tipoEntrada aporte_obra), por isso usa o mesmo rótulo.
+  const totalAportesObra = fechamento.obraPorEspaco.reduce((s, o) => s + o.totalAportes, 0)
+  const totalDespesasObra = fechamento.obraPorEspaco.reduce((s, o) => s + o.totalDespesas, 0)
+  const totalResultadoObra = totalAportesObra - totalDespesasObra
+
   // Sócios por espaço — aporte/retirada individualizados (nunca reagrupados),
   // repasse calculado sobre o Disponível para Distribuição daquele espaço.
   const sociosPorEspaco = useMemo(() => espacos.map(e => {
@@ -185,30 +184,33 @@ export default function FechamentoClient() {
     const socios = (DIVISAO_SOCIOS[e.nome] ?? []).map(s => ({
       nome: s.nome, percentual: s.percentual, valorDevido: disponivel * (s.percentual / 100),
     }))
-    const grupos = Object.entries(GRUPOS_SOCIOS[e.nome] ?? {}).map(([grupo, membros]) => ({
-      nome: grupo,
-      percentual: socios.filter(s => membros.includes(s.nome)).reduce((sum, s) => sum + s.percentual, 0),
-      valorDevido: socios.filter(s => membros.includes(s.nome)).reduce((sum, s) => sum + s.valorDevido, 0),
-    }))
-    return { nome: e.nome, disponivel, socios, grupos }
+    return { nome: e.nome, disponivel, socios }
   }), [espacos, fechamento])
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">
       <FilterBar filters={filters} onChange={handleFiltersChange} />
 
-      {/* Resumo Financeiro */}
-      <div className="rounded-2xl border border-app-border bg-app-surface p-5">
-        <h3 className="text-sm font-semibold text-app-text mb-3">Resumo Financeiro</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <ResumoStat label="Aportes Societários" valor={fechamento.totalAportes} cor="text-violet-600" />
-          <ResumoStat label="Receitas Operacionais" valor={fechamento.totalEntradas} cor="text-emerald-600" />
-          <ResumoStat label="Despesas Operacionais" valor={fechamento.totalSaidas} cor="text-red-500" />
-          <ResumoStat label="Resultado Operacional" valor={fechamento.resultado} cor={fechamento.resultado >= 0 ? 'text-[#128C7E]' : 'text-red-600'} />
-          <ResumoStat label="Despesas de Obra" valor={fechamento.obraPorEspaco.reduce((s, o) => s + o.totalDespesas, 0)} cor="text-orange-500" />
-          <ResumoStat label="Total em Fundos/Reservas" valor={totalFundosReservas} cor="text-amber-600" />
-          <ResumoStat label="Caixa Disponível" valor={fechamento.saldoDisponivelForaFundo} cor="text-app-text" />
-          <ResumoStat label="Disponível para Distribuição" valor={fechamento.disponivelParaDistribuicao} cor={fechamento.disponivelParaDistribuicao >= 0 ? 'text-[#128C7E]' : 'text-red-600'} />
+      {/* Resumo Financeiro — Obra em cima, Operacional embaixo, cada linha
+          seguindo Entrada / Saída / Resultado. Caixa Disponível e Disponível
+          para Distribuição continuam explicados nas seções próprias abaixo. */}
+      <div className="rounded-2xl border border-app-border bg-app-surface p-5 space-y-4">
+        <h3 className="text-sm font-semibold text-app-text">Resumo Financeiro</h3>
+        <div>
+          <p className="text-[11px] font-medium text-app-subtle uppercase tracking-wider mb-1.5">Obra</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <ResumoStat label="Aporte Societário" valor={totalAportesObra} cor="text-violet-600" />
+            <ResumoStat label="Despesas de Obra" valor={totalDespesasObra} cor="text-orange-500" />
+            <ResumoStat label="Resultado Obra" valor={totalResultadoObra} cor={totalResultadoObra >= 0 ? 'text-[#128C7E]' : 'text-red-600'} />
+          </div>
+        </div>
+        <div>
+          <p className="text-[11px] font-medium text-app-subtle uppercase tracking-wider mb-1.5">Operacional</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <ResumoStat label="Receitas Operacionais" valor={fechamento.totalEntradas} cor="text-emerald-600" />
+            <ResumoStat label="Despesas Operacionais" valor={fechamento.totalSaidas} cor="text-red-500" />
+            <ResumoStat label="Resultado Operacional" valor={fechamento.resultado} cor={fechamento.resultado >= 0 ? 'text-[#128C7E]' : 'text-red-600'} />
+          </div>
         </div>
       </div>
 
@@ -253,7 +255,10 @@ export default function FechamentoClient() {
       {/* 3. Fundo de Caixa / Reservas */}
       <section className="rounded-2xl border border-app-border bg-app-surface p-5 space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <h4 className="text-xs font-semibold text-app-muted uppercase tracking-wide">Fundo de Caixa / Reservas</h4>
+          <div>
+            <h4 className="text-xs font-semibold text-app-muted uppercase tracking-wide">Fundo de Caixa / Reservas</h4>
+            <p className="text-xs text-app-subtle mt-0.5">Total em fundos e reservas: <span className="font-semibold text-amber-600">{formatCurrency(totalFundosReservas)}</span></p>
+          </div>
           {podeLancar && (
             <button onClick={() => setNovoFundoOpen(true)}
               className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-600 hover:bg-amber-500/20 transition-colors">
@@ -359,18 +364,6 @@ export default function FechamentoClient() {
               onVerRetiradas={() => setDrillDown({ tipo: 'retiradas', titulo: `Retiradas — ${s.nome}`, nomes: [s.nome] })}
             />
           ))}
-          {resumoPorSocio.grupos.filter(g => g.totalAportes > 0 || g.totalRetiradas > 0).map(g => (
-            <SocioResumoCard
-              key={g.nome}
-              nome={`${g.nome} consolidado`}
-              totalAportes={g.totalAportes}
-              totalRetiradas={g.totalRetiradas}
-              saldo={g.saldo}
-              consolidado
-              onVerAportes={() => setDrillDown({ tipo: 'aportes', titulo: `Aportes — ${g.nome} consolidado`, nomes: g.membros })}
-              onVerRetiradas={() => setDrillDown({ tipo: 'retiradas', titulo: `Retiradas — ${g.nome} consolidado`, nomes: g.membros })}
-            />
-          ))}
         </div>
         {resumoPorSocio.porSocio.length === 0 && (
           <p className="text-sm text-app-subtle text-center py-4">Nenhum sócio configurado para os espaços filtrados.</p>
@@ -400,13 +393,6 @@ export default function FechamentoClient() {
                       <td className="px-2 py-1.5 font-medium text-app-text whitespace-nowrap">{s.nome}</td>
                       <td className="px-2 py-1.5 text-app-text2 whitespace-nowrap">{s.percentual}%</td>
                       <td className={`px-2 py-1.5 font-semibold whitespace-nowrap ${s.valorDevido >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>{formatCurrency(s.valorDevido)}</td>
-                    </tr>
-                  ))}
-                  {e.grupos.map(g => (
-                    <tr key={g.nome} className="bg-app-surface2/40">
-                      <td className="px-2 py-1.5 font-medium text-app-subtle whitespace-nowrap italic">{g.nome} consolidado</td>
-                      <td className="px-2 py-1.5 text-app-subtle whitespace-nowrap">{g.percentual}%</td>
-                      <td className="px-2 py-1.5 text-app-subtle font-semibold whitespace-nowrap">{formatCurrency(g.valorDevido)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -506,18 +492,17 @@ function ResumoStat({ label, valor, cor }: { label: string; valor: number; cor: 
   )
 }
 
-function SocioResumoCard({ nome, totalAportes, totalRetiradas, saldo, consolidado, onVerAportes, onVerRetiradas }: {
+function SocioResumoCard({ nome, totalAportes, totalRetiradas, saldo, onVerAportes, onVerRetiradas }: {
   nome: string
   totalAportes: number
   totalRetiradas: number
   saldo: number
-  consolidado?: boolean
   onVerAportes: () => void
   onVerRetiradas: () => void
 }) {
   return (
-    <div className={`rounded-lg border p-4 space-y-3 ${consolidado ? 'border-dashed border-violet-400/50 bg-app-surface2/30' : 'border-app-border2/60 bg-app-bg'}`}>
-      <p className={`text-sm font-semibold ${consolidado ? 'text-app-subtle italic' : 'text-app-text'}`}>{nome}</p>
+    <div className="rounded-lg border border-app-border2/60 bg-app-bg p-4 space-y-3">
+      <p className="text-sm font-semibold text-app-text">{nome}</p>
       <div className="grid grid-cols-3 gap-2 text-xs">
         <div>
           <p className="text-app-subtle">Aportes</p>
