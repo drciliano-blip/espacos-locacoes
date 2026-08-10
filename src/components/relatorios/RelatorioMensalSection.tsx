@@ -13,6 +13,7 @@ import { DespesasTable } from './LancamentosTables'
 import NovaReceitaModal from '@/components/pagamentos/NovaReceitaModal'
 import EditarEntradaModal from '@/components/pagamentos/EditarEntradaModal'
 import NovaRetiradaSocioModal from './NovaRetiradaSocioModal'
+import EditarRetiradaSocioModal from './EditarRetiradaSocioModal'
 import LancamentoSocioListModal, { type LancamentoSocioRow } from './LancamentoSocioListModal'
 import Toast from '@/components/shared/Toast'
 import type { Receita } from '@/contexts/ReceitasContext'
@@ -49,7 +50,7 @@ interface Props {
 
 export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dataFim }: Props) {
   const { receitas, addReceita, editarReceita, deleteReceita, categorias } = useReceitas()
-  const { contas: contasPagar, addConta } = useContasPagar()
+  const { contas: contasPagar, addConta, updateConta, deleteConta } = useContasPagar()
   const { espacosConfig } = useEspacos()
   const { role } = useCurrentUser()
   const podeLancar = role === 'admin' || role === 'financeiro'
@@ -58,6 +59,7 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
   const [novaRetiradaOpen, setNovaRetiradaOpen] = useState(false)
   const [drillDown, setDrillDown] = useState<null | 'aportes' | 'retiradas'>(null)
   const [editandoAporteId, setEditandoAporteId] = useState<string | null>(null)
+  const [editandoRetiradaId, setEditandoRetiradaId] = useState<string | null>(null)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   function showToast(msg: string) {
     setToastMsg(msg)
@@ -410,8 +412,27 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
           rows={retiradasRows}
           fileModule="contas"
           onClose={() => setDrillDown(null)}
+          onEdit={id => setEditandoRetiradaId(id)}
         />
       )}
+
+      {editandoRetiradaId && (() => {
+        const contaEditando = contasPagar.find(c => c.id === editandoRetiradaId)
+        return contaEditando ? (
+          <EditarRetiradaSocioModal
+            conta={contaEditando}
+            onClose={() => setEditandoRetiradaId(null)}
+            onSave={async c => {
+              await updateConta(c)
+              showToast('Retirada atualizada.')
+            }}
+            onExcluir={async id => {
+              await deleteConta(id)
+              showToast('Retirada excluída.')
+            }}
+          />
+        ) : null
+      })()}
 
       <Toast message={toastMsg} />
     </div>
