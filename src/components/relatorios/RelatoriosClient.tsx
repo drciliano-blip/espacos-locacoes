@@ -140,8 +140,8 @@ export default function RelatoriosClient() {
         ['Retornos do Fundo de Caixa (período)', totalRetornosFundoPeriodo],
         [],
         ['Fechamento da Obra (período — o saldo acumulado está na tela)'],
-        ['Aportes para Obra (período)', totalAportesObraPeriodo],
-        ['Despesas de Obra (período)', totalDespesasObraPeriodo],
+        ['Aporte Societário — receita da obra (período)', totalAportesObraPeriodo],
+        ['Despesas com Obra (período)', totalDespesasObraPeriodo],
         [],
         ['Espaço', 'Receitas Operacionais', 'Despesas Operacionais', 'Resultado'],
         ...espacosParaTabela.map(e => {
@@ -223,10 +223,10 @@ export default function RelatoriosClient() {
       rows: [
         ['Tipo', 'Data', 'Descrição', 'Sócio/Fornecedor', 'Espaço', 'Valor', 'Status', 'Observações'],
         ...aportesObra.map(r => [
-          'Aporte para Obra', r.data, r.descricao, r.socioResponsavel ?? '', r.espaco ?? '', r.valor, r.status, r.observacoes ?? '',
+          'Aporte Societário (receita da obra)', r.data, r.descricao, r.socioResponsavel ?? '', r.espaco ?? '', r.valor, r.status, r.observacoes ?? '',
         ]),
         ...despesasObra.map(c => [
-          'Despesa de Obra', c.dataVencimento, c.descricao, c.fornecedor ?? '', c.espaco, c.valor, c.status, c.observacoes ?? '',
+          'Despesa com Obra', c.dataVencimento, c.descricao, c.fornecedor ?? '', c.espaco, c.valor, c.status, c.observacoes ?? '',
         ]),
       ],
     }
@@ -367,7 +367,7 @@ export default function RelatoriosClient() {
           (desde o início, não só do período) está na seção "Fechamento da Obra"
           do Relatório Mensal, no topo da página. */}
       <FullTable
-        titulo="Aportes para Obra"
+        titulo="Aporte Societário — receita da obra"
         headers={['Data', 'Sócio', 'Espaço', 'Descrição/Motivo', 'Valor', 'Observações']}
         rows={aportesObra.map(r => [
           r.data.split('-').reverse().join('/'), r.socioResponsavel ?? '—', r.espaco ?? '—', r.descricao, formatCurrency(r.valor), r.observacoes ?? '—',
@@ -376,7 +376,7 @@ export default function RelatoriosClient() {
         totalValor={formatCurrency(aportesObra.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0))}
       />
       <FullTable
-        titulo="Despesas de Obra"
+        titulo="Despesas com Obra"
         headers={['Data Vencimento', 'Descrição', 'Fornecedor', 'Espaço', 'Valor', 'Status', 'Data Pagamento', 'Observações']}
         rows={despesasObra.map(c => [
           c.dataVencimento.split('-').reverse().join('/'), c.descricao, c.fornecedor ?? '—', c.espaco,

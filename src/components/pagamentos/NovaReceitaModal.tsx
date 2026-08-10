@@ -21,8 +21,16 @@ const TIPO_ENTRADA_LABEL: Record<TipoEntrada, string> = {
   aporte_societario: 'Aporte Societário',
   outras_entradas: 'Outras Entradas',
   retorno_fundo_caixa: 'Retorno do Fundo de Caixa',
+  // 'aporte_obra' não é mais oferecido pra lançamento novo — o Aporte
+  // Societário já é a receita da obra automaticamente (ver fechamento-calc.ts).
+  // O label continua aqui só pra manter o Record<TipoEntrada,...> exaustivo e
+  // pra exibir corretamente algum lançamento antigo que já use esse tipo.
   aporte_obra: 'Aporte para Obra',
 }
+
+// Tipos oferecidos pra um lançamento NOVO — 'aporte_obra' fica de fora
+// deliberadamente (ver comentário acima).
+const TIPOS_ENTRADA_SELECIONAVEIS: TipoEntrada[] = ['evento', 'aporte_societario', 'outras_entradas', 'retorno_fundo_caixa']
 
 interface Props {
   categorias: CategoriaReceita[]
@@ -213,13 +221,13 @@ export default function NovaReceitaModal({
                 onChange={e => set('tipoEntrada', e.target.value as TipoEntrada)}
                 className="w-full cursor-pointer rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
               >
-                {(Object.keys(TIPO_ENTRADA_LABEL) as TipoEntrada[]).map(t => (
+                {TIPOS_ENTRADA_SELECIONAVEIS.map(t => (
                   <option key={t} value={t}>{TIPO_ENTRADA_LABEL[t]}</option>
                 ))}
               </select>
               {isAporteSocietario && (
                 <p className="text-xs text-app-subtle mt-1">
-                  Não conta como faturamento — aumenta o caixa, mas fica separado nos relatórios.
+                  Não conta como faturamento — aumenta o caixa, mas fica separado nos relatórios. Se o espaço tiver obra em andamento, esse valor também conta automaticamente como receita da obra, sem precisar lançar de novo.
                 </p>
               )}
               {isAporteObra && (

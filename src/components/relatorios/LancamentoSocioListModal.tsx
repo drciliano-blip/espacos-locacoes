@@ -33,13 +33,16 @@ interface Props {
   // Só faz sentido pra aportes hoje (Receita já tem EditarEntradaModal
   // pronto) — quando ausente, a lista fica só de leitura, como retiradas.
   onEdit?: (id: string) => void
+  // Reaproveitado pra despesas de obra, que não têm "sócio" — só o rótulo da
+  // coluna muda (ex: "Fornecedor"), o campo continua sendo `row.socio`.
+  colunaPessoa?: string
 }
 
 // Drill-down genérico dos cards de Aportes/Retiradas em Movimentações
 // Societárias — mostra o lançamento completo, com link direto pro
 // comprovante quando existir (mesmo padrão de leitura de arquivos usado no
 // resto do sistema, module+entityId).
-export default function LancamentoSocioListModal({ titulo, rows, fileModule, onClose, onEdit }: Props) {
+export default function LancamentoSocioListModal({ titulo, rows, fileModule, onClose, onEdit, colunaPessoa = 'Sócio' }: Props) {
   const [filesPorLancamento, setFilesPorLancamento] = useState<Map<string, StoredFile[]>>(new Map())
 
   useEffect(() => {
@@ -87,7 +90,7 @@ export default function LancamentoSocioListModal({ titulo, rows, fileModule, onC
               <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-app-border bg-app-surface2">
-                    {['Data', 'Sócio', 'Espaço', 'Valor', 'Descrição', ...(mostrarOrigem ? ['Origem'] : []), 'Comprovante', ...(onEdit ? [''] : [])].map((h, i) => (
+                    {['Data', colunaPessoa, 'Espaço', 'Valor', 'Descrição', ...(mostrarOrigem ? ['Origem'] : []), 'Comprovante', ...(onEdit ? [''] : [])].map((h, i) => (
                       <th key={h || `acao-${i}`} className={`px-3 py-2.5 text-left font-medium text-app-subtle uppercase tracking-wide whitespace-nowrap ${h === 'Valor' ? 'text-right' : ''}`}>{h}</th>
                     ))}
                   </tr>

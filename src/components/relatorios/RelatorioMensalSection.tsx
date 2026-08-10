@@ -285,11 +285,11 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                   <div>
-                    <p className="text-app-subtle">Aportes para Obra</p>
+                    <p className="text-app-subtle">Aporte Societário (receita da obra)</p>
                     <p className="font-semibold text-violet-600">{formatCurrency(o.totalAportes)}</p>
                   </div>
                   <div>
-                    <p className="text-app-subtle">Despesas de Obra</p>
+                    <p className="text-app-subtle">Despesas com Obra</p>
                     <p className="font-semibold text-red-500">{formatCurrency(o.totalDespesas)}</p>
                   </div>
                   <div>

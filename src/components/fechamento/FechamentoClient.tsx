@@ -170,11 +170,77 @@ export default function FechamentoClient() {
   const totalFundosReservas = fechamento.saldoFundoAtual + totalFundosGenericos
 
   // Obra consolidada (todos os espaços em escopo) pro Resumo Financeiro — o
-  // aporte que financia a obra é o mesmo Aporte Societário, só que com
-  // destino "para obra" (tipoEntrada aporte_obra), por isso usa o mesmo rótulo.
+  // Aporte Societário já É a receita da obra, não existe um lançamento manual
+  // separado pra isso (ver fechamento-calc.ts).
   const totalAportesObra = fechamento.obraPorEspaco.reduce((s, o) => s + o.totalAportes, 0)
   const totalDespesasObra = fechamento.obraPorEspaco.reduce((s, o) => s + o.totalDespesas, 0)
   const totalResultadoObra = totalAportesObra - totalDespesasObra
+
+  // Filtro de período específico da área de Obra — igual ao de Sócios,
+  // independente do período geral da página. Sem filtro (modo 'historico')
+  // mostra o saldo acumulado desde sempre, igual ao Saldo da Obra já exibido.
+  const [obraPeriodoModo, setObraPeriodoModo] = useState<'historico' | 'mes' | 'ano' | 'personalizado'>('historico')
+  const [obraMes, setObraMes] = useState(() => new Date().toISOString().slice(0, 7))
+  const [obraAno, setObraAno] = useState(() => String(new Date().getFullYear()))
+  const [obraDataInicioCustom, setObraDataInicioCustom] = useState('')
+  const [obraDataFimCustom, setObraDataFimCustom] = useState('')
+  const [obraDrillDown, setObraDrillDown] = useState<{ tipo: 'aportes' | 'despesas'; titulo: string; espaco: string } | null>(null)
+
+  const { obraDataInicio, obraDataFim } = useMemo(() => {
+    if (obraPeriodoModo === 'mes') return { obraDataInicio: `${obraMes}-01`, obraDataFim: ultimoDiaDoMes(obraMes) }
+    if (obraPeriodoModo === 'ano') return { obraDataInicio: `${obraAno}-01-01`, obraDataFim: `${obraAno}-12-31` }
+    if (obraPeriodoModo === 'personalizado') return { obraDataInicio: obraDataInicioCustom || undefined, obraDataFim: obraDataFimCustom || undefined }
+    return { obraDataInicio: undefined, obraDataFim: undefined }
+  }, [obraPeriodoModo, obraMes, obraAno, obraDataInicioCustom, obraDataFimCustom])
+
+  const espacosComObra = useMemo(() => new Set(fechamento.obraPorEspaco.map(o => o.nome)), [fechamento.obraPorEspaco])
+
+  // Aporte Societário/despesa de obra em escopo pro painel de Obra — mesmo
+  // padrão do painel de Sócios: respeita o espaço do filtro geral e o
+  // período próprio de Obra (sem filtro = histórico completo).
+  const aportesObraEscopo = useMemo(() => receitas.filter(r => {
+    if (r.tipoEntrada !== 'aporte_societario' && r.tipoEntrada !== 'aporte_obra') return false
+    if (!r.espaco || !espacosComObra.has(r.espaco)) return false
+    if (selectedSpaces?.length && !selectedSpaces.includes(r.espaco)) return false
+    if (obraDataInicio && r.data < obraDataInicio) return false
+    if (obraDataFim && r.data > obraDataFim) return false
+    return true
+  }), [receitas, espacosComObra, selectedSpaces, obraDataInicio, obraDataFim])
+
+  const despesasObraEscopo = useMemo(() => contasPagar.filter(c => {
+    if (c.categoria !== 'obra') return false
+    if (!espacosComObra.has(c.espaco)) return false
+    if (selectedSpaces?.length && !selectedSpaces.includes(c.espaco)) return false
+    const data = c.dataPagamento ?? c.dataVencimento
+    if (obraDataInicio && data < obraDataInicio) return false
+    if (obraDataFim && data > obraDataFim) return false
+    return true
+  }), [contasPagar, espacosComObra, selectedSpaces, obraDataInicio, obraDataFim])
+
+  // Total de Aportes/Despesas/Saldo por espaço com obra, dentro do escopo
+  // acima. Some TODOS os lançamentos pagos, não só o último — se recalcula
+  // sozinho a cada aporte/despesa criado, editado ou excluído.
+  const obraResumoPorEspaco = useMemo(() => Array.from(espacosComObra)
+    .filter(nome => !selectedSpaces?.length || selectedSpaces.includes(nome))
+    .map(nome => {
+      const totalAportes = aportesObraEscopo.filter(r => r.status === 'pago' && r.espaco === nome).reduce((s, r) => s + r.valor, 0)
+      const totalDespesas = despesasObraEscopo.filter(c => c.status === 'pago' && c.espaco === nome).reduce((s, c) => s + c.valor, 0)
+      return { nome, totalAportes, totalDespesas, saldo: totalAportes - totalDespesas }
+    }), [espacosComObra, selectedSpaces, aportesObraEscopo, despesasObraEscopo])
+
+  // Linhas do drill-down (Ver Aportes/Ver Despesas) da Obra — organizadas por
+  // data, só do espaço clicado, mesmo escopo do resumo acima.
+  const obraDrillDownRows: LancamentoSocioRow[] = useMemo(() => {
+    if (!obraDrillDown) return []
+    if (obraDrillDown.tipo === 'aportes') {
+      return aportesObraEscopo
+        .filter(r => r.espaco === obraDrillDown.espaco)
+        .map(r => ({ id: r.id, data: r.data, socio: r.socioResponsavel ?? '—', espaco: r.espaco ?? '—', valor: r.valor, descricao: r.descricao, observacoes: r.observacoes }))
+    }
+    return despesasObraEscopo
+      .filter(c => c.espaco === obraDrillDown.espaco)
+      .map(c => ({ id: c.id, data: c.dataPagamento ?? c.dataVencimento, socio: c.fornecedor ?? '—', espaco: c.espaco, valor: c.valor, descricao: c.descricao, observacoes: c.observacoes }))
+  }, [obraDrillDown, aportesObraEscopo, despesasObraEscopo])
 
   // Sócios por espaço — aporte/retirada individualizados (nunca reagrupados),
   // repasse calculado sobre o Disponível para Distribuição daquele espaço.
@@ -236,21 +302,87 @@ export default function FechamentoClient() {
         </div>
       </section>
 
-      {/* 2. Obra */}
+      {/* 2. Obra — Aporte Societário é a receita da obra (não existe um
+          lançamento manual separado); despesa de obra vem só de Contas Pagas
+          classificadas como Obra. */}
       {fechamento.obraPorEspaco.length > 0 && (
         <section className="rounded-2xl border border-app-border bg-app-surface p-5 space-y-3">
           <h4 className="text-xs font-semibold text-app-muted uppercase tracking-wide">Obra</h4>
+
+          {/* Filtro de período — próprio da área de Obra */}
+          <div className="rounded-lg border border-app-border2/60 bg-app-bg p-3 space-y-2">
+            <p className="text-xs font-medium text-app-subtle uppercase tracking-wider">Período</p>
+            <div className="flex flex-wrap items-center gap-2">
+              {([
+                ['historico', 'Histórico completo'],
+                ['mes', 'Mês'],
+                ['ano', 'Ano'],
+                ['personalizado', 'Personalizado'],
+              ] as const).map(([modo, label]) => (
+                <button key={modo} onClick={() => setObraPeriodoModo(modo)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-medium border transition-colors ${obraPeriodoModo === modo ? 'border-orange-500/40 bg-orange-500/10 text-orange-500' : 'border-app-border2 bg-app-surface2 text-app-muted hover:text-app-text'}`}>
+                  {label}
+                </button>
+              ))}
+              {obraPeriodoModo === 'mes' && (
+                <input type="month" value={obraMes} onChange={e => setObraMes(e.target.value)}
+                  className="rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-xs text-app-text focus:outline-none" />
+              )}
+              {obraPeriodoModo === 'ano' && (
+                <input type="number" value={obraAno} onChange={e => setObraAno(e.target.value)}
+                  className="w-24 rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-xs text-app-text focus:outline-none" />
+              )}
+              {obraPeriodoModo === 'personalizado' && (
+                <>
+                  <input type="date" value={obraDataInicioCustom} onChange={e => setObraDataInicioCustom(e.target.value)}
+                    className="rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-xs text-app-text focus:outline-none" />
+                  <span className="text-xs text-app-subtle">até</span>
+                  <input type="date" value={obraDataFimCustom} onChange={e => setObraDataFimCustom(e.target.value)}
+                    className="rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-xs text-app-text focus:outline-none" />
+                </>
+              )}
+            </div>
+          </div>
+
           <div className="space-y-3">
-            {fechamento.obraPorEspaco.map(o => (
-              <div key={o.nome} className="rounded-lg border border-orange-500/25 bg-orange-500/5 p-4">
-                <p className="text-sm font-semibold text-app-text flex items-center gap-1.5 mb-2"><HardHat className="h-4 w-4 text-orange-500" />{o.nome}</p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                  <div><p className="text-app-subtle">Aportes para Obra</p><p className="font-semibold text-violet-600">{formatCurrency(o.totalAportes)}</p></div>
-                  <div><p className="text-app-subtle">Gastos com Obra</p><p className="font-semibold text-red-500">{formatCurrency(o.totalDespesas)}</p></div>
-                  <div><p className="text-app-subtle">Saldo da Obra</p><p className={`font-semibold ${o.saldo >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>{formatCurrency(o.saldo)}</p></div>
+            {obraResumoPorEspaco.map(o => {
+              const detalhes = fechamento.obraPorEspaco.find(d => d.nome === o.nome)
+              return (
+                <div key={o.nome} className="rounded-lg border border-orange-500/25 bg-orange-500/5 p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <p className="text-sm font-semibold text-app-text flex items-center gap-1.5"><HardHat className="h-4 w-4 text-orange-500" />{o.nome}</p>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setObraDrillDown({ tipo: 'aportes', titulo: `Aporte Societário (obra) — ${o.nome}`, espaco: o.nome })}
+                        className="rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors">
+                        Ver Aportes
+                      </button>
+                      <button onClick={() => setObraDrillDown({ tipo: 'despesas', titulo: `Despesas com Obra — ${o.nome}`, espaco: o.nome })}
+                        className="rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors">
+                        Ver Despesas
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                    <div><p className="text-app-subtle">Aporte Societário (receita da obra)</p><p className="font-semibold text-violet-600">{formatCurrency(o.totalAportes)}</p></div>
+                    <div><p className="text-app-subtle">Despesas com Obra</p><p className="font-semibold text-red-500">{formatCurrency(o.totalDespesas)}</p></div>
+                    <div><p className="text-app-subtle">Saldo da Obra</p><p className={`font-semibold ${o.saldo >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>{formatCurrency(o.saldo)}</p></div>
+                  </div>
+                  {detalhes && detalhes.porSocio.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-app-muted mb-1.5">Aporte realizado por cada sócio (acumulado)</p>
+                      <div className="flex flex-wrap gap-2">
+                        {detalhes.porSocio.map(s => (
+                          <span key={s.nome} className="flex items-center gap-1.5 rounded-full bg-app-surface2 border border-app-border2/60 px-2.5 py-1 text-xs">
+                            <span className="text-app-text font-medium">{s.nome}</span>
+                            <span className="font-semibold text-violet-600">{formatCurrency(s.valor)}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </section>
       )}
@@ -442,6 +574,20 @@ export default function FechamentoClient() {
           fileModule={drillDown.tipo === 'aportes' ? 'receitas' : 'contas'}
           onClose={() => setDrillDown(null)}
           onEdit={drillDown.tipo === 'aportes' ? id => setEditandoAporteId(id) : id => setEditandoRetiradaId(id)}
+        />
+      )}
+
+      {obraDrillDown && (
+        <LancamentoSocioListModal
+          titulo={obraDrillDown.titulo}
+          rows={obraDrillDownRows}
+          fileModule={obraDrillDown.tipo === 'aportes' ? 'receitas' : 'contas'}
+          colunaPessoa={obraDrillDown.tipo === 'aportes' ? 'Sócio' : 'Fornecedor'}
+          onClose={() => setObraDrillDown(null)}
+          // Aporte pode ser editado aqui (mesmo fluxo de Sócios). Despesa de
+          // obra é uma conta comum — edita pela tela de Contas a Pagar, não
+          // tem um modal de edição dedicado aqui.
+          onEdit={obraDrillDown.tipo === 'aportes' ? id => setEditandoAporteId(id) : undefined}
         />
       )}
 

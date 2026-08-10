@@ -53,8 +53,9 @@ export interface FechamentoResultado {
   retornosFundo: Receita[]
   totalRetornosFundo: number
 
-  // Obra (período filtrado) — despesa de obra e aporte pra obra nunca contam
-  // como despesa/receita operacional.
+  // Obra (período filtrado) — o Aporte Societário de um espaço com obra JÁ É
+  // a receita da obra (não é um lançamento separado); despesa de obra nunca
+  // conta como despesa operacional.
   aportesObra: Receita[]
   despesasObra: ContaPagar[]
 
@@ -98,8 +99,22 @@ export function calcularFechamento(
   const despesasOperacionais = saidas.filter(isDespesaOperacional)
   const retiradasSocio = saidas.filter(c => c.categoria === 'retirada_socio')
   const transferenciasFundo = saidas.filter(c => c.categoria === 'fundo_caixa')
-  const aportesObra = entradas.filter(r => r.tipoEntrada === 'aporte_obra')
   const despesasObra = saidas.filter(isDespesaObra)
+
+  // Quais espaços têm obra — usado tanto pro Fechamento da Obra quanto pra
+  // escopar "Aportes para Obra": o Aporte Societário JÁ é a receita da obra
+  // (não existe um tipo de lançamento manual separado pra isso), então só
+  // conta como aporte de obra o aporte de um espaço que efetivamente tem
+  // obra (evita que um aporte qualquer de outro espaço apareça aqui).
+  // 'aporte_obra' continua reconhecido por compatibilidade com lançamentos
+  // antigos feitos antes dessa unificação.
+  const nomesComObra = new Set<string>([
+    ...Object.keys(SOCIOS_OBRA),
+    ...contasPagar.filter(isDespesaObra).map(c => c.espaco),
+  ])
+  const aportesObra = entradas.filter(r =>
+    r.espaco && nomesComObra.has(r.espaco) && (r.tipoEntrada === 'aporte_societario' || r.tipoEntrada === 'aporte_obra'),
+  )
 
   const totalEntradas = entradasOperacionais.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)
   const totalAportes = aportes.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)
@@ -139,7 +154,7 @@ export function calcularFechamento(
   // Resultado), mas reduz o quanto sobra pra repassar aos sócios agora.
   const disponivelParaDistribuicao = resultado - totalTransferenciasFundo + totalRetornosFundo
 
-  const obraPorEspaco = calcularObraPorEspaco(entradasAllTime, saidasAllTime, espacosEmEscopo)
+  const obraPorEspaco = calcularObraPorEspaco(entradasAllTime, saidasAllTime, espacosEmEscopo, nomesComObra)
 
   return {
     entradasOperacionais, totalEntradas, despesasOperacionais, totalSaidas, totalPorCategoriaDespesa, resultado,
@@ -155,15 +170,14 @@ function calcularObraPorEspaco(
   entradasAllTime: Receita[],
   saidasAllTime: ContaPagar[],
   espacosEmEscopo: { nome: string }[],
+  nomesComObra: Set<string>,
 ): ObraEspacoResumo[] {
-  const nomesComObra = new Set<string>([
-    ...Object.keys(SOCIOS_OBRA),
-    ...saidasAllTime.filter(isDespesaObra).map(c => c.espaco),
-    ...entradasAllTime.filter(r => r.tipoEntrada === 'aporte_obra' && r.espaco).map(r => r.espaco as string),
-  ])
   return espacosEmEscopo.filter(e => nomesComObra.has(e.nome)).map(e => {
     const despesasEspaco = saidasAllTime.filter(c => c.espaco === e.nome && isDespesaObra(c))
-    const aportesEspaco = entradasAllTime.filter(r => r.espaco === e.nome && r.tipoEntrada === 'aporte_obra')
+    // Aporte Societário é a receita da obra — não existe um lançamento manual
+    // separado pra isso. 'aporte_obra' continua reconhecido só por
+    // compatibilidade com lançamentos feitos antes dessa unificação.
+    const aportesEspaco = entradasAllTime.filter(r => r.espaco === e.nome && (r.tipoEntrada === 'aporte_societario' || r.tipoEntrada === 'aporte_obra'))
     const totalDespesas = despesasEspaco.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0)
     const totalAportes = aportesEspaco.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)
     const saldo = totalAportes - totalDespesas
