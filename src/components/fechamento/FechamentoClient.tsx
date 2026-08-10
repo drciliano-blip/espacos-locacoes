@@ -52,7 +52,7 @@ export default function FechamentoClient() {
   const [socioAno, setSocioAno] = useState(() => String(new Date().getFullYear()))
   const [socioDataInicioCustom, setSocioDataInicioCustom] = useState('')
   const [socioDataFimCustom, setSocioDataFimCustom] = useState('')
-  const [drillDown, setDrillDown] = useState<{ tipo: 'aportes' | 'retiradas'; titulo: string; nomes: string[] } | null>(null)
+  const [drillDown, setDrillDown] = useState<{ tipo: 'aportes' | 'retiradas'; titulo: string; nomes: string[]; naoIdentificado?: boolean } | null>(null)
   const [editandoAporteId, setEditandoAporteId] = useState<string | null>(null)
   const [editandoRetiradaId, setEditandoRetiradaId] = useState<string | null>(null)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
@@ -133,12 +133,20 @@ export default function FechamentoClient() {
       const totalRetiradas = retiradasSocioEscopo.filter(c => c.status === 'pago' && c.fornecedor === nome).reduce((s, c) => s + c.valor, 0)
       return { nome, totalAportes, totalRetiradas, saldo: totalAportes - totalRetiradas }
     })
-    return { porSocio }
+    // Toda conta paga classificada como Retirada Sócio deve constar em algum
+    // lugar aqui — se o campo Sócio não bater com nenhum dos cadastrados
+    // (lançamento antigo, anterior ao dropdown obrigatório, ou digitado
+    // errado), ela cai aqui em vez de simplesmente desaparecer da soma.
+    const totalRetiradasNaoIdentificadas = retiradasSocioEscopo
+      .filter(c => c.status === 'pago' && (!c.fornecedor || !nomesSociosDisponiveis.includes(c.fornecedor)))
+      .reduce((s, c) => s + c.valor, 0)
+    return { porSocio, totalRetiradasNaoIdentificadas }
   }, [nomesSociosDisponiveis, aportesSocioEscopo, retiradasSocioEscopo])
 
   // Linhas do drill-down (Ver Aportes/Ver Retiradas) — sempre organizadas por
   // data (receitas/contas já vêm ordenadas por data desc do contexto), só do(s)
-  // sócio(s) clicado(s). Mesmo escopo de espaço/período do resumo acima.
+  // sócio(s) clicado(s), ou das retiradas sem sócio identificado quando
+  // `naoIdentificado` está marcado. Mesmo escopo de espaço/período do resumo acima.
   const drillDownRows: LancamentoSocioRow[] = useMemo(() => {
     if (!drillDown) return []
     if (drillDown.tipo === 'aportes') {
@@ -147,12 +155,14 @@ export default function FechamentoClient() {
         .map(r => ({ id: r.id, data: r.data, socio: r.socioResponsavel ?? '—', espaco: r.espaco ?? '—', valor: r.valor, descricao: r.descricao, observacoes: r.observacoes }))
     }
     return retiradasSocioEscopo
-      .filter(c => c.fornecedor && drillDown.nomes.includes(c.fornecedor))
+      .filter(c => drillDown.naoIdentificado
+        ? (!c.fornecedor || !nomesSociosDisponiveis.includes(c.fornecedor))
+        : (c.fornecedor && drillDown.nomes.includes(c.fornecedor)))
       .map(c => ({
         id: c.id, data: c.dataPagamento ?? c.dataVencimento, socio: c.fornecedor ?? '—', espaco: c.espaco,
         valor: c.valor, descricao: c.descricao, observacoes: c.observacoes, origem: origemRetiradaLabel(c),
       }))
-  }, [drillDown, aportesSocioEscopo, retiradasSocioEscopo])
+  }, [drillDown, aportesSocioEscopo, retiradasSocioEscopo, nomesSociosDisponiveis])
 
   // Fundos genéricos (Reservas) em escopo — um fundo sem espaço é da empresa
   // toda, então aparece independente do filtro de espaço; um fundo com espaço
@@ -502,6 +512,26 @@ export default function FechamentoClient() {
         </div>
         {resumoPorSocio.porSocio.length === 0 && (
           <p className="text-sm text-app-subtle text-center py-4">Nenhum sócio configurado para os espaços filtrados.</p>
+        )}
+
+        {resumoPorSocio.totalRetiradasNaoIdentificadas > 0 && (
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 space-y-2">
+            <p className="text-sm font-semibold text-amber-700">Retiradas sem sócio identificado</p>
+            <p className="text-xs text-app-subtle">
+              Essas contas estão classificadas como Retirada Sócio em Contas a Pagar, mas o campo Sócio não bate com nenhum dos sócios cadastrados
+              (Camilo, Alex, Giscard, Trupe Labels) — provavelmente lançadas antes do campo virar dropdown. Não entram no total de ninguém até
+              você corrigir o Sócio de cada uma em Contas a Pagar.
+            </p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-bold text-amber-700">{formatCurrency(resumoPorSocio.totalRetiradasNaoIdentificadas)}</p>
+              <button
+                onClick={() => setDrillDown({ tipo: 'retiradas', titulo: 'Retiradas sem sócio identificado', nomes: [], naoIdentificado: true })}
+                className="rounded-lg border border-amber-500/40 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-500/20 transition-colors"
+              >
+                Ver lançamentos
+              </button>
+            </div>
+          </div>
         )}
 
         {/* Participação societária (% e valor devido) — segue o período geral
