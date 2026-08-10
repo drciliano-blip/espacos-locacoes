@@ -20,7 +20,7 @@ import NovaReceitaModal from '@/components/pagamentos/NovaReceitaModal'
 import EditarEntradaModal from '@/components/pagamentos/EditarEntradaModal'
 import NovaRetiradaSocioModal from '@/components/relatorios/NovaRetiradaSocioModal'
 import EditarRetiradaSocioModal from '@/components/relatorios/EditarRetiradaSocioModal'
-import LancamentoSocioListModal, { type LancamentoSocioRow } from '@/components/relatorios/LancamentoSocioListModal'
+import LancamentoSocioListModal, { type LancamentoSocioRow, origemRetiradaLabel } from '@/components/relatorios/LancamentoSocioListModal'
 import Toast from '@/components/shared/Toast'
 
 function getDefaultFilters(): RelatorioFilters {
@@ -148,7 +148,10 @@ export default function FechamentoClient() {
     }
     return retiradasSocioEscopo
       .filter(c => c.fornecedor && drillDown.nomes.includes(c.fornecedor))
-      .map(c => ({ id: c.id, data: c.dataPagamento ?? c.dataVencimento, socio: c.fornecedor ?? '—', espaco: c.espaco, valor: c.valor, descricao: c.descricao, observacoes: c.observacoes }))
+      .map(c => ({
+        id: c.id, data: c.dataPagamento ?? c.dataVencimento, socio: c.fornecedor ?? '—', espaco: c.espaco,
+        valor: c.valor, descricao: c.descricao, observacoes: c.observacoes, origem: origemRetiradaLabel(c),
+      }))
   }, [drillDown, aportesSocioEscopo, retiradasSocioEscopo])
 
   // Fundos genéricos (Reservas) em escopo — um fundo sem espaço é da empresa

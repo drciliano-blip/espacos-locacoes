@@ -14,7 +14,7 @@ import NovaReceitaModal from '@/components/pagamentos/NovaReceitaModal'
 import EditarEntradaModal from '@/components/pagamentos/EditarEntradaModal'
 import NovaRetiradaSocioModal from './NovaRetiradaSocioModal'
 import EditarRetiradaSocioModal from './EditarRetiradaSocioModal'
-import LancamentoSocioListModal, { type LancamentoSocioRow } from './LancamentoSocioListModal'
+import LancamentoSocioListModal, { type LancamentoSocioRow, origemRetiradaLabel } from './LancamentoSocioListModal'
 import Toast from '@/components/shared/Toast'
 import type { Receita } from '@/contexts/ReceitasContext'
 import type { ContaPagar } from '@/types'
@@ -106,7 +106,7 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
   }))
   const retiradasRows: LancamentoSocioRow[] = retiradasSocio.map(c => ({
     id: c.id, data: c.dataPagamento ?? c.dataVencimento, socio: c.fornecedor ?? '—', espaco: c.espaco,
-    valor: c.valor, descricao: c.descricao, observacoes: c.observacoes,
+    valor: c.valor, descricao: c.descricao, observacoes: c.observacoes, origem: origemRetiradaLabel(c),
   }))
 
   const espacoUnico = selectedSpaces?.length === 1 ? selectedSpaces[0] : undefined

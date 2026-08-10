@@ -144,6 +144,10 @@ export interface ContaPagar {
   // Presente só em despesas geradas automaticamente a partir de um evento
   // (hoje: reembolso de evento cancelado) — vincula a saída ao evento original.
   eventoId?: string
+  // Por onde o lançamento entrou no sistema — hoje só relevante pra Retirada
+  // Sócio, pra mostrar a origem no histórico do sócio (Financeiro → Sócios).
+  // Ausente em lançamentos antigos (origem não rastreada até aqui).
+  origemLancamento?: 'retirada_manual' | 'contas_a_pagar'
 }
 
 // Feature 2: Usuário do sistema

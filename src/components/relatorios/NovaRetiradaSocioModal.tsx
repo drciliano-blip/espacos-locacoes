@@ -66,6 +66,7 @@ export default function NovaRetiradaSocioModal({ onClose, onSave, onSaved }: Pro
         dataPagamento: data,
         fornecedor: socio,
         observacoes: observacoes.trim() || undefined,
+        origemLancamento: 'retirada_manual',
       })
       if (comprovante) {
         try {

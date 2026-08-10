@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
+import { DIVISAO_SOCIOS } from '@/lib/socios-config'
 import { formatCurrency, parseCurrencyBR } from '@/lib/utils'
 import { saveFile, getFiles, getFileUrl, hashFile } from '@/lib/file-storage'
 import FileList from '@/components/shared/FileList'
@@ -731,6 +732,10 @@ function ContaFormModal({ conta, onClose, onSave }: ContaFormModalProps) {
       // Não editável neste formulário — preserva o vínculo se a conta já veio
       // de um fluxo automático (ex: reembolso gerado a partir de um evento).
       eventoId: conta?.eventoId,
+      // Se já tinha origem registrada, preserva. Senão, uma Retirada Sócio
+      // criada/editada por aqui (não pelo "+ Retirada" de Financeiro → Sócios)
+      // é origem "Conta Paga" — mostrado no histórico do sócio.
+      origemLancamento: conta?.origemLancamento ?? (form.categoria === 'retirada_socio' ? 'contas_a_pagar' : undefined),
     }
     try {
       if (pendingFile) {
@@ -836,13 +841,31 @@ function ContaFormModal({ conta, onClose, onSave }: ContaFormModalProps) {
               </select>
             </div>
             <div>
-              <label className="block text-xs text-app-muted mb-1">Beneficiário</label>
-              <input value={form.fornecedor} onChange={e => setForm(f => ({ ...f, fornecedor: e.target.value }))}
-                placeholder="Nome do beneficiário"
-                className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-3 py-1.5 text-sm text-app-text focus:outline-none"
-                onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
-                onBlur={e => { e.currentTarget.style.borderColor = '' }}
-              />
+              {form.categoria === 'retirada_socio' ? (
+                <>
+                  <label className="block text-xs text-app-muted mb-1">Sócio *</label>
+                  <select value={form.fornecedor} onChange={e => setForm(f => ({ ...f, fornecedor: e.target.value }))}
+                    disabled={!form.espaco || form.espaco === 'Todos'}
+                    className="w-full cursor-pointer rounded-lg border border-app-border2 bg-app-surface2 px-3 py-1.5 text-sm text-app-text focus:outline-none disabled:opacity-60 disabled:cursor-default"
+                    onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
+                    onBlur={e => { e.currentTarget.style.borderColor = '' }}
+                  >
+                    <option value="">{form.espaco && form.espaco !== 'Todos' ? 'Selecionar…' : 'Selecione um espaço primeiro'}</option>
+                    {(DIVISAO_SOCIOS[form.espaco] ?? []).map(s => <option key={s.nome} value={s.nome}>{s.nome}</option>)}
+                  </select>
+                  <p className="text-xs text-app-subtle mt-1">Retirada Sócio precisa de um sócio cadastrado — não conta pro total do sócio se ficar em branco ou não bater o nome.</p>
+                </>
+              ) : (
+                <>
+                  <label className="block text-xs text-app-muted mb-1">Beneficiário</label>
+                  <input value={form.fornecedor} onChange={e => setForm(f => ({ ...f, fornecedor: e.target.value }))}
+                    placeholder="Nome do beneficiário"
+                    className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-3 py-1.5 text-sm text-app-text focus:outline-none"
+                    onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
+                    onBlur={e => { e.currentTarget.style.borderColor = '' }}
+                  />
+                </>
+              )}
             </div>
           </div>
 

@@ -13,6 +13,16 @@ export interface LancamentoSocioRow {
   valor: number
   descricao: string
   observacoes?: string
+  // Só preenchido pra retiradas — mostra se veio do "+ Retirada" (Financeiro
+  // → Sócios) ou de uma conta lançada/paga em Contas a Pagar. Ajuda a
+  // conferir de onde veio um valor quando o total do sócio parecer estranho.
+  origem?: 'Retirada Manual' | 'Conta Paga' | 'Origem não identificada'
+}
+
+export function origemRetiradaLabel(c: { origemLancamento?: 'retirada_manual' | 'contas_a_pagar' }): 'Retirada Manual' | 'Conta Paga' | 'Origem não identificada' {
+  if (c.origemLancamento === 'retirada_manual') return 'Retirada Manual'
+  if (c.origemLancamento === 'contas_a_pagar') return 'Conta Paga'
+  return 'Origem não identificada'
 }
 
 interface Props {
@@ -48,6 +58,7 @@ export default function LancamentoSocioListModal({ titulo, rows, fileModule, onC
   }, [fileModule])
 
   const total = rows.reduce((s, r) => s + r.valor, 0)
+  const mostrarOrigem = rows.some(r => r.origem)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
@@ -76,7 +87,7 @@ export default function LancamentoSocioListModal({ titulo, rows, fileModule, onC
               <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-app-border bg-app-surface2">
-                    {['Data', 'Sócio', 'Espaço', 'Valor', 'Descrição', 'Comprovante', ...(onEdit ? [''] : [])].map((h, i) => (
+                    {['Data', 'Sócio', 'Espaço', 'Valor', 'Descrição', ...(mostrarOrigem ? ['Origem'] : []), 'Comprovante', ...(onEdit ? [''] : [])].map((h, i) => (
                       <th key={h || `acao-${i}`} className={`px-3 py-2.5 text-left font-medium text-app-subtle uppercase tracking-wide whitespace-nowrap ${h === 'Valor' ? 'text-right' : ''}`}>{h}</th>
                     ))}
                   </tr>
@@ -91,6 +102,17 @@ export default function LancamentoSocioListModal({ titulo, rows, fileModule, onC
                         <td className="px-3 py-2.5 text-app-text2 whitespace-nowrap">{r.espaco || '—'}</td>
                         <td className="px-3 py-2.5 font-semibold text-app-text whitespace-nowrap text-right">{formatCurrency(r.valor)}</td>
                         <td className="px-3 py-2.5 text-app-text2 max-w-[240px] truncate">{r.descricao}{r.observacoes ? ` — ${r.observacoes}` : ''}</td>
+                        {mostrarOrigem && (
+                          <td className="px-3 py-2.5 whitespace-nowrap">
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium border ${
+                              r.origem === 'Retirada Manual' ? 'bg-fuchsia-500/10 text-fuchsia-600 border-fuchsia-500/20'
+                                : r.origem === 'Conta Paga' ? 'bg-sky-500/10 text-sky-600 border-sky-500/20'
+                                : 'bg-app-surface2 text-app-subtle border-app-border2'
+                            }`}>
+                              {r.origem ?? '—'}
+                            </span>
+                          </td>
+                        )}
                         <td className="px-3 py-2.5 whitespace-nowrap">
                           {arquivos.length > 0 ? (
                             <button
@@ -123,7 +145,7 @@ export default function LancamentoSocioListModal({ titulo, rows, fileModule, onC
                   <tr className="border-t-2 border-app-border bg-app-surface2/60">
                     <td className="px-3 py-2.5 font-semibold text-app-text whitespace-nowrap" colSpan={3}>Total ({rows.length} lançamento{rows.length === 1 ? '' : 's'})</td>
                     <td className="px-3 py-2.5 font-bold text-app-text whitespace-nowrap text-right">{formatCurrency(total)}</td>
-                    <td colSpan={onEdit ? 2 : 1} />
+                    <td colSpan={2 + (mostrarOrigem ? 1 : 0) + (onEdit ? 1 : 0)} />
                   </tr>
                 </tfoot>
               </table>
