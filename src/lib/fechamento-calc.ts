@@ -1,6 +1,6 @@
 import { isReceitaOperacional } from '@/contexts/ReceitasContext'
 import { isDespesaOperacional, isDespesaObra } from '@/contexts/ContasPagarContext'
-import { SOCIOS_OBRA, INVESTIMENTOS_SOCIETARIOS, type InvestimentoSocietario } from '@/lib/socios-config'
+import { SOCIOS_OBRA, INVESTIMENTOS_SOCIETARIOS, nomeCanonicoSocio, type InvestimentoSocietario } from '@/lib/socios-config'
 import type { Receita } from '@/contexts/ReceitasContext'
 import type { ContaPagar } from '@/types'
 
@@ -185,7 +185,8 @@ function calcularObraPorEspaco(
     for (const nome of SOCIOS_OBRA[e.nome] ?? []) porSocioMap.set(nome, 0)
     for (const r of aportesEspaco) {
       if (r.status !== 'pago' || !r.socioResponsavel) continue
-      porSocioMap.set(r.socioResponsavel, (porSocioMap.get(r.socioResponsavel) ?? 0) + r.valor)
+      const nome = nomeCanonicoSocio(r.socioResponsavel)
+      porSocioMap.set(nome, (porSocioMap.get(nome) ?? 0) + r.valor)
     }
     const porSocio = Array.from(porSocioMap.entries()).map(([nome, valor]) => ({ nome, valor }))
     return {

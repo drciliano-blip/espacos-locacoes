@@ -12,7 +12,7 @@ import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useFundos } from '@/contexts/FundosContext'
 import { useCurrentUser } from '@/contexts/UserContext'
-import { DIVISAO_SOCIOS } from '@/lib/socios-config'
+import { DIVISAO_SOCIOS, nomeCanonicoSocio } from '@/lib/socios-config'
 import { formatCurrency } from '@/lib/utils'
 import FundoCard from './FundoCard'
 import NovoFundoModal from './NovoFundoModal'
@@ -129,16 +129,16 @@ export default function FechamentoClient() {
   // direto do ReceitasContext/ContasPagarContext.
   const resumoPorSocio = useMemo(() => {
     const porSocio = nomesSociosDisponiveis.map(nome => {
-      const totalAportes = aportesSocioEscopo.filter(r => r.status === 'pago' && r.socioResponsavel === nome).reduce((s, r) => s + r.valor, 0)
-      const totalRetiradas = retiradasSocioEscopo.filter(c => c.status === 'pago' && c.fornecedor === nome).reduce((s, c) => s + c.valor, 0)
+      const totalAportes = aportesSocioEscopo.filter(r => r.status === 'pago' && r.socioResponsavel && nomeCanonicoSocio(r.socioResponsavel) === nome).reduce((s, r) => s + r.valor, 0)
+      const totalRetiradas = retiradasSocioEscopo.filter(c => c.status === 'pago' && c.fornecedor && nomeCanonicoSocio(c.fornecedor) === nome).reduce((s, c) => s + c.valor, 0)
       return { nome, totalAportes, totalRetiradas, saldo: totalAportes - totalRetiradas }
     })
     // Toda conta paga classificada como Retirada Sócio deve constar em algum
-    // lugar aqui — se o campo Sócio não bater com nenhum dos cadastrados
-    // (lançamento antigo, anterior ao dropdown obrigatório, ou digitado
-    // errado), ela cai aqui em vez de simplesmente desaparecer da soma.
+    // lugar aqui — se o campo Sócio não bater com nenhum dos cadastrados nem
+    // com um alias conhecido (nomeCanonicoSocio), ela cai aqui em vez de
+    // simplesmente desaparecer da soma.
     const totalRetiradasNaoIdentificadas = retiradasSocioEscopo
-      .filter(c => c.status === 'pago' && (!c.fornecedor || !nomesSociosDisponiveis.includes(c.fornecedor)))
+      .filter(c => c.status === 'pago' && (!c.fornecedor || !nomesSociosDisponiveis.includes(nomeCanonicoSocio(c.fornecedor))))
       .reduce((s, c) => s + c.valor, 0)
     return { porSocio, totalRetiradasNaoIdentificadas }
   }, [nomesSociosDisponiveis, aportesSocioEscopo, retiradasSocioEscopo])
@@ -151,13 +151,13 @@ export default function FechamentoClient() {
     if (!drillDown) return []
     if (drillDown.tipo === 'aportes') {
       return aportesSocioEscopo
-        .filter(r => r.socioResponsavel && drillDown.nomes.includes(r.socioResponsavel))
+        .filter(r => r.socioResponsavel && drillDown.nomes.includes(nomeCanonicoSocio(r.socioResponsavel)))
         .map(r => ({ id: r.id, data: r.data, socio: r.socioResponsavel ?? '—', espaco: r.espaco ?? '—', valor: r.valor, descricao: r.descricao, observacoes: r.observacoes }))
     }
     return retiradasSocioEscopo
       .filter(c => drillDown.naoIdentificado
-        ? (!c.fornecedor || !nomesSociosDisponiveis.includes(c.fornecedor))
-        : (c.fornecedor && drillDown.nomes.includes(c.fornecedor)))
+        ? (!c.fornecedor || !nomesSociosDisponiveis.includes(nomeCanonicoSocio(c.fornecedor)))
+        : (c.fornecedor && drillDown.nomes.includes(nomeCanonicoSocio(c.fornecedor))))
       .map(c => ({
         id: c.id, data: c.dataPagamento ?? c.dataVencimento, socio: c.fornecedor ?? '—', espaco: c.espaco,
         valor: c.valor, descricao: c.descricao, observacoes: c.observacoes, origem: origemRetiradaLabel(c),

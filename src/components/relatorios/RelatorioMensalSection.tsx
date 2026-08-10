@@ -7,7 +7,7 @@ import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useCurrentUser } from '@/contexts/UserContext'
 import { formatCurrency } from '@/lib/utils'
-import { DIVISAO_SOCIOS, GRUPOS_SOCIOS } from '@/lib/socios-config'
+import { DIVISAO_SOCIOS, GRUPOS_SOCIOS, nomeCanonicoSocio } from '@/lib/socios-config'
 import { calcularFechamento } from '@/lib/fechamento-calc'
 import { DespesasTable } from './LancamentosTables'
 import NovaReceitaModal from '@/components/pagamentos/NovaReceitaModal'
@@ -91,12 +91,12 @@ export default function RelatorioMensalSection({ selectedSpaces, dataInicio, dat
   const nomesEspacosEmEscopo = useMemo(() => espacos.map(e => e.nome), [espacos])
 
   const aportesPorSocio = useMemo(() => buildSocioBreakdown(
-    aportes.filter(r => r.status === 'pago' && r.socioResponsavel).map(r => ({ nome: r.socioResponsavel as string, valor: r.valor })),
+    aportes.filter(r => r.status === 'pago' && r.socioResponsavel).map(r => ({ nome: nomeCanonicoSocio(r.socioResponsavel as string), valor: r.valor })),
     nomesEspacosEmEscopo,
   ), [aportes, nomesEspacosEmEscopo])
 
   const retiradasPorSocio = useMemo(() => buildSocioBreakdown(
-    retiradasSocio.filter(c => c.status === 'pago' && c.fornecedor).map(c => ({ nome: c.fornecedor as string, valor: c.valor })),
+    retiradasSocio.filter(c => c.status === 'pago' && c.fornecedor).map(c => ({ nome: nomeCanonicoSocio(c.fornecedor as string), valor: c.valor })),
     nomesEspacosEmEscopo,
   ), [retiradasSocio, nomesEspacosEmEscopo])
 

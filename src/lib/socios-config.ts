@@ -29,6 +29,25 @@ export const DIVISAO_SOCIOS: Record<string, SocioSplit[]> = {
   ],
 }
 
+// Nomes alternativos que já aparecem em lançamentos antigos de Contas Pagar
+// (nome completo/formal em vez do apelido usado no dropdown, por exemplo) —
+// usado só na hora de somar/agrupar por sócio, nunca oferecido como opção
+// nova nos formulários (esses continuam mostrando só o nome canônico).
+export const ALIASES_SOCIOS: Record<string, string> = {
+  'ALEXANDRE CAMILLO TESSITORE': 'Alex',
+}
+
+// Resolve um nome de sócio (como veio salvo no fornecedor/socioResponsável)
+// pro nome canônico usado em DIVISAO_SOCIOS — bate maiúsc./minúsc. e espaços
+// nas pontas, mas não tenta adivinhar nada além dos aliases cadastrados.
+export function nomeCanonicoSocio(nome: string): string {
+  const chave = nome.trim().toUpperCase()
+  for (const [alias, canonico] of Object.entries(ALIASES_SOCIOS)) {
+    if (alias.toUpperCase() === chave) return canonico
+  }
+  return nome
+}
+
 // Sócios que participam dos custos/aportes da obra de cada espaço — não é o
 // mesmo grupo de DIVISAO_SOCIOS. Um sócio pode ter participação societária e
 // no resultado operacional sem participar da obra (ex: Trupe Labels no
