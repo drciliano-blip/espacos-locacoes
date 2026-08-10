@@ -84,6 +84,29 @@ export default function FechamentoClient() {
   const aportesFiltrados = socioFiltro ? fechamento.aportes.filter(r => r.socioResponsavel === socioFiltro) : fechamento.aportes
   const retiradasFiltradas = socioFiltro ? fechamento.retiradasSocio.filter(c => c.fornecedor === socioFiltro) : fechamento.retiradasSocio
 
+  // Total de Aportes/Retiradas/Saldo por sócio — soma TODOS os lançamentos
+  // (não só o último), já respeitando espaço/período do filtro ativo (mesmo
+  // conjunto de registros que "Ver Aportes"/"Ver Retiradas" mostram). Nunca
+  // substitui o histórico — é só um total calculado por cima dele, que se
+  // recalcula sozinho a cada aporte/retirada criado, editado ou excluído
+  // porque lê direto do ReceitasContext/ContasPagarContext.
+  const resumoPorSocio = useMemo(() => {
+    const porSocio = nomesSociosDisponiveis.map(nome => {
+      const totalAportes = fechamento.aportes.filter(r => r.status === 'pago' && r.socioResponsavel === nome).reduce((s, r) => s + r.valor, 0)
+      const totalRetiradas = fechamento.retiradasSocio.filter(c => c.status === 'pago' && c.fornecedor === nome).reduce((s, c) => s + c.valor, 0)
+      return { nome, totalAportes, totalRetiradas, saldo: totalAportes - totalRetiradas }
+    })
+    const grupos = new Map<string, string[]>()
+    for (const e of espacos) for (const [grupo, membros] of Object.entries(GRUPOS_SOCIOS[e.nome] ?? {})) grupos.set(grupo, membros)
+    const gruposResumo = Array.from(grupos.entries()).map(([nome, membros]) => {
+      const membrosResumo = porSocio.filter(s => membros.includes(s.nome))
+      const totalAportes = membrosResumo.reduce((s, m) => s + m.totalAportes, 0)
+      const totalRetiradas = membrosResumo.reduce((s, m) => s + m.totalRetiradas, 0)
+      return { nome, totalAportes, totalRetiradas, saldo: totalAportes - totalRetiradas }
+    })
+    return { porSocio, grupos: gruposResumo }
+  }, [nomesSociosDisponiveis, fechamento.aportes, fechamento.retiradasSocio, espacos])
+
   const aportesRows: LancamentoSocioRow[] = aportesFiltrados.map(r => ({
     id: r.id, data: r.data, socio: r.socioResponsavel ?? '—', espaco: r.espaco ?? '—',
     valor: r.valor, descricao: r.descricao, observacoes: r.observacoes,
@@ -273,6 +296,44 @@ export default function FechamentoClient() {
             </button>
           </div>
         </div>
+
+        {(resumoPorSocio.porSocio.length > 0 || resumoPorSocio.grupos.length > 0) && (
+          <div className="rounded-lg border border-app-border2/60 bg-app-bg p-4 space-y-2">
+            <p className="text-sm font-semibold text-app-text">Aportes e Retiradas por Sócio</p>
+            <p className="text-xs text-app-subtle">
+              {selectedSpaces?.length ? `Consolidado — ${selectedSpaces.join(', ')}` : 'Consolidado de todos os espaços'}
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-app-border">
+                    {['Sócio', 'Total de Aportes', 'Total de Retiradas', 'Saldo do Sócio'].map(h => (
+                      <th key={h} className="px-2 py-1.5 text-left font-medium text-app-subtle uppercase tracking-wide whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-app-border/50">
+                  {resumoPorSocio.porSocio.filter(s => !socioFiltro || s.nome === socioFiltro).map(s => (
+                    <tr key={s.nome}>
+                      <td className="px-2 py-1.5 font-medium text-app-text whitespace-nowrap">{s.nome}</td>
+                      <td className="px-2 py-1.5 text-violet-600 whitespace-nowrap">{formatCurrency(s.totalAportes)}</td>
+                      <td className="px-2 py-1.5 text-fuchsia-600 whitespace-nowrap">{formatCurrency(s.totalRetiradas)}</td>
+                      <td className={`px-2 py-1.5 font-semibold whitespace-nowrap ${s.saldo >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>{formatCurrency(s.saldo)}</td>
+                    </tr>
+                  ))}
+                  {resumoPorSocio.grupos.filter(g => g.totalAportes > 0 || g.totalRetiradas > 0).map(g => (
+                    <tr key={g.nome} className="bg-app-surface2/40">
+                      <td className="px-2 py-1.5 font-medium text-app-subtle whitespace-nowrap italic">{g.nome} consolidado</td>
+                      <td className="px-2 py-1.5 text-app-subtle whitespace-nowrap">{formatCurrency(g.totalAportes)}</td>
+                      <td className="px-2 py-1.5 text-app-subtle whitespace-nowrap">{formatCurrency(g.totalRetiradas)}</td>
+                      <td className="px-2 py-1.5 text-app-subtle font-semibold whitespace-nowrap">{formatCurrency(g.saldo)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {sociosPorEspaco.map(e => (
           <div key={e.nome} className="rounded-lg border border-app-border2/60 bg-app-bg p-4 space-y-2">
