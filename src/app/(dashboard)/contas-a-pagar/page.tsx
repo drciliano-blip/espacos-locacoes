@@ -9,7 +9,7 @@ import {
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { DIVISAO_SOCIOS } from '@/lib/socios-config'
-import { formatCurrency, parseCurrencyBR } from '@/lib/utils'
+import { formatCurrency, parseCurrencyBR, formatDate } from '@/lib/utils'
 import { saveFile, getFiles, getFileUrl, hashFile } from '@/lib/file-storage'
 import FileList from '@/components/shared/FileList'
 import FileSearchModal from '@/components/shared/FileSearchModal'
@@ -1258,10 +1258,13 @@ function DarBaixaModal({ conta, onClose, onConfirm }: {
       setFileHashAtual(hash)
 
       const outrosComprovantes = await getFiles({ module: 'contas', categoria: 'comprovante_pagamento' })
-      const jaUsado = outrosComprovantes.some(f => f.entityId !== conta.id && f.fileHash === hash)
-      if (jaUsado) {
+      const arquivoDuplicado = outrosComprovantes.find(f => f.entityId !== conta.id && f.fileHash === hash)
+      if (arquivoDuplicado) {
+        const outraConta = todasContas.find(c => c.id === arquivoDuplicado.entityId)
         setDuplicado(true)
-        setErro(COMPROVANTE_DUPLICADO_MSG)
+        setErro(outraConta
+          ? `${COMPROVANTE_DUPLICADO_MSG} (usado em "${outraConta.descricao}"${outraConta.dataPagamento ? ` — ${formatDate(outraConta.dataPagamento)}` : ''})`
+          : `${COMPROVANTE_DUPLICADO_MSG} (lançamento original já foi excluído — avise o suporte se isso persistir)`)
         return
       }
 
@@ -1282,15 +1285,15 @@ function DarBaixaModal({ conta, onClose, onConfirm }: {
       // Duplicidade pelos dados da transação — cobre o caso do comprovante ter
       // sido reenviado com outro nome/conteúdo (ex: reexportado), mas ainda
       // representando o mesmo pagamento já usado em outra conta.
-      const mesmaTransacaoJaUsada = todasContas.some(c =>
+      const contaConflitante = todasContas.find(c =>
         c.id !== conta.id && c.status === 'pago' && c.valor === conta.valor && (
           (!!data.dataPagamento && !!data.horaPagamento && c.dataPagamento === parseDataBR(data.dataPagamento) && c.horaPagamento === data.horaPagamento) ||
           (!!data.identificadorTransacao && !!c.comprovanteIdentificador && c.comprovanteIdentificador === data.identificadorTransacao)
         )
       )
-      if (mesmaTransacaoJaUsada) {
+      if (contaConflitante) {
         setDuplicado(true)
-        setErro(COMPROVANTE_DUPLICADO_MSG)
+        setErro(`${COMPROVANTE_DUPLICADO_MSG} (mesmos dados de "${contaConflitante.descricao}"${contaConflitante.dataPagamento ? ` — ${formatDate(contaConflitante.dataPagamento)}` : ''})`)
         return
       }
 

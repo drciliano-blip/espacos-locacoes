@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAtividades } from '@/contexts/AtividadesContext'
+import { getFiles, deleteFile } from '@/lib/file-storage'
 import type { ContaPagar, CategoriaContaPagar, StatusContaPagar } from '@/types'
 
 // Fundo de Caixa (transferência de saldo), Retirada Sócio (distribuição a
@@ -185,6 +186,14 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.from('contas_pagar').delete().eq('id', id)
     if (error) throw error
     setContas(prev => prev.filter(c => c.id !== id))
+    try {
+      const arquivos = await getFiles({ module: 'contas', entityId: id })
+      await Promise.all(arquivos.map(f => deleteFile(f.id)))
+    } catch {
+      // se a limpeza dos arquivos falhar, a conta já foi excluída — não deve
+      // travar o fluxo, mas o comprovante pode ficar órfão (bloqueando reenvio
+      // futuro do mesmo arquivo na checagem de duplicidade do "Dar baixa")
+    }
     if (alvo) {
       try {
         await logAtividade({ tipo: 'financeiro', acao: 'Conta a pagar excluída', detalhes: alvo.descricao, espaco: alvo.espaco !== 'Todos' ? alvo.espaco : undefined })
