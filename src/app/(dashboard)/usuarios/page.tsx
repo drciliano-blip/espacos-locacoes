@@ -61,6 +61,7 @@ export default function UsuariosPage() {
   const [espacosSelecionados, setEspacosSelecionados] = useState<string[]>([])
   const [carregandoEspacos, setCarregandoEspacos] = useState(false)
   const [salvando, setSalvando] = useState(false)
+  const [erroSalvar, setErroSalvar] = useState<string | null>(null)
   const [novoUsuarioOpen, setNovoUsuarioOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'usuarios' | 'permissoes'>('usuarios')
 
@@ -78,6 +79,7 @@ export default function UsuariosPage() {
     setEditingUser(user)
     setDraft({ nome: user.nome, role: user.role, ativo: user.ativo })
     setEspacosSelecionados([])
+    setErroSalvar(null)
     setModalOpen(true)
     setCarregandoEspacos(true)
     const supabase = createClient()
@@ -93,24 +95,30 @@ export default function UsuariosPage() {
   async function handleSave() {
     if (!editingUser || !draft.nome) return
     setSalvando(true)
+    setErroSalvar(null)
     const supabase = createClient()
     try {
-      await supabase
+      const { error: erroProfile } = await supabase
         .from('profiles')
         .update({ nome: draft.nome, role: draft.role, ativo: draft.ativo })
         .eq('id', editingUser.id)
+      if (erroProfile) throw erroProfile
 
       // Vínculo de espaços só importa pro papel "sócio", mas sincroniza sempre
       // que o modal foi usado — evita deixar vínculo velho de uma troca de papel.
-      await supabase.from('usuario_espacos').delete().eq('usuario_id', editingUser.id)
+      const { error: erroDelete } = await supabase.from('usuario_espacos').delete().eq('usuario_id', editingUser.id)
+      if (erroDelete) throw erroDelete
       if (draft.role === 'socio' && espacosSelecionados.length > 0) {
-        await supabase.from('usuario_espacos').insert(
+        const { error: erroInsert } = await supabase.from('usuario_espacos').insert(
           espacosSelecionados.map(espacoId => ({ usuario_id: editingUser.id, espaco_id: espacoId }))
         )
+        if (erroInsert) throw erroInsert
       }
 
       setModalOpen(false)
       loadUsuarios()
+    } catch (e) {
+      setErroSalvar(e instanceof Error ? e.message : 'Falha ao salvar — tente novamente.')
     } finally {
       setSalvando(false)
     }
@@ -322,8 +330,8 @@ export default function UsuariosPage() {
 
       {/* Modal editar */}
       {modalOpen && editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setModalOpen(false)}>
-          <div className="w-full max-w-md rounded-2xl border border-app-border bg-app-surface p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setModalOpen(false)}>
+          <div className="w-full max-w-md rounded-2xl border border-app-border bg-app-surface p-6 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-base font-bold text-app-text">Editar Usuário</h3>
               <button onClick={() => setModalOpen(false)} className="text-app-subtle hover:text-app-text">
@@ -418,6 +426,10 @@ export default function UsuariosPage() {
                 <span className="text-sm text-app-text2">{draft.ativo ? 'Usuário ativo' : 'Usuário inativo'}</span>
               </div>
             </div>
+
+            {erroSalvar && (
+              <p className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">{erroSalvar}</p>
+            )}
 
             <div className="flex justify-end gap-2 mt-6">
               <button
