@@ -195,6 +195,10 @@ export default function FechamentoClient() {
   const [obraDataInicioCustom, setObraDataInicioCustom] = useState('')
   const [obraDataFimCustom, setObraDataFimCustom] = useState('')
   const [obraDrillDown, setObraDrillDown] = useState<{ tipo: 'aportes' | 'despesas'; titulo: string; espaco: string } | null>(null)
+  // Drill-down do Resultado Operacional — mesma regra de conferência dos
+  // outros cards: sempre dá pra abrir o total e ver exatamente quais
+  // lançamentos pagos (mesmo filtro de período/espaço do FilterBar) o formam.
+  const [resultadoDrillDown, setResultadoDrillDown] = useState<'receitas' | 'despesas' | null>(null)
 
   const { obraDataInicio, obraDataFim } = useMemo(() => {
     if (obraPeriodoModo === 'mes') return { obraDataInicio: `${obraMes}-01`, obraDataFim: ultimoDiaDoMes(obraMes) }
@@ -252,6 +256,18 @@ export default function FechamentoClient() {
       .map(c => ({ id: c.id, data: c.dataPagamento ?? c.dataVencimento, socio: c.fornecedor ?? '—', espaco: c.espaco, valor: c.valor, descricao: c.descricao, observacoes: c.observacoes }))
   }, [obraDrillDown, aportesObraEscopo, despesasObraEscopo])
 
+  const resultadoDrillDownRows: LancamentoSocioRow[] = useMemo(() => {
+    if (resultadoDrillDown === 'receitas') {
+      return fechamento.entradasOperacionais.filter(r => r.status === 'pago')
+        .map(r => ({ id: r.id, data: r.data, socio: r.cliente ?? '—', espaco: r.espaco ?? '—', valor: r.valor, descricao: r.descricao, observacoes: r.observacoes }))
+    }
+    if (resultadoDrillDown === 'despesas') {
+      return fechamento.despesasOperacionais.filter(c => c.status === 'pago')
+        .map(c => ({ id: c.id, data: c.dataPagamento ?? c.dataVencimento, socio: c.fornecedor ?? '—', espaco: c.espaco, valor: c.valor, descricao: c.descricao, observacoes: c.observacoes }))
+    }
+    return []
+  }, [resultadoDrillDown, fechamento])
+
   // Sócios por espaço — aporte/retirada individualizados (nunca reagrupados),
   // repasse calculado sobre o Disponível para Distribuição daquele espaço.
   const sociosPorEspaco = useMemo(() => espacos.map(e => {
@@ -297,14 +313,16 @@ export default function FechamentoClient() {
       <section className="rounded-2xl border border-app-border bg-app-surface p-5 space-y-3">
         <h4 className="text-xs font-semibold text-app-muted uppercase tracking-wide">Resultado Operacional</h4>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="min-w-0 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+          <button type="button" onClick={() => setResultadoDrillDown('receitas')}
+            className="min-w-0 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-left hover:border-emerald-500/40 transition-colors">
             <div className="flex items-center gap-2 mb-1"><ArrowUpCircle className="h-4 w-4 shrink-0 text-emerald-500" /><span className="text-xs text-emerald-600 font-medium">Receitas</span></div>
             <p className="text-lg font-bold text-emerald-600 break-words">{formatCurrency(fechamento.totalEntradas)}</p>
-          </div>
-          <div className="min-w-0 rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+          </button>
+          <button type="button" onClick={() => setResultadoDrillDown('despesas')}
+            className="min-w-0 rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-left hover:border-red-500/40 transition-colors">
             <div className="flex items-center gap-2 mb-1"><ArrowDownCircle className="h-4 w-4 shrink-0 text-red-500" /><span className="text-xs text-red-600 font-medium">Despesas</span></div>
             <p className="text-lg font-bold text-red-600 break-words">{formatCurrency(fechamento.totalSaidas)}</p>
-          </div>
+          </button>
           <div className={`min-w-0 rounded-xl border p-4 ${fechamento.resultado >= 0 ? 'border-[#25D366]/25 bg-[#25D366]/5' : 'border-red-500/20 bg-red-500/5'}`}>
             <div className="flex items-center gap-2 mb-1"><Wallet className={`h-4 w-4 shrink-0 ${fechamento.resultado >= 0 ? 'text-[#128C7E]' : 'text-red-500'}`} /><span className={`text-xs font-medium ${fechamento.resultado >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>Resultado</span></div>
             <p className={`text-lg font-bold break-words ${fechamento.resultado >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>{formatCurrency(fechamento.resultado)}</p>
@@ -604,6 +622,16 @@ export default function FechamentoClient() {
           fileModule={drillDown.tipo === 'aportes' ? 'receitas' : 'contas'}
           onClose={() => setDrillDown(null)}
           onEdit={drillDown.tipo === 'aportes' ? id => setEditandoAporteId(id) : id => setEditandoRetiradaId(id)}
+        />
+      )}
+
+      {resultadoDrillDown && (
+        <LancamentoSocioListModal
+          titulo={resultadoDrillDown === 'receitas' ? 'Receitas Operacionais — período filtrado' : 'Despesas Operacionais — período filtrado'}
+          rows={resultadoDrillDownRows}
+          fileModule={resultadoDrillDown === 'receitas' ? 'receitas' : 'contas'}
+          colunaPessoa={resultadoDrillDown === 'receitas' ? 'Cliente' : 'Fornecedor'}
+          onClose={() => setResultadoDrillDown(null)}
         />
       )}
 
