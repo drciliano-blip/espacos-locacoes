@@ -72,6 +72,19 @@ export interface FechamentoResultado {
   obraPorEspaco: ObraEspacoResumo[]
 }
 
+// Data usada pra encaixar um lançamento num período: se já foi pago/recebido,
+// é a data real do pagamento/recebimento — não o vencimento original. Uma
+// conta paga antes de vencer precisa contar no período em que o dinheiro
+// realmente saiu, senão o Financeiro (que filtra por período) fica menor que
+// o total de Contas Pagas (que não filtra por período por padrão) sempre que
+// existir pagamento antecipado.
+function dataEfetivaReceita(r: Receita): string {
+  return r.status === 'pago' && r.dataRecebimento ? r.dataRecebimento : r.data
+}
+function dataEfetivaConta(c: ContaPagar): string {
+  return c.status === 'pago' && c.dataPagamento ? c.dataPagamento : c.dataVencimento
+}
+
 export function calcularFechamento(
   receitas: Receita[],
   contasPagar: ContaPagar[],
@@ -80,14 +93,16 @@ export function calcularFechamento(
 ): FechamentoResultado {
   const entradas = receitas.filter(r => {
     const matchEspaco = !selectedSpaces?.length || (r.espaco && selectedSpaces.includes(r.espaco))
-    const matchInicio = !dataInicio || r.data >= dataInicio
-    const matchFim = !dataFim || r.data <= dataFim
+    const data = dataEfetivaReceita(r)
+    const matchInicio = !dataInicio || data >= dataInicio
+    const matchFim = !dataFim || data <= dataFim
     return matchEspaco && matchInicio && matchFim
   })
   const saidas = contasPagar.filter(c => {
     const matchEspaco = !selectedSpaces?.length || selectedSpaces.includes(c.espaco)
-    const matchInicio = !dataInicio || c.dataVencimento >= dataInicio
-    const matchFim = !dataFim || c.dataVencimento <= dataFim
+    const data = dataEfetivaConta(c)
+    const matchInicio = !dataInicio || data >= dataInicio
+    const matchFim = !dataFim || data <= dataFim
     return matchEspaco && matchInicio && matchFim
   })
 
