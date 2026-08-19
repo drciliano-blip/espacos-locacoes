@@ -10,8 +10,9 @@ import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useRepasses } from '@/contexts/RepassesContext'
 import { useCurrentUser } from '@/contexts/UserContext'
+import { useFundos } from '@/contexts/FundosContext'
 import { DIVISAO_SOCIOS } from '@/lib/socios-config'
-import { calcularFechamento } from '@/lib/fechamento-calc'
+import { calcularFechamento, reservasGenericasNoPeriodo } from '@/lib/fechamento-calc'
 import { parseCurrencyBR } from '@/lib/utils'
 import { X } from 'lucide-react'
 import { downloadWorkbook, type ExportSheet } from '@/lib/xlsx-export'
@@ -43,6 +44,7 @@ export default function RelatoriosClient() {
   const { contas: contasPagar } = useContasPagar()
   const { espacosConfig } = useEspacos()
   const { repasses, addRepasse } = useRepasses()
+  const { fundos, movimentacoes } = useFundos()
   const { role } = useCurrentUser()
   const podeRegistrarRepasse = role === 'admin' || role === 'financeiro'
   const [filters, setFilters] = useState<RelatorioFilters>(getDefaultFilters)
@@ -96,7 +98,8 @@ export default function RelatoriosClient() {
       const despesaTotal = despesasOperacionais.filter(c => c.status === 'pago' && c.espaco === e.nome).reduce((s, c) => s + c.valor, 0)
       const transferenciasEspaco = transferenciasFundo.filter(c => c.status === 'pago' && c.espaco === e.nome).reduce((s, c) => s + c.valor, 0)
       const retornosEspaco = retornosFundo.filter(r => r.status === 'pago' && r.espaco === e.nome).reduce((s, r) => s + r.valor, 0)
-      const lucro = receitaTotal - despesaTotal - transferenciasEspaco + retornosEspaco
+      const reservasEspaco = reservasGenericasNoPeriodo(fundos.filter(f => f.espaco === e.nome), movimentacoes, filters.dataInicio, filters.dataFim)
+      const lucro = receitaTotal - despesaTotal - transferenciasEspaco + retornosEspaco - reservasEspaco
       const socios = DIVISAO_SOCIOS[e.nome] ?? []
       for (const s of socios) {
         const valorDevido = lucro * (s.percentual / 100)
@@ -107,7 +110,7 @@ export default function RelatoriosClient() {
       }
     }
     return rows
-  }, [espacosParaTabela, entradasOperacionais, despesasOperacionais, transferenciasFundo, retornosFundo, repasses, filters.dataInicio, filters.dataFim])
+  }, [espacosParaTabela, entradasOperacionais, despesasOperacionais, transferenciasFundo, retornosFundo, fundos, movimentacoes, repasses, filters.dataInicio, filters.dataFim])
 
   function handleExportExcel() {
     const totalEntradasPeriodo = entradasOperacionais.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)

@@ -2,6 +2,7 @@ import { isReceitaOperacional } from '@/contexts/ReceitasContext'
 import { isDespesaOperacional, isDespesaObra } from '@/contexts/ContasPagarContext'
 import { SOCIOS_OBRA, INVESTIMENTOS_SOCIETARIOS, nomeCanonicoSocio, type InvestimentoSocietario } from '@/lib/socios-config'
 import type { Receita } from '@/contexts/ReceitasContext'
+import type { Fundo, MovimentacaoFundo } from '@/contexts/FundosContext'
 import type { ContaPagar } from '@/types'
 
 // Lógica compartilhada entre Relatórios (RelatorioMensalSection) e a aba
@@ -64,8 +65,15 @@ export interface FechamentoResultado {
   saldoFundoAtual: number
   saldoDisponivelForaFundo: number
 
+  // Reservas genéricas (Reserva Impostos, Reserva Obra, etc. — nunca o Fundo
+  // de Caixa, que já entra em totalTransferenciasFundo/totalRetornosFundo)
+  // separadas no período, dentro do escopo de espaço filtrado.
+  totalReservasGenericas: number
+
   // Disponível para Distribuição (período filtrado) — só esse valor deve
   // alimentar o cálculo de repasse aos sócios, nunca o Resultado bruto.
+  // Resultado Operacional − tudo que foi separado em Fundo de Caixa/Reservas
+  // no período (+ o que voltou) — dinheiro reservado nunca é distribuível.
   disponivelParaDistribuicao: number
 
   // Fechamento da Obra — acumulado desde o início, só por espaço com obra.
@@ -85,11 +93,32 @@ function dataEfetivaConta(c: ContaPagar): string {
   return c.status === 'pago' && c.dataPagamento ? c.dataPagamento : c.dataVencimento
 }
 
+// Net (entradas − saídas) das reservas genéricas (Reserva Impostos, Reserva
+// Obra etc. — nunca o Fundo de Caixa) dentro de um período, escopado a um
+// conjunto de fundos já filtrado por espaço. Fica exportada pra Financeiro e
+// Relatórios calcularem a mesma coisa por espaço individual (repasse por
+// sócio), sem duplicar a lógica de soma.
+export function reservasGenericasNoPeriodo(
+  fundosEmEscopo: Fundo[],
+  movimentacoes: MovimentacaoFundo[],
+  dataInicio?: string,
+  dataFim?: string,
+): number {
+  const idsEmEscopo = new Set(fundosEmEscopo.map(f => f.id))
+  const movs = movimentacoes.filter(m =>
+    idsEmEscopo.has(m.fundoId) && (!dataInicio || m.data >= dataInicio) && (!dataFim || m.data <= dataFim),
+  )
+  return movs.filter(m => m.tipo === 'entrada').reduce((s, m) => s + m.valor, 0)
+    - movs.filter(m => m.tipo === 'saida').reduce((s, m) => s + m.valor, 0)
+}
+
 export function calcularFechamento(
   receitas: Receita[],
   contasPagar: ContaPagar[],
   { selectedSpaces, dataInicio, dataFim }: FiltroFechamento,
   espacosEmEscopo: { nome: string }[],
+  fundos: Fundo[] = [],
+  movimentacoesFundo: MovimentacaoFundo[] = [],
 ): FechamentoResultado {
   const entradas = receitas.filter(r => {
     const matchEspaco = !selectedSpaces?.length || (r.espaco && selectedSpaces.includes(r.espaco))
@@ -163,11 +192,20 @@ export function calcularFechamento(
     entradasOperAllTime + outrasAllTime + aportesAllTime + fundoReturnsAllTime
     - despesasOperAllTime - retiradasAllTime - fundoTransfersAllTime
 
-  // Disponível para Distribuição: Resultado Operacional do período menos o que
-  // entrou em fundo/reserva no período mais o que voltou do fundo no período.
-  // Transferir pro Fundo de Caixa não é despesa (por isso não mexe no
-  // Resultado), mas reduz o quanto sobra pra repassar aos sócios agora.
-  const disponivelParaDistribuicao = resultado - totalTransferenciasFundo + totalRetornosFundo
+  // Reservas genéricas (Reserva Impostos, Reserva Obra etc.) dentro do mesmo
+  // escopo de espaço do período filtrado — um fundo sem espaço é da empresa
+  // toda e sempre entra; um fundo com espaço só entra se aquele espaço
+  // estiver no filtro (ou nenhum filtro aplicado), mesma regra usada pros
+  // demais totais acima.
+  const fundosEmEscopo = fundos.filter(f => !f.espaco || !selectedSpaces?.length || selectedSpaces.includes(f.espaco))
+  const totalReservasGenericas = reservasGenericasNoPeriodo(fundosEmEscopo, movimentacoesFundo, dataInicio, dataFim)
+
+  // Disponível para Distribuição: Resultado Operacional do período menos tudo
+  // que foi separado em Fundo de Caixa/Reservas no período (mais o que voltou
+  // do Fundo de Caixa). Reservas nunca são despesa (não mexem no Resultado),
+  // mas reduzem o quanto sobra pra repassar aos sócios agora — dinheiro
+  // reservado nunca deve ser contado como disponível pra distribuição.
+  const disponivelParaDistribuicao = resultado - totalTransferenciasFundo + totalRetornosFundo - totalReservasGenericas
 
   const obraPorEspaco = calcularObraPorEspaco(entradasAllTime, saidasAllTime, espacosEmEscopo, nomesComObra)
 
@@ -176,7 +214,7 @@ export function calcularFechamento(
     aportes, totalAportes, retiradasSocio, totalRetiradasSocio,
     outrasEntradas, totalOutrasEntradas, transferenciasFundo, totalTransferenciasFundo, retornosFundo, totalRetornosFundo,
     aportesObra, despesasObra,
-    saldoFundoAtual, saldoDisponivelForaFundo, disponivelParaDistribuicao,
+    saldoFundoAtual, saldoDisponivelForaFundo, totalReservasGenericas, disponivelParaDistribuicao,
     obraPorEspaco,
   }
 }

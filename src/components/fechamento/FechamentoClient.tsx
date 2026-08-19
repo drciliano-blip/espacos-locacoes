@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import FilterBar, { type RelatorioFilters } from '@/components/relatorios/FilterBar'
 import { getPeriodRange } from '@/lib/relatorios-utils'
-import { calcularFechamento } from '@/lib/fechamento-calc'
+import { calcularFechamento, reservasGenericasNoPeriodo } from '@/lib/fechamento-calc'
 import { useReceitas } from '@/contexts/ReceitasContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { useEspacos } from '@/contexts/EspacosContext'
@@ -78,8 +78,8 @@ export default function FechamentoClient() {
   const espacoUnico = selectedSpaces?.length === 1 ? selectedSpaces[0] : undefined
 
   const fechamento = useMemo(
-    () => calcularFechamento(receitas, contasPagar, { selectedSpaces, dataInicio: filters.dataInicio, dataFim: filters.dataFim }, espacos),
-    [receitas, contasPagar, selectedSpaces, filters.dataInicio, filters.dataFim, espacos],
+    () => calcularFechamento(receitas, contasPagar, { selectedSpaces, dataInicio: filters.dataInicio, dataFim: filters.dataFim }, espacos, fundos, movimentacoes),
+    [receitas, contasPagar, selectedSpaces, filters.dataInicio, filters.dataFim, espacos, fundos, movimentacoes],
   )
 
   const nomesSociosDisponiveis = useMemo(() => {
@@ -275,12 +275,13 @@ export default function FechamentoClient() {
     const despesaTotal = fechamento.despesasOperacionais.filter(c => c.status === 'pago' && c.espaco === e.nome).reduce((s, c) => s + c.valor, 0)
     const transferenciasEspaco = fechamento.transferenciasFundo.filter(c => c.status === 'pago' && c.espaco === e.nome).reduce((s, c) => s + c.valor, 0)
     const retornosEspaco = fechamento.retornosFundo.filter(r => r.status === 'pago' && r.espaco === e.nome).reduce((s, r) => s + r.valor, 0)
-    const disponivel = receitaTotal - despesaTotal - transferenciasEspaco + retornosEspaco
+    const reservasEspaco = reservasGenericasNoPeriodo(fundos.filter(f => f.espaco === e.nome), movimentacoes, filters.dataInicio, filters.dataFim)
+    const disponivel = receitaTotal - despesaTotal - transferenciasEspaco + retornosEspaco - reservasEspaco
     const socios = (DIVISAO_SOCIOS[e.nome] ?? []).map(s => ({
       nome: s.nome, percentual: s.percentual, valorDevido: disponivel * (s.percentual / 100),
     }))
     return { nome: e.nome, disponivel, socios }
-  }), [espacos, fechamento])
+  }), [espacos, fechamento, fundos, movimentacoes, filters.dataInicio, filters.dataFim])
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">
@@ -454,10 +455,23 @@ export default function FechamentoClient() {
       {/* 4. Disponível para Distribuição */}
       <section className="rounded-2xl border border-app-border bg-app-surface p-5 space-y-3">
         <h4 className="text-xs font-semibold text-app-muted uppercase tracking-wide">Disponível para Distribuição</h4>
-        <div className="rounded-lg border border-[#25D366]/25 bg-[#25D366]/5 p-4">
-          <p className="text-xs text-app-subtle">Resultado Operacional − Transferências pro Fundo de Caixa (período) + Retornos do Fundo (período)</p>
-          <p className={`text-2xl font-bold mt-1 ${fechamento.disponivelParaDistribuicao >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>{formatCurrency(fechamento.disponivelParaDistribuicao)}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+          <div className="rounded-lg border border-app-border2/60 bg-app-bg p-3">
+            <p className="text-app-subtle">Resultado Operacional</p>
+            <p className="font-semibold text-app-text">{formatCurrency(fechamento.resultado)}</p>
+          </div>
+          <div className="rounded-lg border border-app-border2/60 bg-app-bg p-3">
+            <p className="text-app-subtle">(−) Fundo de Caixa / Reservas (período)</p>
+            <p className="font-semibold text-amber-600">{formatCurrency(fechamento.totalTransferenciasFundo - fechamento.totalRetornosFundo + fechamento.totalReservasGenericas)}</p>
+          </div>
+          <div className="rounded-lg border border-[#25D366]/25 bg-[#25D366]/5 p-3">
+            <p className="text-app-subtle">= Disponível para Distribuição</p>
+            <p className={`text-lg font-bold ${fechamento.disponivelParaDistribuicao >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>{formatCurrency(fechamento.disponivelParaDistribuicao)}</p>
+          </div>
         </div>
+        <p className="text-xs text-app-subtle">
+          Reservas nunca são despesa — não reduzem o Resultado Operacional, só o quanto sobra pra distribuir aos sócios. Inclui Fundo de Caixa e todos os fundos/reservas genéricos (Reserva Impostos, Reserva Obra etc.) criados na seção acima, líquido do que voltou no período.
+        </p>
       </section>
 
       {/* 5. Sócios — organizado por sócio (não por data); o histórico
