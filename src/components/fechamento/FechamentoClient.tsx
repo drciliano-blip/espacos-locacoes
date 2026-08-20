@@ -147,16 +147,18 @@ export default function FechamentoClient() {
     return true
   }), [contasPagar, selectedSpaces])
 
-  // Total de Aportes/Retiradas/Saldo por sócio — soma TODOS os lançamentos
-  // pagos (não só o último) dentro do escopo acima. Nunca substitui o
-  // histórico — é só um total calculado por cima dele, que se recalcula
-  // sozinho a cada aporte/retirada criado, editado ou excluído porque lê
-  // direto do ReceitasContext/ContasPagarContext.
+  // Total de Aportes/Retiradas por sócio — soma TODOS os lançamentos pagos
+  // (não só o último) dentro do escopo acima. Nunca substitui o histórico —
+  // é só um total calculado por cima dele, que se recalcula sozinho a cada
+  // aporte/retirada criado, editado ou excluído porque lê direto do
+  // ReceitasContext/ContasPagarContext. Sem "saldo" (aporte − retirada) de
+  // propósito: aporte e retirada têm finalidades diferentes e nunca devem
+  // ser compensados entre si.
   const resumoPorSocio = useMemo(() => {
     const porSocio = nomesSociosDisponiveis.map(nome => {
       const totalAportes = aportesSocioEscopo.filter(r => r.status === 'pago' && r.socioResponsavel && nomeCanonicoSocio(r.socioResponsavel) === nome).reduce((s, r) => s + r.valor, 0)
       const totalRetiradas = retiradasSocioEscopo.filter(c => c.status === 'pago' && c.fornecedor && nomeCanonicoSocio(c.fornecedor) === nome).reduce((s, c) => s + c.valor, 0)
-      return { nome, totalAportes, totalRetiradas, saldo: totalAportes - totalRetiradas }
+      return { nome, totalAportes, totalRetiradas }
     })
     // Toda conta paga classificada como Retirada Sócio deve constar em algum
     // lugar aqui — se o campo Sócio não bater com nenhum dos cadastrados nem
@@ -401,8 +403,8 @@ export default function FechamentoClient() {
     const sociosResumoSheet: ExportSheet = {
       name: 'Sócios - Resumo',
       rows: [
-        ['Sócio', 'Total Aportado', 'Total Retirado', 'Saldo'],
-        ...resumoPorSocio.porSocio.map(s => [s.nome, s.totalAportes, s.totalRetiradas, s.saldo]),
+        ['Sócio', 'Total Aportado', 'Total Retirado'],
+        ...resumoPorSocio.porSocio.map(s => [s.nome, s.totalAportes, s.totalRetiradas]),
       ],
     }
 
@@ -661,7 +663,8 @@ export default function FechamentoClient() {
 
         <p className="text-xs text-app-subtle">Valores acumulados desde o início. Retiradas somam lançamentos manuais e Contas Pagas classificadas como Retirada Sócio, sem duplicidade.</p>
 
-        {/* Resumo por sócio — nome, total de aportes, total de retiradas, saldo */}
+        {/* Resumo por sócio — nome, total de aportes, total de retiradas. Sem
+            "saldo" de propósito: aporte e retirada não se compensam. */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {resumoPorSocio.porSocio.map(s => (
             <SocioResumoCard
@@ -669,7 +672,6 @@ export default function FechamentoClient() {
               nome={s.nome}
               totalAportes={s.totalAportes}
               totalRetiradas={s.totalRetiradas}
-              saldo={s.saldo}
               onVerAportes={() => setDrillDown({ tipo: 'aportes', titulo: `Aportes — ${s.nome}`, nomes: [s.nome] })}
               onVerRetiradas={() => setDrillDown({ tipo: 'retiradas', titulo: `Retiradas — ${s.nome}`, nomes: [s.nome] })}
             />
@@ -993,29 +995,26 @@ function ResumoStatAcionavel({ label, valor, cor, onVisualizar, onExportExcel, o
   )
 }
 
-function SocioResumoCard({ nome, totalAportes, totalRetiradas, saldo, onVerAportes, onVerRetiradas }: {
+function SocioResumoCard({ nome, totalAportes, totalRetiradas, onVerAportes, onVerRetiradas }: {
   nome: string
   totalAportes: number
   totalRetiradas: number
-  saldo: number
   onVerAportes: () => void
   onVerRetiradas: () => void
 }) {
   return (
     <div className="rounded-lg border border-app-border2/60 bg-app-bg p-4 space-y-3">
       <p className="text-sm font-semibold text-app-text">{nome}</p>
-      <div className="grid grid-cols-3 gap-2 text-xs">
+      {/* Aporte e retirada nunca se compensam — por isso não existe um
+          card de "Saldo" aqui, de propósito. */}
+      <div className="grid grid-cols-2 gap-2 text-xs">
         <div>
-          <p className="text-app-subtle">Aportes</p>
+          <p className="text-app-subtle">Total de Aportes</p>
           <p className="font-semibold text-violet-600">{formatCurrency(totalAportes)}</p>
         </div>
         <div>
-          <p className="text-app-subtle">Retiradas</p>
+          <p className="text-app-subtle">Total de Retiradas</p>
           <p className="font-semibold text-fuchsia-600">{formatCurrency(totalRetiradas)}</p>
-        </div>
-        <div>
-          <p className="text-app-subtle">Saldo</p>
-          <p className={`font-semibold ${saldo >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>{formatCurrency(saldo)}</p>
         </div>
       </div>
       <div className="flex gap-2">
