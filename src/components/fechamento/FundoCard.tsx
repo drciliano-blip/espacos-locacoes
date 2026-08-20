@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Vault, Plus, Minus, History } from 'lucide-react'
+import { Vault, Plus, Minus, History, Trash2 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { useFundos, type Fundo, type MovimentacaoFundo, type TipoMovimentacaoFundo } from '@/contexts/FundosContext'
 import MovimentacaoFundoModal from './MovimentacaoFundoModal'
@@ -14,14 +14,30 @@ interface Props {
 }
 
 export default function FundoCard({ fundo, movimentacoes, podeMovimentar, onMovimentado }: Props) {
-  const { addMovimentacao } = useFundos()
+  const { addMovimentacao, deleteFundo } = useFundos()
   const [movimentando, setMovimentando] = useState<TipoMovimentacaoFundo | null>(null)
   const [verHistorico, setVerHistorico] = useState(false)
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState(false)
+  const [excluindo, setExcluindo] = useState(false)
+  const [erroExcluir, setErroExcluir] = useState<string | null>(null)
 
   const totalEntradas = movimentacoes.filter(m => m.tipo === 'entrada').reduce((s, m) => s + m.valor, 0)
   const totalSaidas = movimentacoes.filter(m => m.tipo === 'saida').reduce((s, m) => s + m.valor, 0)
   const saldo = totalEntradas - totalSaidas
-  const progresso = fundo.meta && fundo.meta > 0 ? Math.min(100, Math.max(0, (saldo / fundo.meta) * 100)) : null
+  const podeExcluir = saldo === 0
+
+  async function handleExcluir() {
+    setExcluindo(true)
+    setErroExcluir(null)
+    try {
+      await deleteFundo(fundo.id)
+      onMovimentado(`Fundo "${fundo.nome}" excluído.`)
+    } catch (err) {
+      setErroExcluir(err instanceof Error ? err.message : 'Falha ao excluir o fundo.')
+    } finally {
+      setExcluindo(false)
+    }
+  }
 
   return (
     <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 p-4 space-y-3">
@@ -40,13 +56,8 @@ export default function FundoCard({ fundo, movimentacoes, podeMovimentar, onMovi
         </div>
       </div>
 
-      {progresso !== null && (
-        <div>
-          <div className="h-1.5 rounded-full bg-app-surface2 overflow-hidden">
-            <div className="h-full bg-amber-500" style={{ width: `${progresso}%` }} />
-          </div>
-          <p className="text-[11px] text-app-subtle mt-1">{progresso.toFixed(0)}% da meta de {formatCurrency(fundo.meta as number)}</p>
-        </div>
+      {erroExcluir && (
+        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">{erroExcluir}</p>
       )}
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -69,7 +80,36 @@ export default function FundoCard({ fundo, movimentacoes, podeMovimentar, onMovi
           <History className="h-3.5 w-3.5" />
           {verHistorico ? 'Ocultar histórico' : `Histórico (${movimentacoes.length})`}
         </button>
+        {podeMovimentar && (
+          <button onClick={() => setConfirmandoExclusao(true)} disabled={!podeExcluir}
+            title={podeExcluir ? undefined : 'Só é possível excluir um fundo com saldo zerado.'}
+            className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-app-muted">
+            <Trash2 className="h-3.5 w-3.5" />
+            Excluir
+          </button>
+        )}
       </div>
+
+      {confirmandoExclusao && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setConfirmandoExclusao(false)}>
+          <div className="w-full max-w-sm rounded-2xl border border-app-border bg-app-surface p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-bold text-app-text mb-2">Excluir fundo?</h3>
+            <p className="text-sm text-app-muted mb-5">
+              "{fundo.nome}" — saldo R$ 0,00. Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setConfirmandoExclusao(false)} disabled={excluindo}
+                className="rounded-lg border border-app-border2 px-4 py-2 text-sm text-app-muted hover:bg-app-surface2 transition-colors disabled:opacity-50">
+                Cancelar
+              </button>
+              <button onClick={async () => { await handleExcluir(); setConfirmandoExclusao(false) }} disabled={excluindo}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 transition-colors disabled:opacity-50">
+                {excluindo ? 'Excluindo…' : 'Excluir'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {verHistorico && (
         <div className="overflow-x-auto">

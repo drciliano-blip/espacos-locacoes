@@ -12,7 +12,7 @@ import { useRepasses } from '@/contexts/RepassesContext'
 import { useCurrentUser } from '@/contexts/UserContext'
 import { useFundos } from '@/contexts/FundosContext'
 import { DIVISAO_SOCIOS } from '@/lib/socios-config'
-import { calcularFechamento, reservasGenericasNoPeriodo } from '@/lib/fechamento-calc'
+import { calcularFechamento } from '@/lib/fechamento-calc'
 import { parseCurrencyBR } from '@/lib/utils'
 import { X } from 'lucide-react'
 import { downloadWorkbook, type ExportSheet } from '@/lib/xlsx-export'
@@ -81,25 +81,22 @@ export default function RelatoriosClient() {
     aportes, retiradasSocio,
     outrasEntradas, transferenciasFundo, retornosFundo,
     aportesObra, despesasObra,
+    disponivelPorEspaco,
   } = useMemo(
-    () => calcularFechamento(receitas, contasPagar, { selectedSpaces, dataInicio: filters.dataInicio, dataFim: filters.dataFim }, espacosParaTabela),
-    [receitas, contasPagar, selectedSpaces, filters.dataInicio, filters.dataFim, espacosParaTabela],
+    () => calcularFechamento(receitas, contasPagar, { selectedSpaces, dataInicio: filters.dataInicio, dataFim: filters.dataFim }, espacosParaTabela, fundos, movimentacoes),
+    [receitas, contasPagar, selectedSpaces, filters.dataInicio, filters.dataFim, espacosParaTabela, fundos, movimentacoes],
   )
 
-  // Repasse para os sócios do período — usa o Disponível para Distribuição
-  // (lucro operacional do espaço menos o que foi separado pro Fundo de Caixa no
-  // período, mais o que voltou dele), nunca o lucro bruto — senão dinheiro já
-  // reservado seria repassado também. "Já repassado" soma os lançamentos reais
-  // de repasse (tela de Fluxo de Caixa) dentro do mesmo período.
+  // Repasse para os sócios — usa o Disponível para Distribuição acumulado de
+  // cada espaço (fechamento-calc.ts, mesma fonte da aba Financeiro): Resultado
+  // Operacional acumulado menos reservas (Fundo de Caixa + genéricas) menos
+  // tudo que os sócios já retiraram, nunca o lucro bruto do período. "Já
+  // repassado" soma os lançamentos reais de repasse (tela de Fluxo de Caixa)
+  // dentro do período filtrado.
   const repasseSociosRows = useMemo(() => {
     const rows: { espaco: string; socio: string; percentual: number; lucro: number; valorDevido: number; jaRepassado: number; valorPendente: number }[] = []
     for (const e of espacosParaTabela) {
-      const receitaTotal = entradasOperacionais.filter(r => r.status === 'pago' && r.espaco === e.nome).reduce((s, r) => s + r.valor, 0)
-      const despesaTotal = despesasOperacionais.filter(c => c.status === 'pago' && c.espaco === e.nome).reduce((s, c) => s + c.valor, 0)
-      const transferenciasEspaco = transferenciasFundo.filter(c => c.status === 'pago' && c.espaco === e.nome).reduce((s, c) => s + c.valor, 0)
-      const retornosEspaco = retornosFundo.filter(r => r.status === 'pago' && r.espaco === e.nome).reduce((s, r) => s + r.valor, 0)
-      const reservasEspaco = reservasGenericasNoPeriodo(fundos.filter(f => f.espaco === e.nome), movimentacoes, filters.dataInicio, filters.dataFim)
-      const lucro = receitaTotal - despesaTotal - transferenciasEspaco + retornosEspaco - reservasEspaco
+      const lucro = disponivelPorEspaco.find(d => d.nome === e.nome)?.disponivel ?? 0
       const socios = DIVISAO_SOCIOS[e.nome] ?? []
       for (const s of socios) {
         const valorDevido = lucro * (s.percentual / 100)
@@ -110,7 +107,7 @@ export default function RelatoriosClient() {
       }
     }
     return rows
-  }, [espacosParaTabela, entradasOperacionais, despesasOperacionais, transferenciasFundo, retornosFundo, fundos, movimentacoes, repasses, filters.dataInicio, filters.dataFim])
+  }, [espacosParaTabela, disponivelPorEspaco, repasses, filters.dataInicio, filters.dataFim])
 
   function handleExportExcel() {
     const totalEntradasPeriodo = entradasOperacionais.filter(r => r.status === 'pago').reduce((s, r) => s + r.valor, 0)

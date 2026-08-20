@@ -20,7 +20,6 @@ export default function NovoFundoModal({ onClose, onSave, onSaved }: Props) {
   const [nome, setNome] = useState('')
   const [descricao, setDescricao] = useState('')
   const [espaco, setEspaco] = useState('')
-  const [meta, setMeta] = useState('')
   const [valorInicial, setValorInicial] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -39,7 +38,6 @@ export default function NovoFundoModal({ onClose, onSave, onSaved }: Props) {
         nome: nome.trim(),
         descricao: descricao.trim() || undefined,
         espaco: espaco || undefined,
-        meta: meta ? parseCurrencyBR(meta) : undefined,
         valorInicial: valorInicial ? parseCurrencyBR(valorInicial) : undefined,
       })
       onSaved()
@@ -97,27 +95,15 @@ export default function NovoFundoModal({ onClose, onSave, onSaved }: Props) {
             </select>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-app-subtle mb-0.5 block">Meta (R$, opcional)</label>
-              <input
-                type="text" inputMode="decimal"
-                value={meta}
-                onChange={e => setMeta(e.target.value)}
-                placeholder="0,00"
-                className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-app-subtle mb-0.5 block">Valor inicial (R$, opcional)</label>
-              <input
-                type="text" inputMode="decimal"
-                value={valorInicial}
-                onChange={e => setValorInicial(e.target.value)}
-                placeholder="0,00"
-                className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
-              />
-            </div>
+          <div>
+            <label className="text-xs text-app-subtle mb-0.5 block">Valor (R$) — quanto existe hoje nessa reserva</label>
+            <input
+              type="text" inputMode="decimal"
+              value={valorInicial}
+              onChange={e => setValorInicial(e.target.value)}
+              placeholder="0,00"
+              className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
+            />
           </div>
 
           {erro && (

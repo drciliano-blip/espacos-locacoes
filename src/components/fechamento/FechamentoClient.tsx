@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import FilterBar, { type RelatorioFilters } from '@/components/relatorios/FilterBar'
 import { getPeriodRange } from '@/lib/relatorios-utils'
-import { calcularFechamento, reservasGenericasNoPeriodo } from '@/lib/fechamento-calc'
+import { calcularFechamento } from '@/lib/fechamento-calc'
 import { useReceitas } from '@/contexts/ReceitasContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { useEspacos } from '@/contexts/EspacosContext'
@@ -44,14 +44,6 @@ export default function FechamentoClient() {
   const [novoFundoOpen, setNovoFundoOpen] = useState(false)
   const [novoAporteOpen, setNovoAporteOpen] = useState(false)
   const [novaRetiradaOpen, setNovaRetiradaOpen] = useState(false)
-  // Filtro de período específico da área de Sócios — independente do período
-  // geral da página (que rege Resultado Operacional/Obra/etc). Sem filtro
-  // (modo 'historico') mostra o total acumulado desde sempre de cada sócio.
-  const [socioPeriodoModo, setSocioPeriodoModo] = useState<'historico' | 'mes' | 'ano' | 'personalizado'>('historico')
-  const [socioMes, setSocioMes] = useState(() => new Date().toISOString().slice(0, 7))
-  const [socioAno, setSocioAno] = useState(() => String(new Date().getFullYear()))
-  const [socioDataInicioCustom, setSocioDataInicioCustom] = useState('')
-  const [socioDataFimCustom, setSocioDataFimCustom] = useState('')
   const [drillDown, setDrillDown] = useState<{ tipo: 'aportes' | 'retiradas'; titulo: string; nomes: string[]; naoIdentificado?: boolean } | null>(null)
   const [editandoAporteId, setEditandoAporteId] = useState<string | null>(null)
   const [editandoRetiradaId, setEditandoRetiradaId] = useState<string | null>(null)
@@ -88,39 +80,21 @@ export default function FechamentoClient() {
     return Array.from(nomes)
   }, [espacos])
 
-  function ultimoDiaDoMes(anoMes: string): string {
-    const [ano, mes] = anoMes.split('-').map(Number)
-    const dia = new Date(ano, mes, 0).getDate()
-    return `${anoMes}-${String(dia).padStart(2, '0')}`
-  }
-
-  const { socioDataInicio, socioDataFim } = useMemo(() => {
-    if (socioPeriodoModo === 'mes') return { socioDataInicio: `${socioMes}-01`, socioDataFim: ultimoDiaDoMes(socioMes) }
-    if (socioPeriodoModo === 'ano') return { socioDataInicio: `${socioAno}-01-01`, socioDataFim: `${socioAno}-12-31` }
-    if (socioPeriodoModo === 'personalizado') return { socioDataInicio: socioDataInicioCustom || undefined, socioDataFim: socioDataFimCustom || undefined }
-    return { socioDataInicio: undefined, socioDataFim: undefined }
-  }, [socioPeriodoModo, socioMes, socioAno, socioDataInicioCustom, socioDataFimCustom])
-
-  // Aportes/retiradas em escopo pro painel de Sócios — respeita o espaço
-  // selecionado no filtro geral da página e o período próprio de Sócios (sem
-  // filtro = histórico completo). Independente do período do FilterBar do
-  // topo, que rege as outras seções (Resultado Operacional, Obra, etc).
+  // Aportes/retiradas em escopo pro painel de Sócios — sempre acumulado
+  // (histórico completo), só respeita o espaço selecionado no filtro geral
+  // da página. É uma posição atual (quanto cada sócio já aportou/retirou),
+  // não um fluxo de período.
   const aportesSocioEscopo = useMemo(() => receitas.filter(r => {
     if (r.tipoEntrada !== 'aporte_societario') return false
     if (selectedSpaces?.length && (!r.espaco || !selectedSpaces.includes(r.espaco))) return false
-    if (socioDataInicio && r.data < socioDataInicio) return false
-    if (socioDataFim && r.data > socioDataFim) return false
     return true
-  }), [receitas, selectedSpaces, socioDataInicio, socioDataFim])
+  }), [receitas, selectedSpaces])
 
   const retiradasSocioEscopo = useMemo(() => contasPagar.filter(c => {
     if (c.categoria !== 'retirada_socio') return false
     if (selectedSpaces?.length && !selectedSpaces.includes(c.espaco)) return false
-    const data = c.dataPagamento ?? c.dataVencimento
-    if (socioDataInicio && data < socioDataInicio) return false
-    if (socioDataFim && data > socioDataFim) return false
     return true
-  }), [contasPagar, selectedSpaces, socioDataInicio, socioDataFim])
+  }), [contasPagar, selectedSpaces])
 
   // Total de Aportes/Retiradas/Saldo por sócio — soma TODOS os lançamentos
   // pagos (não só o último) dentro do escopo acima. Nunca substitui o
@@ -186,61 +160,31 @@ export default function FechamentoClient() {
   const totalDespesasObra = fechamento.obraPorEspaco.reduce((s, o) => s + o.totalDespesas, 0)
   const totalResultadoObra = totalAportesObra - totalDespesasObra
 
-  // Filtro de período específico da área de Obra — igual ao de Sócios,
-  // independente do período geral da página. Sem filtro (modo 'historico')
-  // mostra o saldo acumulado desde sempre, igual ao Saldo da Obra já exibido.
-  const [obraPeriodoModo, setObraPeriodoModo] = useState<'historico' | 'mes' | 'ano' | 'personalizado'>('historico')
-  const [obraMes, setObraMes] = useState(() => new Date().toISOString().slice(0, 7))
-  const [obraAno, setObraAno] = useState(() => String(new Date().getFullYear()))
-  const [obraDataInicioCustom, setObraDataInicioCustom] = useState('')
-  const [obraDataFimCustom, setObraDataFimCustom] = useState('')
   const [obraDrillDown, setObraDrillDown] = useState<{ tipo: 'aportes' | 'despesas'; titulo: string; espaco: string } | null>(null)
   // Drill-down do Resultado Operacional — mesma regra de conferência dos
   // outros cards: sempre dá pra abrir o total e ver exatamente quais
   // lançamentos pagos (mesmo filtro de período/espaço do FilterBar) o formam.
   const [resultadoDrillDown, setResultadoDrillDown] = useState<'receitas' | 'despesas' | null>(null)
 
-  const { obraDataInicio, obraDataFim } = useMemo(() => {
-    if (obraPeriodoModo === 'mes') return { obraDataInicio: `${obraMes}-01`, obraDataFim: ultimoDiaDoMes(obraMes) }
-    if (obraPeriodoModo === 'ano') return { obraDataInicio: `${obraAno}-01-01`, obraDataFim: `${obraAno}-12-31` }
-    if (obraPeriodoModo === 'personalizado') return { obraDataInicio: obraDataInicioCustom || undefined, obraDataFim: obraDataFimCustom || undefined }
-    return { obraDataInicio: undefined, obraDataFim: undefined }
-  }, [obraPeriodoModo, obraMes, obraAno, obraDataInicioCustom, obraDataFimCustom])
-
   const espacosComObra = useMemo(() => new Set(fechamento.obraPorEspaco.map(o => o.nome)), [fechamento.obraPorEspaco])
 
-  // Aporte Societário/despesa de obra em escopo pro painel de Obra — mesmo
-  // padrão do painel de Sócios: respeita o espaço do filtro geral e o
-  // período próprio de Obra (sem filtro = histórico completo).
+  // Aporte Societário/despesa de obra em escopo pro painel de Obra — sempre
+  // acumulado (histórico completo), só respeita o espaço do filtro geral da
+  // página. É uma posição atual (saldo da obra desde sempre), não um fluxo
+  // de período.
   const aportesObraEscopo = useMemo(() => receitas.filter(r => {
     if (r.tipoEntrada !== 'aporte_societario' && r.tipoEntrada !== 'aporte_obra') return false
     if (!r.espaco || !espacosComObra.has(r.espaco)) return false
     if (selectedSpaces?.length && !selectedSpaces.includes(r.espaco)) return false
-    if (obraDataInicio && r.data < obraDataInicio) return false
-    if (obraDataFim && r.data > obraDataFim) return false
     return true
-  }), [receitas, espacosComObra, selectedSpaces, obraDataInicio, obraDataFim])
+  }), [receitas, espacosComObra, selectedSpaces])
 
   const despesasObraEscopo = useMemo(() => contasPagar.filter(c => {
     if (c.categoria !== 'obra') return false
     if (!espacosComObra.has(c.espaco)) return false
     if (selectedSpaces?.length && !selectedSpaces.includes(c.espaco)) return false
-    const data = c.dataPagamento ?? c.dataVencimento
-    if (obraDataInicio && data < obraDataInicio) return false
-    if (obraDataFim && data > obraDataFim) return false
     return true
-  }), [contasPagar, espacosComObra, selectedSpaces, obraDataInicio, obraDataFim])
-
-  // Total de Aportes/Despesas/Saldo por espaço com obra, dentro do escopo
-  // acima. Some TODOS os lançamentos pagos, não só o último — se recalcula
-  // sozinho a cada aporte/despesa criado, editado ou excluído.
-  const obraResumoPorEspaco = useMemo(() => Array.from(espacosComObra)
-    .filter(nome => !selectedSpaces?.length || selectedSpaces.includes(nome))
-    .map(nome => {
-      const totalAportes = aportesObraEscopo.filter(r => r.status === 'pago' && r.espaco === nome).reduce((s, r) => s + r.valor, 0)
-      const totalDespesas = despesasObraEscopo.filter(c => c.status === 'pago' && c.espaco === nome).reduce((s, c) => s + c.valor, 0)
-      return { nome, totalAportes, totalDespesas, saldo: totalAportes - totalDespesas }
-    }), [espacosComObra, selectedSpaces, aportesObraEscopo, despesasObraEscopo])
+  }), [contasPagar, espacosComObra, selectedSpaces])
 
   // Linhas do drill-down (Ver Aportes/Ver Despesas) da Obra — organizadas por
   // data, só do espaço clicado, mesmo escopo do resumo acima.
@@ -269,19 +213,16 @@ export default function FechamentoClient() {
   }, [resultadoDrillDown, fechamento])
 
   // Sócios por espaço — aporte/retirada individualizados (nunca reagrupados),
-  // repasse calculado sobre o Disponível para Distribuição daquele espaço.
+  // repasse calculado sobre o Disponível para Distribuição acumulado daquele
+  // espaço (fechamento.disponivelPorEspaco — fonte única, já descontando
+  // reservas e retiradas já feitas, ver fechamento-calc.ts).
   const sociosPorEspaco = useMemo(() => espacos.map(e => {
-    const receitaTotal = fechamento.entradasOperacionais.filter(r => r.status === 'pago' && r.espaco === e.nome).reduce((s, r) => s + r.valor, 0)
-    const despesaTotal = fechamento.despesasOperacionais.filter(c => c.status === 'pago' && c.espaco === e.nome).reduce((s, c) => s + c.valor, 0)
-    const transferenciasEspaco = fechamento.transferenciasFundo.filter(c => c.status === 'pago' && c.espaco === e.nome).reduce((s, c) => s + c.valor, 0)
-    const retornosEspaco = fechamento.retornosFundo.filter(r => r.status === 'pago' && r.espaco === e.nome).reduce((s, r) => s + r.valor, 0)
-    const reservasEspaco = reservasGenericasNoPeriodo(fundos.filter(f => f.espaco === e.nome), movimentacoes, filters.dataInicio, filters.dataFim)
-    const disponivel = receitaTotal - despesaTotal - transferenciasEspaco + retornosEspaco - reservasEspaco
+    const disponivel = fechamento.disponivelPorEspaco.find(d => d.nome === e.nome)?.disponivel ?? 0
     const socios = (DIVISAO_SOCIOS[e.nome] ?? []).map(s => ({
       nome: s.nome, percentual: s.percentual, valorDevido: disponivel * (s.percentual / 100),
     }))
     return { nome: e.nome, disponivel, socios }
-  }), [espacos, fechamento, fundos, movimentacoes, filters.dataInicio, filters.dataFim])
+  }), [espacos, fechamento])
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">
@@ -337,45 +278,10 @@ export default function FechamentoClient() {
       {fechamento.obraPorEspaco.length > 0 && (
         <section className="rounded-2xl border border-app-border bg-app-surface p-5 space-y-3">
           <h4 className="text-xs font-semibold text-app-muted uppercase tracking-wide">Obra</h4>
-
-          {/* Filtro de período — próprio da área de Obra */}
-          <div className="rounded-lg border border-app-border2/60 bg-app-bg p-3 space-y-2">
-            <p className="text-xs font-medium text-app-subtle uppercase tracking-wider">Período</p>
-            <div className="flex flex-wrap items-center gap-2">
-              {([
-                ['historico', 'Histórico completo'],
-                ['mes', 'Mês'],
-                ['ano', 'Ano'],
-                ['personalizado', 'Personalizado'],
-              ] as const).map(([modo, label]) => (
-                <button key={modo} onClick={() => setObraPeriodoModo(modo)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-medium border transition-colors ${obraPeriodoModo === modo ? 'border-orange-500/40 bg-orange-500/10 text-orange-500' : 'border-app-border2 bg-app-surface2 text-app-muted hover:text-app-text'}`}>
-                  {label}
-                </button>
-              ))}
-              {obraPeriodoModo === 'mes' && (
-                <input type="month" value={obraMes} onChange={e => setObraMes(e.target.value)}
-                  className="rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-xs text-app-text focus:outline-none" />
-              )}
-              {obraPeriodoModo === 'ano' && (
-                <input type="number" value={obraAno} onChange={e => setObraAno(e.target.value)}
-                  className="w-24 rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-xs text-app-text focus:outline-none" />
-              )}
-              {obraPeriodoModo === 'personalizado' && (
-                <>
-                  <input type="date" value={obraDataInicioCustom} onChange={e => setObraDataInicioCustom(e.target.value)}
-                    className="rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-xs text-app-text focus:outline-none" />
-                  <span className="text-xs text-app-subtle">até</span>
-                  <input type="date" value={obraDataFimCustom} onChange={e => setObraDataFimCustom(e.target.value)}
-                    className="rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-xs text-app-text focus:outline-none" />
-                </>
-              )}
-            </div>
-          </div>
+          <p className="text-xs text-app-subtle">Valores acumulados desde o início — Aporte Societário é a receita da obra, despesa de obra vem só de Contas Pagas classificadas como Obra.</p>
 
           <div className="space-y-3">
-            {obraResumoPorEspaco.map(o => {
-              const detalhes = fechamento.obraPorEspaco.find(d => d.nome === o.nome)
+            {fechamento.obraPorEspaco.map(o => {
               return (
                 <div key={o.nome} className="rounded-lg border border-orange-500/25 bg-orange-500/5 p-4 space-y-3">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -396,11 +302,11 @@ export default function FechamentoClient() {
                     <div><p className="text-app-subtle">Despesas com Obra</p><p className="font-semibold text-red-500">{formatCurrency(o.totalDespesas)}</p></div>
                     <div><p className="text-app-subtle">Saldo da Obra</p><p className={`font-semibold ${o.saldo >= 0 ? 'text-[#128C7E]' : 'text-red-600'}`}>{formatCurrency(o.saldo)}</p></div>
                   </div>
-                  {detalhes && detalhes.porSocio.length > 0 && (
+                  {o.porSocio.length > 0 && (
                     <div>
                       <p className="text-xs font-medium text-app-muted mb-1.5">Aporte realizado por cada sócio (acumulado)</p>
                       <div className="flex flex-wrap gap-2">
-                        {detalhes.porSocio.map(s => (
+                        {o.porSocio.map(s => (
                           <span key={s.nome} className="flex items-center gap-1.5 rounded-full bg-app-surface2 border border-app-border2/60 px-2.5 py-1 text-xs">
                             <span className="text-app-text font-medium">{s.nome}</span>
                             <span className="font-semibold text-violet-600">{formatCurrency(s.valor)}</span>
@@ -452,17 +358,23 @@ export default function FechamentoClient() {
         )}
       </section>
 
-      {/* 4. Disponível para Distribuição */}
+      {/* 4. Disponível para Distribuição — posição acumulada, não um fluxo do
+          período: Resultado Operacional acumulado menos o que está reservado
+          agora menos o que os sócios já retiraram. */}
       <section className="rounded-2xl border border-app-border bg-app-surface p-5 space-y-3">
         <h4 className="text-xs font-semibold text-app-muted uppercase tracking-wide">Disponível para Distribuição</h4>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
           <div className="rounded-lg border border-app-border2/60 bg-app-bg p-3">
-            <p className="text-app-subtle">Resultado Operacional</p>
-            <p className="font-semibold text-app-text">{formatCurrency(fechamento.resultado)}</p>
+            <p className="text-app-subtle">Resultado Operacional (acumulado)</p>
+            <p className="font-semibold text-app-text">{formatCurrency(fechamento.resultadoAcumulado)}</p>
           </div>
           <div className="rounded-lg border border-app-border2/60 bg-app-bg p-3">
-            <p className="text-app-subtle">(−) Fundo de Caixa / Reservas (período)</p>
-            <p className="font-semibold text-amber-600">{formatCurrency(fechamento.totalTransferenciasFundo - fechamento.totalRetornosFundo + fechamento.totalReservasGenericas)}</p>
+            <p className="text-app-subtle">(−) Fundo de Caixa / Reservas</p>
+            <p className="font-semibold text-amber-600">{formatCurrency(fechamento.saldoFundoAtual + fechamento.totalReservasGenericas)}</p>
+          </div>
+          <div className="rounded-lg border border-app-border2/60 bg-app-bg p-3">
+            <p className="text-app-subtle">(−) Já retirado pelos sócios</p>
+            <p className="font-semibold text-fuchsia-600">{formatCurrency(fechamento.totalRetiradasSocioAcumulado)}</p>
           </div>
           <div className="rounded-lg border border-[#25D366]/25 bg-[#25D366]/5 p-3">
             <p className="text-app-subtle">= Disponível para Distribuição</p>
@@ -470,7 +382,7 @@ export default function FechamentoClient() {
           </div>
         </div>
         <p className="text-xs text-app-subtle">
-          Reservas nunca são despesa — não reduzem o Resultado Operacional, só o quanto sobra pra distribuir aos sócios. Inclui Fundo de Caixa e todos os fundos/reservas genéricos (Reserva Impostos, Reserva Obra etc.) criados na seção acima, líquido do que voltou no período.
+          Valores acumulados desde o início, não travados ao período do filtro acima — é uma posição atual, não um resultado de mês. Reservas e retiradas nunca são despesa (não reduzem o Resultado Operacional), só reduzem o quanto ainda pode sair da empresa pros sócios.
         </p>
       </section>
 
@@ -493,40 +405,7 @@ export default function FechamentoClient() {
           )}
         </div>
 
-        {/* Filtro de período — próprio da área de Sócios */}
-        <div className="rounded-lg border border-app-border2/60 bg-app-bg p-3 space-y-2">
-          <p className="text-xs font-medium text-app-subtle uppercase tracking-wider">Período</p>
-          <div className="flex flex-wrap items-center gap-2">
-            {([
-              ['historico', 'Histórico completo'],
-              ['mes', 'Mês'],
-              ['ano', 'Ano'],
-              ['personalizado', 'Personalizado'],
-            ] as const).map(([modo, label]) => (
-              <button key={modo} onClick={() => setSocioPeriodoModo(modo)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-medium border transition-colors ${socioPeriodoModo === modo ? 'border-violet-500/40 bg-violet-500/10 text-violet-300' : 'border-app-border2 bg-app-surface2 text-app-muted hover:text-app-text'}`}>
-                {label}
-              </button>
-            ))}
-            {socioPeriodoModo === 'mes' && (
-              <input type="month" value={socioMes} onChange={e => setSocioMes(e.target.value)}
-                className="rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-xs text-app-text focus:outline-none" />
-            )}
-            {socioPeriodoModo === 'ano' && (
-              <input type="number" value={socioAno} onChange={e => setSocioAno(e.target.value)}
-                className="w-24 rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-xs text-app-text focus:outline-none" />
-            )}
-            {socioPeriodoModo === 'personalizado' && (
-              <>
-                <input type="date" value={socioDataInicioCustom} onChange={e => setSocioDataInicioCustom(e.target.value)}
-                  className="rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-xs text-app-text focus:outline-none" />
-                <span className="text-xs text-app-subtle">até</span>
-                <input type="date" value={socioDataFimCustom} onChange={e => setSocioDataFimCustom(e.target.value)}
-                  className="rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-xs text-app-text focus:outline-none" />
-              </>
-            )}
-          </div>
-        </div>
+        <p className="text-xs text-app-subtle">Valores acumulados desde o início. Retiradas somam lançamentos manuais e Contas Pagas classificadas como Retirada Sócio, sem duplicidade.</p>
 
         {/* Resumo por sócio — nome, total de aportes, total de retiradas, saldo */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -566,9 +445,8 @@ export default function FechamentoClient() {
           </div>
         )}
 
-        {/* Participação societária (% e valor devido) — segue o período geral
-            da página, não o período de Sócios acima, porque é sobre o
-            Disponível para Distribuição do período do relatório. */}
+        {/* Participação societária (% e valor devido) — sobre o Disponível
+            para Distribuição acumulado do espaço (fechamento.disponivelPorEspaco). */}
         {sociosPorEspaco.map(e => (
           <div key={e.nome} className="rounded-lg border border-app-border2/60 bg-app-bg p-4 space-y-2">
             <div className="flex items-center justify-between gap-2">

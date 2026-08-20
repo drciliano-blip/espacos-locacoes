@@ -65,16 +65,37 @@ export interface FechamentoResultado {
   saldoFundoAtual: number
   saldoDisponivelForaFundo: number
 
-  // Reservas genéricas (Reserva Impostos, Reserva Obra, etc. — nunca o Fundo
-  // de Caixa, que já entra em totalTransferenciasFundo/totalRetornosFundo)
-  // separadas no período, dentro do escopo de espaço filtrado.
+  // Saldo atual (acumulado, nunca travado ao período) dos fundos/reservas
+  // genéricos — Reserva Impostos, Reserva Obra etc. Nunca inclui o Fundo de
+  // Caixa (esse é saldoFundoAtual).
   totalReservasGenericas: number
 
-  // Disponível para Distribuição (período filtrado) — só esse valor deve
-  // alimentar o cálculo de repasse aos sócios, nunca o Resultado bruto.
-  // Resultado Operacional − tudo que foi separado em Fundo de Caixa/Reservas
-  // no período (+ o que voltou) — dinheiro reservado nunca é distribuível.
+  // Resultado Operacional acumulado desde sempre (dentro do escopo de espaço
+  // filtrado) — usado só pra compor Disponível para Distribuição abaixo,
+  // nunca pro card "Resultado Operacional" do topo (esse é o `resultado`
+  // travado ao período do FilterBar).
+  resultadoAcumulado: number
+
+  // Total retirado pelos sócios desde sempre (dentro do escopo de espaço
+  // filtrado) — inclui toda retirada paga, venha de lançamento manual ou de
+  // Contas Pagas classificada como Retirada Sócio (sem distinção, sem
+  // duplicidade: cada retirada é uma linha só). Usado pra compor Disponível
+  // para Distribuição.
+  totalRetiradasSocioAcumulado: number
+
+  // Disponível para Distribuição — é uma posição atual, não um fluxo de
+  // período: Resultado Operacional acumulado menos tudo que está reservado
+  // agora (Fundo de Caixa + reservas genéricas) menos tudo que os sócios já
+  // retiraram. Dinheiro reservado ou já retirado nunca é distribuível de
+  // novo. Só esse valor deve alimentar o cálculo de repasse aos sócios,
+  // nunca o Resultado bruto.
   disponivelParaDistribuicao: number
+
+  // Mesma conta do disponivelParaDistribuicao, mas por espaço individual —
+  // alimenta a divisão societária (% de cada sócio). Só entram fundos
+  // vinculados àquele espaço específico (um fundo sem espaço é da empresa
+  // toda, não dá pra atribuir a um espaço só).
+  disponivelPorEspaco: { nome: string; disponivel: number }[]
 
   // Fechamento da Obra — acumulado desde o início, só por espaço com obra.
   obraPorEspaco: ObraEspacoResumo[]
@@ -192,20 +213,36 @@ export function calcularFechamento(
     entradasOperAllTime + outrasAllTime + aportesAllTime + fundoReturnsAllTime
     - despesasOperAllTime - retiradasAllTime - fundoTransfersAllTime
 
-  // Reservas genéricas (Reserva Impostos, Reserva Obra etc.) dentro do mesmo
-  // escopo de espaço do período filtrado — um fundo sem espaço é da empresa
-  // toda e sempre entra; um fundo com espaço só entra se aquele espaço
-  // estiver no filtro (ou nenhum filtro aplicado), mesma regra usada pros
-  // demais totais acima.
+  // Fundos genéricos (Reserva Impostos, Reserva Obra etc.) no escopo de
+  // espaço filtrado — um fundo sem espaço é da empresa toda e sempre entra;
+  // um fundo com espaço só entra se aquele espaço estiver no filtro (ou
+  // nenhum filtro aplicado), mesma regra usada pros demais totais acima.
+  // Saldo sempre acumulado (sem data), nunca travado ao período.
   const fundosEmEscopo = fundos.filter(f => !f.espaco || !selectedSpaces?.length || selectedSpaces.includes(f.espaco))
-  const totalReservasGenericas = reservasGenericasNoPeriodo(fundosEmEscopo, movimentacoesFundo, dataInicio, dataFim)
+  const totalReservasGenericas = reservasGenericasNoPeriodo(fundosEmEscopo, movimentacoesFundo)
 
-  // Disponível para Distribuição: Resultado Operacional do período menos tudo
-  // que foi separado em Fundo de Caixa/Reservas no período (mais o que voltou
-  // do Fundo de Caixa). Reservas nunca são despesa (não mexem no Resultado),
-  // mas reduzem o quanto sobra pra repassar aos sócios agora — dinheiro
-  // reservado nunca deve ser contado como disponível pra distribuição.
-  const disponivelParaDistribuicao = resultado - totalTransferenciasFundo + totalRetornosFundo - totalReservasGenericas
+  const resultadoAcumulado = entradasOperAllTime - despesasOperAllTime
+
+  // Disponível para Distribuição é uma posição atual (não um fluxo do
+  // período): Resultado Operacional acumulado menos tudo que está reservado
+  // agora (Fundo de Caixa + reservas genéricas) menos tudo que os sócios já
+  // retiraram — nenhum desses três é despesa (não mexem no Resultado), mas
+  // reduzem o quanto ainda pode sair da empresa pros sócios.
+  const disponivelParaDistribuicao = resultadoAcumulado - saldoFundoAtual - totalReservasGenericas - retiradasAllTime
+
+  // Mesma conta, mas por espaço individual — só entram fundos vinculados
+  // àquele espaço específico (fundo sem espaço não dá pra atribuir a um só).
+  const disponivelPorEspaco = espacosEmEscopo.map(e => {
+    const entradasEspaco = somaPaga(entradasAllTime, r => isReceitaOperacional(r) && r.espaco === e.nome, r => r.valor, r => r.status)
+    const despesasEspaco = somaPaga(saidasAllTime, c => isDespesaOperacional(c) && c.espaco === e.nome, c => c.valor, c => c.status)
+    const fundoCaixaEspaco =
+      somaPaga(saidasAllTime, c => c.categoria === 'fundo_caixa' && c.espaco === e.nome, c => c.valor, c => c.status)
+      - somaPaga(entradasAllTime, r => r.tipoEntrada === 'retorno_fundo_caixa' && r.espaco === e.nome, r => r.valor, r => r.status)
+    const reservasGenericasEspaco = reservasGenericasNoPeriodo(fundos.filter(f => f.espaco === e.nome), movimentacoesFundo)
+    const retiradasEspaco = somaPaga(saidasAllTime, c => c.categoria === 'retirada_socio' && c.espaco === e.nome, c => c.valor, c => c.status)
+    const disponivel = entradasEspaco - despesasEspaco - fundoCaixaEspaco - reservasGenericasEspaco - retiradasEspaco
+    return { nome: e.nome, disponivel }
+  })
 
   const obraPorEspaco = calcularObraPorEspaco(entradasAllTime, saidasAllTime, espacosEmEscopo, nomesComObra)
 
@@ -214,7 +251,9 @@ export function calcularFechamento(
     aportes, totalAportes, retiradasSocio, totalRetiradasSocio,
     outrasEntradas, totalOutrasEntradas, transferenciasFundo, totalTransferenciasFundo, retornosFundo, totalRetornosFundo,
     aportesObra, despesasObra,
-    saldoFundoAtual, saldoDisponivelForaFundo, totalReservasGenericas, disponivelParaDistribuicao,
+    saldoFundoAtual, saldoDisponivelForaFundo, totalReservasGenericas, resultadoAcumulado,
+    totalRetiradasSocioAcumulado: retiradasAllTime,
+    disponivelParaDistribuicao, disponivelPorEspaco,
     obraPorEspaco,
   }
 }

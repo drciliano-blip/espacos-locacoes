@@ -10,7 +10,6 @@ export interface Fundo {
   espaco?: string // undefined = fundo da empresa toda
   nome: string
   descricao?: string
-  meta?: number
 }
 
 export type TipoMovimentacaoFundo = 'entrada' | 'saida'
@@ -49,7 +48,6 @@ function fundoFromRow(row: FundoRow): Fundo {
     espaco: row.espaco?.nome,
     nome: row.nome,
     descricao: row.descricao ?? undefined,
-    meta: row.meta !== null ? Number(row.meta) : undefined,
   }
 }
 
@@ -68,7 +66,6 @@ function movimentacaoFromRow(row: MovimentacaoRow): MovimentacaoFundo {
 export interface NovoFundoInput {
   nome: string
   descricao?: string
-  meta?: number
   espaco?: string
   valorInicial?: number
   responsavelInicial?: string
@@ -89,6 +86,7 @@ interface FundosContextValue {
   loading: boolean
   addFundo: (input: NovoFundoInput) => Promise<Fundo>
   addMovimentacao: (input: NovaMovimentacaoInput) => Promise<void>
+  deleteFundo: (id: string) => Promise<void>
 }
 
 const FundosContext = createContext<FundosContextValue | null>(null)
@@ -128,7 +126,6 @@ export function FundosProvider({ children }: { children: ReactNode }) {
         espaco_id: espacoId,
         nome: input.nome,
         descricao: input.descricao ?? null,
-        meta: input.meta ?? null,
         created_by: user?.id ?? null,
       })
       .select(SELECT_FUNDO)
@@ -191,8 +188,30 @@ export function FundosProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // Só permite excluir com saldo zerado — evita apagar reserva que ainda tem
+  // dinheiro nela. Confere de novo aqui (não só na UI) contra a movimentacoes
+  // atual, é a garantia real antes de mandar pro banco.
+  async function deleteFundo(id: string) {
+    const saldo = movimentacoes
+      .filter(m => m.fundoId === id)
+      .reduce((s, m) => s + (m.tipo === 'entrada' ? m.valor : -m.valor), 0)
+    if (saldo !== 0) throw new Error('Só é possível excluir um fundo com saldo zerado.')
+
+    const alvo = fundos.find(f => f.id === id)
+    const supabase = createClient()
+    const { error } = await supabase.from('fundos').delete().eq('id', id)
+    if (error) throw error
+    setFundos(prev => prev.filter(f => f.id !== id))
+    setMovimentacoes(prev => prev.filter(m => m.fundoId !== id))
+    try {
+      await logAtividade({ tipo: 'financeiro', acao: 'Fundo excluído', detalhes: alvo?.nome ?? '', espaco: alvo?.espaco })
+    } catch {
+      // log é secundário, não deve impedir a exclusão já concluída
+    }
+  }
+
   return (
-    <FundosContext.Provider value={{ fundos, movimentacoes, loading, addFundo, addMovimentacao }}>
+    <FundosContext.Provider value={{ fundos, movimentacoes, loading, addFundo, addMovimentacao, deleteFundo }}>
       {children}
     </FundosContext.Provider>
   )
