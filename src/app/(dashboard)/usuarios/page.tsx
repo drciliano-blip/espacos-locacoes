@@ -23,7 +23,7 @@ const roleConfig: Record<NivelAcesso, { label: string; color: string; icon: Reac
   },
   financeiro: {
     label: 'Financeiro', color: 'bg-sky-500/15 text-sky-400 border-sky-500/20',
-    icon: DollarSign, desc: 'Dashboard, Pagamentos, Eventos, Relatórios, Contas a Pagar',
+    icon: DollarSign, desc: 'Dashboard, Pagamentos, Eventos, Financeiro, Contas a Pagar',
   },
   operacional: {
     label: 'Operacional', color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20',
@@ -35,19 +35,19 @@ const roleConfig: Record<NivelAcesso, { label: string; color: string; icon: Reac
   },
   socio: {
     label: 'Sócio', color: 'bg-violet-500/15 text-violet-400 border-violet-500/20',
-    icon: Handshake, desc: 'Dashboard, Agenda, Eventos, Relatórios, Espaços — somente leitura, restrito aos espaços vinculados',
+    icon: Handshake, desc: 'Dashboard, Agenda, Eventos, Financeiro, Espaços — somente leitura, restrito aos espaços vinculados',
   },
 }
 
 const permissionsMatrix: Record<NivelAcesso, string[]> = {
-  admin: ['Dashboard', 'Agenda', 'Pagamentos', 'Eventos', 'Relatórios', 'Contas a Pagar', 'Usuários', 'Espaços', 'Calculadora de Staff'],
-  financeiro: ['Dashboard', 'Pagamentos', 'Eventos', 'Relatórios', 'Contas a Pagar'],
+  admin: ['Dashboard', 'Agenda', 'Pagamentos', 'Eventos', 'Financeiro', 'Contas a Pagar', 'Usuários', 'Espaços', 'Calculadora de Staff'],
+  financeiro: ['Dashboard', 'Pagamentos', 'Eventos', 'Financeiro', 'Contas a Pagar'],
   operacional: ['Dashboard', 'Agenda', 'Eventos', 'Espaços', 'Calculadora de Staff'],
   visualizador: ['Dashboard'],
-  socio: ['Dashboard', 'Agenda', 'Eventos', 'Relatórios', 'Espaços'],
+  socio: ['Dashboard', 'Agenda', 'Eventos', 'Financeiro', 'Espaços'],
 }
 
-const allPages = ['Dashboard', 'Agenda', 'Pagamentos', 'Eventos', 'Relatórios', 'Contas a Pagar', 'Usuários', 'Espaços', 'Calculadora de Staff']
+const allPages = ['Dashboard', 'Agenda', 'Pagamentos', 'Eventos', 'Financeiro', 'Contas a Pagar', 'Usuários', 'Espaços', 'Calculadora de Staff']
 
 export default function UsuariosPage() {
   const { espacosConfig } = useEspacos()

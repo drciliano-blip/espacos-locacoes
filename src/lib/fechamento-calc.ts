@@ -5,10 +5,10 @@ import type { Receita } from '@/contexts/ReceitasContext'
 import type { Fundo, MovimentacaoFundo } from '@/contexts/FundosContext'
 import type { ContaPagar } from '@/types'
 
-// Lógica compartilhada entre Relatórios (RelatorioMensalSection) e a aba
-// Fechamento — extraída aqui pra garantir que as duas telas SEMPRE mostrem os
-// mesmos números (Resultado Operacional, Obra, Fundo de Caixa). Nunca duplicar
-// esses cálculos direto num componente — sempre passar por aqui.
+// Toda a aritmética financeira do sistema (Resultado Operacional, Obra,
+// Fundo de Caixa/Reservas, Disponível para Distribuição) fica aqui, extraída
+// do componente Financeiro — nunca duplicar esses cálculos direto numa tela,
+// sempre passar por aqui.
 
 interface FiltroFechamento {
   selectedSpaces?: string[]
@@ -116,9 +116,7 @@ function dataEfetivaConta(c: ContaPagar): string {
 
 // Net (entradas − saídas) das reservas genéricas (Reserva Impostos, Reserva
 // Obra etc. — nunca o Fundo de Caixa) dentro de um período, escopado a um
-// conjunto de fundos já filtrado por espaço. Fica exportada pra Financeiro e
-// Relatórios calcularem a mesma coisa por espaço individual (repasse por
-// sócio), sem duplicar a lógica de soma.
+// conjunto de fundos já filtrado por espaço.
 export function reservasGenericasNoPeriodo(
   fundosEmEscopo: Fundo[],
   movimentacoes: MovimentacaoFundo[],

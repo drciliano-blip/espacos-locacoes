@@ -11,7 +11,6 @@ import {
   LogOut,
   ChevronDown,
   ChevronRight,
-  BarChart2,
   Landmark,
   Receipt,
   Users,
@@ -24,9 +23,10 @@ import { ROLE_PERMISSIONS } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/client'
 import type { NivelAcesso } from '@/types'
 
+// Relatórios foi incorporado na aba Financeiro (visualização + exportação
+// PDF/Excel) — a aba própria foi removida, não existe mais rota /relatorios.
 const navItemsBefore = [
   { href: '/dashboard',      label: 'Dashboard',     icon: LayoutDashboard, page: 'dashboard' },
-  { href: '/relatorios',     label: 'Relatórios',    icon: BarChart2,       page: 'relatorios' },
   { href: '/fechamento',     label: 'Financeiro',    icon: Landmark,        page: 'fechamento' },
   { href: '/agenda',         label: 'Agenda',        icon: CalendarDays,    page: 'agenda' },
   { href: '/calculadora-staff', label: 'Calculadora de Staff', icon: Calculator, page: 'calculadora-staff' },
@@ -113,7 +113,7 @@ export default function Sidebar({ userRole }: SidebarProps) {
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-        {/* Items 0–3: Dashboard, Relatórios, Agenda, Contas a Pagar */}
+        {/* Dashboard, Financeiro, Agenda, Calculadora de Staff, Contas a Pagar */}
         {navItemsBefore
           .filter(item => permissions.includes(item.page))
           .map(({ href, label, icon }) => (

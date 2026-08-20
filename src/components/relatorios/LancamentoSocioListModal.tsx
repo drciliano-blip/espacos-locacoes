@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { X, Paperclip, Pencil } from 'lucide-react'
+import { X, Paperclip, Pencil, FileDown, Printer } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { getFiles, viewFile, type StoredFile } from '@/lib/file-storage'
+import { downloadWorkbook } from '@/lib/xlsx-export'
 
 export interface LancamentoSocioRow {
   id: string
@@ -36,13 +37,17 @@ interface Props {
   // Reaproveitado pra despesas de obra, que não têm "sócio" — só o rótulo da
   // coluna muda (ex: "Fornecedor"), o campo continua sendo `row.socio`.
   colunaPessoa?: string
+  // Sem isso, "Imprimir" cai no window.print() direto — imprime a página
+  // inteira por trás do modal. Passado pela tela que abre o modal, pra
+  // coordenar com o bloco de impressão restrita a essa lista só.
+  onPrint?: () => void
 }
 
 // Drill-down genérico dos cards de Aportes/Retiradas em Movimentações
 // Societárias — mostra o lançamento completo, com link direto pro
 // comprovante quando existir (mesmo padrão de leitura de arquivos usado no
 // resto do sistema, module+entityId).
-export default function LancamentoSocioListModal({ titulo, rows, fileModule, onClose, onEdit, colunaPessoa = 'Sócio' }: Props) {
+export default function LancamentoSocioListModal({ titulo, rows, fileModule, onClose, onEdit, colunaPessoa = 'Sócio', onPrint }: Props) {
   const [filesPorLancamento, setFilesPorLancamento] = useState<Map<string, StoredFile[]>>(new Map())
 
   useEffect(() => {
@@ -63,19 +68,42 @@ export default function LancamentoSocioListModal({ titulo, rows, fileModule, onC
   const total = rows.reduce((s, r) => s + r.valor, 0)
   const mostrarOrigem = rows.some(r => r.origem)
 
+  function handleExportarExcel() {
+    downloadWorkbook(
+      [{
+        name: titulo.slice(0, 31),
+        rows: [
+          ['Data', colunaPessoa, 'Espaço', 'Valor', 'Descrição', 'Observações', ...(mostrarOrigem ? ['Origem'] : [])],
+          ...rows.map(r => [
+            r.data, r.socio, r.espaco, r.valor, r.descricao, r.observacoes ?? '', ...(mostrarOrigem ? [r.origem ?? ''] : []),
+          ]),
+        ],
+      }],
+      `${titulo.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.xlsx`,
+    )
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 print:hidden" onClick={onClose}>
       <div className="w-full max-w-3xl bg-app-surface rounded-2xl border border-app-border shadow-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-app-border sticky top-0 bg-app-surface z-10 gap-3">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-app-text truncate">{titulo}</h2>
             <p className="text-xs text-app-subtle mt-0.5">{rows.length} lançamento{rows.length === 1 ? '' : 's'}, discriminados abaixo</p>
           </div>
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="text-right">
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="text-right mr-1">
               <p className="text-[10px] text-app-subtle uppercase tracking-wide">Total somado</p>
               <p className="text-base font-bold text-app-text">{formatCurrency(total)}</p>
             </div>
+            <button onClick={handleExportarExcel} title="Exportar Excel"
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-app-subtle hover:bg-app-surface2 hover:text-app-text transition-colors">
+              <FileDown className="h-4 w-4" />
+            </button>
+            <button onClick={() => (onPrint ? onPrint() : window.print())} title="Imprimir / PDF"
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-app-subtle hover:bg-app-surface2 hover:text-app-text transition-colors">
+              <Printer className="h-4 w-4" />
+            </button>
             <button onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-lg text-app-subtle hover:bg-app-surface2 transition-colors">
               <X className="h-4 w-4" />
             </button>
