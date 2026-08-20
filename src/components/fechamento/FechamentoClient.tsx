@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import {
-  ArrowUpCircle, ArrowDownCircle, Wallet, HardHat, Vault, Plus, X,
+  ArrowUpCircle, ArrowDownCircle, Wallet, HardHat, Vault, Plus, X, Eye,
 } from 'lucide-react'
 import FilterBar, { type RelatorioFilters } from '@/components/relatorios/FilterBar'
 import { getPeriodRange } from '@/lib/relatorios-utils'
@@ -980,16 +980,19 @@ function ResumoStatAcionavel({ label, valor, cor, onVisualizar, onExportExcel, o
   onExportPdf: () => void
 }) {
   return (
-    <div className="min-w-0 rounded-lg border border-app-border2/60 bg-app-bg p-3 space-y-2">
-      <div>
-        <p className="text-[11px] text-app-subtle">{label}</p>
-        <p className={`text-sm font-bold break-words ${cor}`}>{formatCurrency(valor)}</p>
-      </div>
-      <div className="flex items-center gap-2 print-hidden">
-        <button onClick={onVisualizar} className="text-[11px] font-medium text-app-muted hover:text-app-text underline decoration-dotted underline-offset-2">
-          Visualizar
-        </button>
-        <ExportarRelatorioButton onExcel={onExportExcel} onPdf={onExportPdf} label="Exportar" />
+    <div className="min-w-0 rounded-lg border border-app-border2/60 bg-app-bg p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[11px] text-app-subtle">{label}</p>
+          <p className={`text-sm font-bold break-words ${cor}`}>{formatCurrency(valor)}</p>
+        </div>
+        <div className="flex items-center gap-0.5 shrink-0 print-hidden">
+          <button onClick={onVisualizar} title="Visualizar"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-app-subtle hover:bg-app-surface2 hover:text-app-text transition-colors">
+            <Eye className="h-3.5 w-3.5" />
+          </button>
+          <ExportarRelatorioButton onExcel={onExportExcel} onPdf={onExportPdf} label="Exportar" compact />
+        </div>
       </div>
     </div>
   )
