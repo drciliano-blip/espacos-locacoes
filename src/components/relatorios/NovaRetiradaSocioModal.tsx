@@ -11,6 +11,29 @@ import type { ContaPagar } from '@/types'
 const GREEN = '#25D366'
 const DARK_GREEN = '#128C7E'
 
+function parseValorBR(valor: string): string {
+  const n = parseCurrencyBR(valor)
+  return n > 0 ? String(n) : ''
+}
+
+// Mesma tolerância usada na leitura de comprovantes em Contas a Pagar —
+// dia/mês sem zero à esquerda, ano com 2 dígitos ou separador "-".
+function parseDataBR(data: string): string {
+  const match = data.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/)
+  if (!match) return ''
+  let [, dd, mm, yyyy] = match
+  dd = dd.padStart(2, '0')
+  mm = mm.padStart(2, '0')
+  if (yyyy.length === 2) yyyy = `20${yyyy}`
+  return `${yyyy}-${mm}-${dd}`
+}
+
+interface BoletoExtracao {
+  valor?: string | null
+  dataPagamento?: string | null
+  vencimento?: string | null
+}
+
 interface Props {
   onClose: () => void
   onSave: (c: ContaPagar) => Promise<void>
@@ -35,8 +58,50 @@ export default function NovaRetiradaSocioModal({ onClose, onSave, onSaved }: Pro
   const [submitted, setSubmitted] = useState(false)
   const [saving, setSaving] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const [extraindoIA, setExtraindoIA] = useState(false)
+  const [avisoIA, setAvisoIA] = useState<string | null>(null)
 
   const sociosDoEspaco = espaco ? (DIVISAO_SOCIOS[espaco] ?? []).map(s => s.nome) : []
+
+  // Lê Valor e Data direto do comprovante anexado — mesmo padrão de leitura
+  // por IA já usado em Contas a Pagar. Só preenche o que a IA identificar com
+  // segurança (nunca inventa); o que não vier, fica em branco pro usuário
+  // preencher manualmente. Os dois campos continuam editáveis depois.
+  async function handleComprovanteSelecionado(file: File | null) {
+    setComprovante(file)
+    setAvisoIA(null)
+    if (!file) return
+
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    const isPdf = file.type === 'application/pdf' || ext === 'pdf'
+    const isImage = file.type.startsWith('image/')
+    if (!isPdf && !isImage) return
+
+    setExtraindoIA(true)
+    try {
+      const body = new FormData()
+      body.append('file', file)
+      const res = await fetch('/api/extract-boleto', { method: 'POST', body })
+      const extraido: BoletoExtracao & { error?: string } = await res.json()
+      if (!res.ok || extraido.error) {
+        setAvisoIA('Não foi possível ler o comprovante automaticamente — preencha Data e Valor manualmente.')
+        return
+      }
+      if (!extraido.valor && !extraido.dataPagamento) {
+        setAvisoIA('A IA não identificou valor/data neste comprovante — preencha manualmente.')
+        return
+      }
+      if (extraido.valor) setValor(v => parseValorBR(extraido.valor!) || v)
+      // "dataPagamento" é a data real da retirada (comprovante de pagamento
+      // já efetivado); "vencimento" só existiria num boleto a pagar, o que
+      // não se aplica aqui — por isso não é usado como alternativa.
+      if (extraido.dataPagamento) setData(d => parseDataBR(extraido.dataPagamento!) || d)
+    } catch {
+      setAvisoIA('Falha ao conectar com a IA — preencha Data e Valor manualmente.')
+    } finally {
+      setExtraindoIA(false)
+    }
+  }
 
   const errors = {
     espaco: !espaco,
@@ -175,22 +240,25 @@ export default function NovaRetiradaSocioModal({ onClose, onSave, onSaved }: Pro
 
           <div>
             <label className="text-xs text-app-subtle mb-0.5 block">Comprovante (opcional)</label>
+            <p className="text-[11px] text-app-subtle mb-1.5">Ao anexar, a IA tenta ler Valor e Data direto do comprovante — os campos continuam editáveis.</p>
             <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden"
-              onChange={e => setComprovante(e.target.files?.[0] ?? null)} />
+              onChange={e => handleComprovanteSelecionado(e.target.files?.[0] ?? null)} />
             <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
-              onChange={e => setComprovante(e.target.files?.[0] ?? null)} />
+              onChange={e => handleComprovanteSelecionado(e.target.files?.[0] ?? null)} />
             <div className="flex items-center gap-2 flex-wrap">
-              <button type="button" onClick={() => fileRef.current?.click()}
-                className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors">
+              <button type="button" onClick={() => fileRef.current?.click()} disabled={extraindoIA}
+                className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors disabled:opacity-60">
                 <Paperclip className="h-3.5 w-3.5" />
                 {comprovante ? comprovante.name : 'Selecionar arquivo…'}
               </button>
-              <button type="button" onClick={() => cameraRef.current?.click()}
-                className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors">
+              <button type="button" onClick={() => cameraRef.current?.click()} disabled={extraindoIA}
+                className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs text-app-muted hover:bg-app-surface2 transition-colors disabled:opacity-60">
                 <Camera className="h-3.5 w-3.5" />
                 Tirar foto
               </button>
+              {extraindoIA && <span className="text-xs text-app-subtle">Lendo comprovante…</span>}
             </div>
+            {avisoIA && <p className="text-xs text-amber-600 mt-1.5">{avisoIA}</p>}
           </div>
 
           {erro && (
