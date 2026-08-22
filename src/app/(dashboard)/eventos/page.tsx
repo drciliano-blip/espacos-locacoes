@@ -7,10 +7,11 @@ import FileSearchModal from '@/components/shared/FileSearchModal'
 import NovoContratoModal from '@/components/contratos/NovoContratoModal'
 import DocumentosSection from '@/components/eventos/DocumentosSection'
 import ReceitasEventoSection from '@/components/eventos/ReceitasEventoSection'
-import { useEspacos } from '@/contexts/EspacosContext'
+import Toast from '@/components/shared/Toast'
 import { useContratos } from '@/contexts/ContratosContext'
 import { useCurrentUser } from '@/contexts/UserContext'
-import type { StatusEvento } from '@/types'
+import { useEspacoAtivo, MSG_ESPACO_ESPECIFICO_NECESSARIO } from '@/contexts/EspacoAtivoContext'
+import type { StatusEvento, Espaco } from '@/types'
 
 type Tab = 'contratos' | 'documentos' | 'receitas'
 
@@ -21,26 +22,30 @@ const TABS: { key: Tab; label: string; Icon: typeof FileText }[] = [
 ]
 
 export default function EventosPage() {
-  const { espacosNomes } = useEspacos()
   const { contratos, addContrato } = useContratos()
   const { role } = useCurrentUser()
+  const { espacosEmEscopo, espacoUnico, precisaEspacoEspecifico } = useEspacoAtivo()
   const [tab, setTab] = useState<Tab>('contratos')
   const [search, setSearch]           = useState('')
-  const [espacoFilter, setEspacoFilter] = useState<string>('todos')
   const [statusFilter, setStatusFilter] = useState<StatusEvento | 'todos'>('todos')
   const [docModalOpen, setDocModalOpen] = useState(false)
   const [novoOpen, setNovoOpen]         = useState(false)
+  const [toastMsg, setToastMsg] = useState<string | null>(null)
+  function showToast(msg: string) {
+    setToastMsg(msg)
+    setTimeout(() => setToastMsg(null), 3500)
+  }
 
   const filtered = useMemo(() => {
     return contratos.filter((c) => {
       const matchSearch =
         c.cliente.toLowerCase().includes(search.toLowerCase()) ||
         c.numeroContrato.toLowerCase().includes(search.toLowerCase())
-      const matchEspaco = espacoFilter === 'todos' || c.espaco === espacoFilter
+      const matchEspaco = !espacosEmEscopo || espacosEmEscopo.includes(c.espaco)
       const matchStatus = statusFilter === 'todos' || c.status === statusFilter
       return matchSearch && matchEspaco && matchStatus
     })
-  }, [contratos, search, espacoFilter, statusFilter])
+  }, [contratos, search, espacosEmEscopo, statusFilter])
 
   return (
     <div className="max-w-6xl mx-auto space-y-4">
@@ -73,7 +78,10 @@ export default function EventosPage() {
             </button>
             {role !== 'socio' && (
               <button
-                onClick={() => setNovoOpen(true)}
+                onClick={() => {
+                  if (precisaEspacoEspecifico()) { showToast(MSG_ESPACO_ESPECIFICO_NECESSARIO); return }
+                  setNovoOpen(true)
+                }}
                 className="ml-auto flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-white transition-colors"
                 style={{ backgroundColor: '#25D366' }}
                 onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#128C7E' }}
@@ -99,14 +107,6 @@ export default function EventosPage() {
               />
             </div>
             <select
-              value={espacoFilter}
-              onChange={(e) => setEspacoFilter(e.target.value)}
-              className="rounded-lg border border-app-border2 bg-app-surface px-3 py-2 text-sm text-app-text2 focus:outline-none cursor-pointer"
-            >
-              <option value="todos">Todos espaços</option>
-              {espacosNomes.map((e) => <option key={e} value={e}>{e}</option>)}
-            </select>
-            <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as StatusEvento | 'todos')}
               className="rounded-lg border border-app-border2 bg-app-surface px-3 py-2 text-sm text-app-text2 focus:outline-none cursor-pointer"
@@ -120,6 +120,7 @@ export default function EventosPage() {
           {docModalOpen && <FileSearchModal onClose={() => setDocModalOpen(false)} defaultModule="contratos" />}
           {novoOpen && (
             <NovoContratoModal
+              espacoPadrao={(espacoUnico ?? undefined) as Espaco | undefined}
               onClose={() => setNovoOpen(false)}
               onSave={addContrato}
             />
@@ -141,6 +142,8 @@ export default function EventosPage() {
 
       {tab === 'documentos' && <DocumentosSection />}
       {tab === 'receitas' && <ReceitasEventoSection />}
+
+      <Toast message={toastMsg} />
     </div>
   )
 }

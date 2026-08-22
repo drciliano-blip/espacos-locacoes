@@ -60,9 +60,9 @@ interface Draft {
   observacaoParceria: string
 }
 
-function emptyDraft(): Draft {
+function emptyDraft(espacoPadrao?: Espaco): Draft {
   return {
-    cliente: '', cpfCnpj: '', espaco: '', dataEvento: '',
+    cliente: '', cpfCnpj: '', espaco: espacoPadrao ?? '', dataEvento: '',
     horaInicio: '', horaFim: '', tipo: '', valorTotal: '',
     valorEntrada: '', responsavel: '', observacoes: '',
     status: 'confirmado',
@@ -71,6 +71,9 @@ function emptyDraft(): Draft {
 }
 
 interface Props {
+  // Quando presente, o espaço vem travado nesse valor (seleção global do
+  // Dashboard) — o select fica desabilitado, mesmo padrão do NovoEventoModal.
+  espacoPadrao?: Espaco
   onClose: () => void
   onSave: (c: Contrato) => void | Promise<void>
 }
@@ -110,12 +113,12 @@ function Field({
   )
 }
 
-export default function NovoContratoModal({ onClose, onSave }: Props) {
+export default function NovoContratoModal({ espacoPadrao, onClose, onSave }: Props) {
   const { espacosNomes } = useEspacos()
   // Gerado uma única vez — usado tanto no PDF gerado antes de salvar quanto no
   // contrato salvo de fato, pra não anexar arquivo a um id que nunca vira registro real.
   const [contratoId]            = useState(() => crypto.randomUUID())
-  const [draft, setDraft]       = useState<Draft>(emptyDraft)
+  const [draft, setDraft]       = useState<Draft>(() => emptyDraft(espacoPadrao))
   const [submitted, setSubmitted] = useState(false)
   const fichaFileRef = useRef<HTMLInputElement>(null)
   const fichaCameraRef = useRef<HTMLInputElement>(null)
@@ -154,7 +157,7 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
         cpfCnpj: data.pessoaJuridica
           ? (data.cnpj ? maskCNPJ(data.cnpj) : d.cpfCnpj)
           : (data.cpf ? maskCPF(data.cpf) : d.cpfCnpj),
-        espaco: (matchFromList(data.espacoDesejado, espacosNomes) as Espaco) ?? d.espaco,
+        espaco: (!espacoPadrao ? matchFromList(data.espacoDesejado, espacosNomes) as Espaco : undefined) ?? d.espaco,
         dataEvento: data.dataEvento ? parseDataBR(data.dataEvento) || d.dataEvento : d.dataEvento,
         horaInicio: data.horaInicioEvento ?? d.horaInicio,
         horaFim: data.horaTerminoEvento ?? d.horaFim,
@@ -399,7 +402,8 @@ export default function NovoContratoModal({ onClose, onSave }: Props) {
                 <select
                   value={draft.espaco}
                   onChange={e => set('espaco', e.target.value)}
-                  className={`w-full rounded-lg border ${submitted && errors.espaco ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none cursor-pointer`}
+                  disabled={!!espacoPadrao}
+                  className={`w-full rounded-lg border ${submitted && errors.espaco ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none cursor-pointer disabled:opacity-60 disabled:cursor-default`}
                   onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
                   onBlur={e => { e.currentTarget.style.borderColor = '' }}
                 >
