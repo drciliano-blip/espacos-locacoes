@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 
 const CATEGORIAS = ['operacional', 'obra', 'financeiro', 'retirada_socio']
-const SUBCATEGORIAS = ['aluguel', 'energia', 'internet', 'funcionários', 'manutenção', 'fornecedores', 'extras', 'outros']
+const SUBCATEGORIAS = ['aluguel', 'energia', 'agua', 'iptu', 'internet', 'funcionários', 'manutenção', 'fornecedores', 'extras', 'outros']
 
 function buildPrompt(espacosNomes: string[]): string {
   const espacosLista = espacosNomes.length > 0 ? espacosNomes.map(e => `"${e}"`).join(', ') : '(nenhum espaço cadastrado)'
@@ -21,7 +21,7 @@ function buildPrompt(espacosNomes: string[]): string {
   "identificadorTransacao": string | null,
   "espaco": string | null,
   "categoria": "operacional" | "obra" | "financeiro" | "retirada_socio" | null,
-  "subcategoria": "aluguel" | "energia" | "internet" | "funcionários" | "manutenção" | "fornecedores" | "extras" | "outros" | null,
+  "subcategoria": "aluguel" | "energia" | "agua" | "iptu" | "internet" | "funcionários" | "manutenção" | "fornecedores" | "extras" | "outros" | null,
   "observacoes": string | null,
   "cnpj": "XX.XXX.XXX/XXXX-XX" | null
 }
@@ -29,7 +29,7 @@ function buildPrompt(espacosNomes: string[]): string {
 Dicas:
 - "descricao": um resumo curto do que é a despesa (ex: "Manutenção elétrica — Complexo Jussara").
 - "fornecedor": nome de quem vai receber o pagamento (pessoa ou empresa).
-- "vencimento" x "dataPagamento" — são coisas DIFERENTES, não confunda: "vencimento" é a data limite pra pagar (aparece em boletos/faturas, geralmente rotulada "vencimento" ou "vence em"). "dataPagamento" é a data em que o pagamento JÁ FOI efetivado — é o dado principal de um comprovante/recibo de PIX, transferência ou pagamento realizado, geralmente rotulado "Data da transação", "Pago em", "Realizado em", "Comprovante gerado em" ou similar, sempre acompanhado de um horário. Se o documento é claramente um comprovante de pagamento (não um boleto a pagar), ele não tem vencimento — preencha "dataPagamento" com a data da transação e deixe "vencimento" como null.
+- "vencimento" x "dataPagamento" — são coisas DIFERENTES, não confunda: "vencimento" é a data limite pra pagar (aparece em boletos/faturas, geralmente rotulada "vencimento" ou "vence em"). "dataPagamento" é a data em que o pagamento JÁ FOI efetivado — é o dado principal de um comprovante/recibo de PIX, transferência ou pagamento realizado, geralmente rotulado "Data da transação", "Pago em", "Realizado em", "Comprovante gerado em" ou similar, sempre acompanhado de um horário. Um mesmo documento pode ter as DUAS datas ao mesmo tempo — ex: um boleto já pago costuma mostrar tanto o vencimento originalmente impresso quanto a data em que foi efetivamente pago; nesse caso preencha os dois campos, cada um com sua data. Só deixe "vencimento" como null quando nenhuma data de vencimento estiver de fato impressa/mencionada no documento — ex: um comprovante solto de PIX/transferência, sem nenhuma referência a boleto/fatura, normalmente não tem vencimento nenhum.
 - "horaPagamento": procure o horário exato em que o pagamento foi efetivado (comum em comprovantes de PIX/transferência, ex: "14:32:07" ou "14h32"). Retorne em 24h no formato HH:MM. Se o documento não mostrar hora, null.
 - "formaPagamento": ex: PIX, transferência, boleto, dinheiro.
 - "chavePagamento": chave PIX, dados bancários (banco/agência/conta) ou qualquer identificador de pagamento mencionado.

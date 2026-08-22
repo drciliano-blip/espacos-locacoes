@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useCallback } from 'react'
 import {
   Receipt, TrendingDown, CheckCircle2, AlertCircle, Clock,
   Filter, X, Plus, FolderOpen, Paperclip, ChevronDown, ChevronUp, Sparkles, Camera, Banknote, Pencil, Trash2,
@@ -123,14 +123,15 @@ const categoriaBadge: Record<CategoriaContaPagar, string> = {
   retirada_socio: 'bg-violet-500/10 text-violet-600', fundo_caixa: 'bg-amber-500/10 text-amber-600', reembolso_evento: 'bg-rose-500/10 text-rose-600',
 }
 
-const SUBCATEGORIAS: string[] = ['aluguel', 'energia', 'internet', 'funcionários', 'manutenção', 'fornecedores', 'extras', 'outros', 'despesa_a_comprovar']
+const SUBCATEGORIAS: string[] = ['aluguel', 'energia', 'agua', 'iptu', 'internet', 'funcionários', 'manutenção', 'fornecedores', 'extras', 'outros', 'despesa_a_comprovar']
 const subcategoriaLabel: Record<string, string> = {
-  aluguel: 'Aluguel', energia: 'Energia', internet: 'Internet', funcionários: 'Funcionários',
+  aluguel: 'Aluguel', energia: 'Energia', agua: 'Água', iptu: 'IPTU', internet: 'Internet', funcionários: 'Funcionários',
   manutenção: 'Manutenção', fornecedores: 'Fornecedores', extras: 'Extras', outros: 'Outros',
   despesa_a_comprovar: 'Despesa a ser comprovada',
 }
 const subcategoriaBadge: Record<string, string> = {
   aluguel: 'bg-violet-500/10 text-violet-600', energia: 'bg-yellow-500/10 text-yellow-600',
+  agua: 'bg-cyan-500/10 text-cyan-600', iptu: 'bg-rose-500/10 text-rose-600',
   internet: 'bg-sky-500/10 text-sky-600', funcionários: 'bg-blue-500/10 text-blue-600',
   manutenção: 'bg-orange-500/10 text-orange-600', fornecedores: 'bg-teal-500/10 text-teal-600',
   extras: 'bg-zinc-500/10 text-zinc-600', outros: 'bg-slate-500/10 text-slate-600',
@@ -265,11 +266,14 @@ export default function ContasPagarPage() {
     setRelendoTodas(false)
   }
 
-  const filtered = useMemo(() => todasContas.filter(c => {
-    const status = statusEfetivo(c)
-    if (tab === 'apagar' && status === 'pago') return false
-    if (tab === 'pagas'  && status !== 'pago') return false
-    if (tab === 'atraso' && status !== 'atrasado') return false
+  // Filtros que não são a aba (espaço/categoria/vencimento/pagamento/
+  // fornecedor/valor) — extraído à parte pra poder contar quantas contas
+  // caem em cada aba (Contas a Pagar/Pagas/Em Atraso) sob o MESMO filtro
+  // ativo, sem depender de qual aba está selecionada no momento. Sem isso, o
+  // número no badge de cada aba mostrava o total geral (todas as contas do
+  // sistema, ignorando espaço/período/etc.), divergindo do total real da
+  // lista filtrada exibida embaixo.
+  const matchesOutrosFiltros = useCallback((c: ContaPagar) => {
     if (filterEspaco       && c.espaco       !== filterEspaco)       return false
     if (filterCategoria    && c.categoria    !== filterCategoria)    return false
     if (filterSubcategoria && c.subcategoria !== filterSubcategoria) return false
@@ -281,7 +285,22 @@ export default function ContasPagarPage() {
     if (filterValorMin     && c.valor < parseCurrencyBR(filterValorMin)) return false
     if (filterValorMax     && c.valor > parseCurrencyBR(filterValorMax)) return false
     return true
-  }), [todasContas, tab, filterEspaco, filterCategoria, filterSubcategoria, filterVencDe, filterVencAte, filterPagDe, filterPagAte, filterFornecedor, filterValorMin, filterValorMax])
+  }, [filterEspaco, filterCategoria, filterSubcategoria, filterVencDe, filterVencAte, filterPagDe, filterPagAte, filterFornecedor, filterValorMin, filterValorMax])
+
+  const filtered = useMemo(() => todasContas.filter(c => {
+    const status = statusEfetivo(c)
+    if (tab === 'apagar' && status === 'pago') return false
+    if (tab === 'pagas'  && status !== 'pago') return false
+    if (tab === 'atraso' && status !== 'atrasado') return false
+    return matchesOutrosFiltros(c)
+  }), [todasContas, tab, matchesOutrosFiltros])
+
+  // Contagem por aba respeitando todos os outros filtros ativos (mas não a
+  // própria aba, já que as três precisam contar ao mesmo tempo).
+  const contasSobFiltroAtual = useMemo(() => todasContas.filter(matchesOutrosFiltros), [todasContas, matchesOutrosFiltros])
+  const countApagar = contasSobFiltroAtual.filter(c => statusEfetivo(c) !== 'pago').length
+  const countPagas  = contasSobFiltroAtual.filter(c => statusEfetivo(c) === 'pago').length
+  const countAtraso = contasSobFiltroAtual.filter(c => statusEfetivo(c) === 'atrasado').length
 
   const porCategoria = CATEGORIAS.map(cat => ({ categoria: cat, rows: filtered.filter(c => c.categoria === cat) }))
 
@@ -384,7 +403,7 @@ export default function ContasPagarPage() {
                   {t === 'apagar' ? <Receipt className="h-3.5 w-3.5" /> : t === 'pagas' ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
                   {t === 'apagar' ? 'Contas a Pagar' : t === 'pagas' ? 'Contas Pagas' : 'Em Atraso'}
                   <span className={`rounded-full text-xs px-1.5 py-0.5 ${t === 'apagar' ? 'bg-amber-500/15 text-amber-600' : t === 'pagas' ? 'bg-emerald-500/15 text-emerald-600' : 'bg-red-500/15 text-red-600'}`}>
-                    {t === 'apagar' ? todasContas.filter(c => statusEfetivo(c) !== 'pago').length : t === 'pagas' ? todasContas.filter(c => statusEfetivo(c) === 'pago').length : todasContas.filter(c => statusEfetivo(c) === 'atrasado').length}
+                    {t === 'apagar' ? countApagar : t === 'pagas' ? countPagas : countAtraso}
                   </span>
                 </span>
               </button>

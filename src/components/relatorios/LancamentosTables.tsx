@@ -11,7 +11,7 @@ export const statusBadgeClass: Record<string, string> = {
 }
 
 export const SUBCATEGORIA_LABEL: Record<string, string> = {
-  aluguel: 'Aluguel', energia: 'Energia', internet: 'Internet', funcionários: 'Funcionários',
+  aluguel: 'Aluguel', energia: 'Energia', agua: 'Água', iptu: 'IPTU', internet: 'Internet', funcionários: 'Funcionários',
   manutenção: 'Manutenção', fornecedores: 'Fornecedores', extras: 'Extras', outros: 'Outros',
   despesa_a_comprovar: 'Despesa a ser comprovada',
 }
