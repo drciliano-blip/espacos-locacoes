@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import {
-  ArrowUpCircle, ArrowDownCircle, Wallet, HardHat, Vault, Plus, X, Eye,
+  ArrowUpCircle, ArrowDownCircle, Wallet, HardHat, Vault, Plus, X, Eye, Landmark,
 } from 'lucide-react'
 import FilterBar, { type RelatorioFilters } from '@/components/relatorios/FilterBar'
 import { getPeriodRange } from '@/lib/relatorios-utils'
@@ -458,7 +459,16 @@ export default function FechamentoClient() {
             disponível no Financeiro respeitando o filtro de espaço/período
             ativo (PDF via impressão do relatório completo abaixo; Excel com
             uma planilha por seção). */}
-        <div className="flex items-center justify-end print-hidden">
+        <div className="flex items-center justify-end gap-2 print-hidden">
+          {podeLancar && (
+            <Link
+              href="/fechamento/conciliacao"
+              className="flex items-center gap-1.5 rounded-lg border border-app-border2 bg-app-surface px-3 py-2 text-sm font-medium text-app-text hover:bg-app-surface2 transition-colors"
+            >
+              <Landmark className="h-4 w-4 text-[#25D366]" />
+              Conciliação Bancária
+            </Link>
+          )}
           <ExportarRelatorioButton onExcel={handleExportExcelCompleto} onPdf={() => window.print()} label="Exportar Relatório" />
         </div>
 

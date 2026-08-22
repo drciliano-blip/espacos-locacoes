@@ -5,15 +5,19 @@ import Link from 'next/link'
 import { ChevronLeft, Plus, Landmark, ArrowUpCircle, ArrowDownCircle } from 'lucide-react'
 import { useConciliacao, type ImportarExtratoResultado } from '@/contexts/ConciliacaoContext'
 import { useCurrentUser } from '@/contexts/UserContext'
-import { useEspacoAtivo } from '@/contexts/EspacoAtivoContext'
+import { useEspacoAtivo, MSG_ESPACO_ESPECIFICO_NECESSARIO } from '@/contexts/EspacoAtivoContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
-import { conciliar, type StatusConciliacao, type ItemConciliacao } from '@/lib/conciliacao-bancaria'
+import {
+  conciliar, receitaParaLancamento, contaParaLancamento,
+  type StatusConciliacao, type ItemConciliacao, type LancamentoResumo, type MovimentacaoBancaria,
+} from '@/lib/conciliacao-bancaria'
 import { formatCurrency } from '@/lib/utils'
 import { getPeriodRange } from '@/lib/relatorios-utils'
 import FilterBar, { type RelatorioFilters } from '@/components/relatorios/FilterBar'
 import Toast from '@/components/shared/Toast'
 import ImportarExtratoModal from './ImportarExtratoModal'
+import CriarLancamentoDeBancoModal from './CriarLancamentoDeBancoModal'
 
 const STATUS_LABEL: Record<StatusConciliacao, string> = {
   conciliado: 'Conciliado',
@@ -41,24 +45,117 @@ function direcaoDoItem(item: ItemConciliacao): 'entrada' | 'saida' {
   return item.lancamento?.tipo === 'receita' ? 'entrada' : 'saida'
 }
 
+// Ação por linha: "Criar lançamento" abre o modal completo; "Vincular a…"
+// resolve o caso comum de duplicidade/divergência com 1 clique (o lançamento
+// certo já existe, só falta apontar pra ele); "Desvincular" desfaz um vínculo
+// manual (o automático nunca precisa — é recalculado sozinho a cada render).
+function AcaoConferencia({
+  item, candidatos, onCriar, onVincular, onDesvincular,
+}: {
+  item: ItemConciliacao
+  candidatos: LancamentoResumo[]
+  onCriar: () => void
+  onVincular: (l: LancamentoResumo) => Promise<void>
+  onDesvincular: () => Promise<void>
+}) {
+  const [selecionado, setSelecionado] = useState('')
+  const [processando, setProcessando] = useState(false)
+
+  if (item.vinculoManual) {
+    return (
+      <button
+        onClick={async () => { setProcessando(true); try { await onDesvincular() } finally { setProcessando(false) } }}
+        disabled={processando}
+        className="text-[11px] text-app-subtle hover:text-red-500 underline underline-offset-2 disabled:opacity-40"
+      >
+        Desvincular
+      </button>
+    )
+  }
+  if (!item.movimentacao || item.lancamento) return null
+
+  async function handleVincular() {
+    const alvo = candidatos.find(c => `${c.tipo}:${c.id}` === selecionado)
+    if (!alvo) return
+    setProcessando(true)
+    try { await onVincular(alvo) } finally { setProcessando(false) }
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 min-w-[170px]">
+      <button
+        onClick={onCriar}
+        className="rounded-lg border border-[#25D366]/40 bg-[#25D366]/10 px-2 py-1 text-[11px] font-medium text-[#128C7E] hover:bg-[#25D366]/20 transition-colors"
+      >
+        Criar lançamento
+      </button>
+      {candidatos.length > 0 && (
+        <div className="flex items-center gap-1">
+          <select
+            value={selecionado}
+            onChange={e => setSelecionado(e.target.value)}
+            className="min-w-0 flex-1 rounded-lg border border-app-border2 bg-app-surface2 px-1.5 py-1 text-[11px] text-app-text focus:outline-none"
+          >
+            <option value="">Vincular a…</option>
+            {candidatos.map(c => (
+              <option key={`${c.tipo}:${c.id}`} value={`${c.tipo}:${c.id}`}>{c.data} — {formatCurrency(c.valor)} — {c.descricao.slice(0, 24)}</option>
+            ))}
+          </select>
+          <button
+            onClick={handleVincular}
+            disabled={!selecionado || processando}
+            className="rounded-lg border border-app-border2 px-1.5 py-1 text-[11px] text-app-muted hover:bg-app-surface2 disabled:opacity-40 transition-colors"
+          >
+            OK
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Tela de conferência banco x sistema — status nunca é persistido, sempre
 // recalculado aqui a partir do que está carregado (ver src/lib/conciliacao-bancaria.ts).
 export default function ConciliacaoBancariaClient() {
-  const { extratos, movimentacoes, loading, importarExtrato } = useConciliacao()
-  const { receitas } = useReceitas()
-  const { contas: contasPagar } = useContasPagar()
+  const { extratos, movimentacoes, loading, importarExtrato, vincularMovimentacao, desvincularMovimentacao } = useConciliacao()
+  const { receitas, categorias, addReceita } = useReceitas()
+  const { contas: contasPagar, addConta } = useContasPagar()
   const { role } = useCurrentUser()
-  const { espacoUnico, espacosEmEscopo: selectedSpaces } = useEspacoAtivo()
+  const { espacoUnico, espacosEmEscopo: selectedSpaces, precisaEspacoEspecifico } = useEspacoAtivo()
   const podeVer = role === 'admin' || role === 'financeiro'
 
   const [filters, setFilters] = useState<RelatorioFilters>(getDefaultFilters)
   const [statusFiltro, setStatusFiltro] = useState<StatusConciliacao | 'todos'>('todos')
   const [direcaoFiltro, setDirecaoFiltro] = useState<'todas' | 'entrada' | 'saida'>('todas')
   const [importOpen, setImportOpen] = useState(false)
+  const [criarLancamentoAlvo, setCriarLancamentoAlvo] = useState<MovimentacaoBancaria | null>(null)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   function showToast(msg: string) {
     setToastMsg(msg)
     setTimeout(() => setToastMsg(null), 4000)
+  }
+
+  function handleAbrirCriar(mov: MovimentacaoBancaria) {
+    if (precisaEspacoEspecifico()) { showToast(MSG_ESPACO_ESPECIFICO_NECESSARIO); return }
+    setCriarLancamentoAlvo(mov)
+  }
+
+  async function handleVincularExistente(mov: MovimentacaoBancaria, l: LancamentoResumo) {
+    try {
+      await vincularMovimentacao(mov.id, l.tipo, l.id)
+      showToast('Movimentação vinculada.')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Falha ao vincular.')
+    }
+  }
+
+  async function handleDesvincular(mov: MovimentacaoBancaria) {
+    try {
+      await desvincularMovimentacao(mov.id)
+      showToast('Vínculo removido — movimentação volta pra conferência automática.')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Falha ao desvincular.')
+    }
   }
 
   function handleImportado(resultado: ImportarExtratoResultado) {
@@ -100,6 +197,24 @@ export default function ConciliacaoBancariaClient() {
     if (direcaoFiltro !== 'todas' && direcaoDoItem(item) !== direcaoFiltro) return false
     return true
   }), [resultado, statusFiltro, direcaoFiltro])
+
+  // Lançamentos pagos, no escopo filtrado, que já viraram um "conciliado"
+  // automático — ficam de fora das opções de "Vincular a…" (evita apontar
+  // duas movimentações pro mesmo lançamento).
+  const lancamentosJaConciliados = useMemo(() => {
+    const set = new Set<string>()
+    resultado.itens.forEach(item => { if (item.status === 'conciliado' && item.lancamento) set.add(`${item.lancamento.tipo}:${item.lancamento.id}`) })
+    return set
+  }, [resultado])
+
+  const candidatosEntradaLivres = useMemo(
+    () => receitasEmEscopo.filter(r => r.status === 'pago').map(receitaParaLancamento).filter(l => !lancamentosJaConciliados.has(`${l.tipo}:${l.id}`)),
+    [receitasEmEscopo, lancamentosJaConciliados],
+  )
+  const candidatosSaidaLivres = useMemo(
+    () => contasPagarEmEscopo.filter(c => c.status === 'pago').map(contaParaLancamento).filter(l => !lancamentosJaConciliados.has(`${l.tipo}:${l.id}`)),
+    [contasPagarEmEscopo, lancamentosJaConciliados],
+  )
 
   return (
     <div className="max-w-6xl mx-auto space-y-4">
@@ -217,7 +332,7 @@ export default function ConciliacaoBancariaClient() {
                 <table className="w-full text-xs border-collapse">
                   <thead>
                     <tr className="border-b border-app-border bg-app-surface2">
-                      {['Movimentação Bancária', 'Lançamento no Sistema', 'Status'].map(h => (
+                      {['Movimentação Bancária', 'Lançamento no Sistema', 'Status', 'Ação'].map(h => (
                         <th key={h} className="px-2 py-2 text-left font-medium text-app-subtle uppercase tracking-wide whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
@@ -254,6 +369,17 @@ export default function ConciliacaoBancariaClient() {
                         <td className="px-2 py-2 align-top whitespace-nowrap">
                           <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_COLOR[item.status]}`}>{STATUS_LABEL[item.status]}</span>
                           {item.vinculoManual && <span className="block text-[10px] text-app-subtle mt-1">Vinculado manualmente</span>}
+                        </td>
+                        <td className="px-2 py-2 align-top">
+                          {item.movimentacao && (
+                            <AcaoConferencia
+                              item={item}
+                              candidatos={direcaoDoItem(item) === 'entrada' ? candidatosEntradaLivres : candidatosSaidaLivres}
+                              onCriar={() => handleAbrirCriar(item.movimentacao!)}
+                              onVincular={l => handleVincularExistente(item.movimentacao!, l)}
+                              onDesvincular={() => handleDesvincular(item.movimentacao!)}
+                            />
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -302,6 +428,19 @@ export default function ConciliacaoBancariaClient() {
           onClose={() => setImportOpen(false)}
           onImportar={importarExtrato}
           onImportado={handleImportado}
+        />
+      )}
+
+      {criarLancamentoAlvo && espacoUnico && (
+        <CriarLancamentoDeBancoModal
+          movimentacao={criarLancamentoAlvo}
+          espacoPadrao={espacoUnico}
+          categorias={categorias}
+          onClose={() => setCriarLancamentoAlvo(null)}
+          onSaveReceita={addReceita}
+          onSaveConta={addConta}
+          onVincular={vincularMovimentacao}
+          onCriado={() => showToast('Lançamento criado e vinculado à movimentação.')}
         />
       )}
 

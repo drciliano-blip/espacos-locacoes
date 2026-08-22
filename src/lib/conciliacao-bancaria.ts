@@ -145,11 +145,11 @@ function avaliarCandidato(
   }
 }
 
-function receitaParaLancamento(r: Receita): LancamentoResumo {
+export function receitaParaLancamento(r: Receita): LancamentoResumo {
   return { tipo: 'receita', id: r.id, descricao: r.descricao, valor: r.valor, data: r.dataRecebimento ?? r.data, espaco: r.espaco }
 }
 
-function contaParaLancamento(c: ContaPagar): LancamentoResumo {
+export function contaParaLancamento(c: ContaPagar): LancamentoResumo {
   return { tipo: 'conta_pagar', id: c.id, descricao: c.descricao, valor: c.valor, data: c.dataPagamento ?? c.dataVencimento, espaco: c.espaco !== 'Todos' ? c.espaco : undefined }
 }
 
