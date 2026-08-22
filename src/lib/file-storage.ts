@@ -7,7 +7,7 @@ export interface StoredFile {
   name: string
   mimeType: string
   size: number
-  module: 'contas' | 'contratos' | 'agenda' | 'pagamentos' | 'espacos' | 'funcionarios' | 'fichas' | 'receitas'
+  module: 'contas' | 'contratos' | 'agenda' | 'pagamentos' | 'espacos' | 'funcionarios' | 'fichas' | 'receitas' | 'extratos'
   entityId: string
   entityName: string
   espaco?: string
