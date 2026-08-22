@@ -7,6 +7,7 @@ import {
   MessageSquareText, RefreshCw, Vault,
 } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
+import { useEspacoAtivo, MSG_ESPACO_ESPECIFICO_NECESSARIO } from '@/contexts/EspacoAtivoContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { DIVISAO_SOCIOS } from '@/lib/socios-config'
 import { formatCurrency, parseCurrencyBR, formatDate } from '@/lib/utils'
@@ -175,13 +176,12 @@ function contaParaForm(conta: ContaPagar): FormState {
 }
 
 export default function ContasPagarPage() {
-  const { espacosNomes } = useEspacos()
+  const { espacosEmEscopo, espacoUnico, precisaEspacoEspecifico } = useEspacoAtivo()
   const { contas, addConta, updateConta, deleteConta, darBaixa, corrigirDataPagamento } = useContasPagar()
   const [contaBaixa,        setContaBaixa]        = useState<ContaPagar | null>(null)
   const [contaEditando,     setContaEditando]     = useState<ContaPagar | null>(null)
   const [contaExcluindo,    setContaExcluindo]    = useState<ContaPagar | null>(null)
   const [tab,               setTab]               = useState<'apagar' | 'pagas' | 'atraso'>('apagar')
-  const [filterEspaco,      setFilterEspaco]      = useState('')
   const [filterCategoria,   setFilterCategoria]   = useState<CategoriaContaPagar | ''>('')
   const [filterSubcategoria,setFilterSubcategoria]= useState('')
   const [filterVencDe,      setFilterVencDe]      = useState('')
@@ -274,7 +274,7 @@ export default function ContasPagarPage() {
   // sistema, ignorando espaço/período/etc.), divergindo do total real da
   // lista filtrada exibida embaixo.
   const matchesOutrosFiltros = useCallback((c: ContaPagar) => {
-    if (filterEspaco       && c.espaco       !== filterEspaco)       return false
+    if (espacosEmEscopo    && !espacosEmEscopo.includes(c.espaco))    return false
     if (filterCategoria    && c.categoria    !== filterCategoria)    return false
     if (filterSubcategoria && c.subcategoria !== filterSubcategoria) return false
     if (filterVencDe       && c.dataVencimento < filterVencDe)       return false
@@ -285,7 +285,7 @@ export default function ContasPagarPage() {
     if (filterValorMin     && c.valor < parseCurrencyBR(filterValorMin)) return false
     if (filterValorMax     && c.valor > parseCurrencyBR(filterValorMax)) return false
     return true
-  }, [filterEspaco, filterCategoria, filterSubcategoria, filterVencDe, filterVencAte, filterPagDe, filterPagAte, filterFornecedor, filterValorMin, filterValorMax])
+  }, [espacosEmEscopo, filterCategoria, filterSubcategoria, filterVencDe, filterVencAte, filterPagDe, filterPagAte, filterFornecedor, filterValorMin, filterValorMax])
 
   const filtered = useMemo(() => todasContas.filter(c => {
     const status = statusEfetivo(c)
@@ -312,14 +312,20 @@ export default function ContasPagarPage() {
     return chaveB.localeCompare(chaveA)
   }), [filtered])
 
-  const totalPago     = todasContas.filter(c => statusEfetivo(c) === 'pago').reduce((s, c) => s + c.valor, 0)
-  const totalPendente = todasContas.filter(c => statusEfetivo(c) === 'pendente').reduce((s, c) => s + c.valor, 0)
-  const totalAtrasado = todasContas.filter(c => statusEfetivo(c) === 'atrasado').reduce((s, c) => s + c.valor, 0)
-  const totalGeral    = todasContas.reduce((s, c) => s + c.valor, 0)
+  // KPIs do topo respeitam o espaço ativo global (senão mostrariam um total
+  // de empresa inteira acima de uma lista já filtrada num espaço só —
+  // exatamente a mistura de contexto que a seleção global existe pra evitar),
+  // mas não os demais filtros da lista (categoria/vencimento/etc.) — esses só
+  // afetam a relação detalhada abaixo, os KPIs continuam sendo a visão geral.
+  const contasNoEspacoAtivo = espacosEmEscopo ? todasContas.filter(c => espacosEmEscopo.includes(c.espaco)) : todasContas
+  const totalPago     = contasNoEspacoAtivo.filter(c => statusEfetivo(c) === 'pago').reduce((s, c) => s + c.valor, 0)
+  const totalPendente = contasNoEspacoAtivo.filter(c => statusEfetivo(c) === 'pendente').reduce((s, c) => s + c.valor, 0)
+  const totalAtrasado = contasNoEspacoAtivo.filter(c => statusEfetivo(c) === 'atrasado').reduce((s, c) => s + c.valor, 0)
+  const totalGeral    = contasNoEspacoAtivo.reduce((s, c) => s + c.valor, 0)
 
-  const hasFilters = !!(filterEspaco || filterCategoria || filterSubcategoria || filterVencDe || filterVencAte || filterPagDe || filterPagAte || filterFornecedor || filterValorMin || filterValorMax)
+  const hasFilters = !!(filterCategoria || filterSubcategoria || filterVencDe || filterVencAte || filterPagDe || filterPagAte || filterFornecedor || filterValorMin || filterValorMax)
   function clearFilters() {
-    setFilterEspaco(''); setFilterCategoria(''); setFilterSubcategoria('')
+    setFilterCategoria(''); setFilterSubcategoria('')
     setFilterVencDe(''); setFilterVencAte(''); setFilterPagDe(''); setFilterPagAte('')
     setFilterFornecedor(''); setFilterValorMin(''); setFilterValorMax('')
   }
@@ -363,7 +369,10 @@ export default function ContasPagarPage() {
       {/* Ações */}
       <div className="flex items-center gap-2 flex-wrap">
         <button
-          onClick={() => setNovaContaOpen(true)}
+          onClick={() => {
+            if (precisaEspacoEspecifico()) { showToast(MSG_ESPACO_ESPECIFICO_NECESSARIO); return }
+            setNovaContaOpen(true)
+          }}
           className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white transition-opacity"
           style={{ backgroundColor: GREEN }}
           onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#128C7E' }}
@@ -373,7 +382,10 @@ export default function ContasPagarPage() {
           Nova Conta
         </button>
         <button
-          onClick={() => setTransferirFundoOpen(true)}
+          onClick={() => {
+            if (precisaEspacoEspecifico()) { showToast(MSG_ESPACO_ESPECIFICO_NECESSARIO); return }
+            setTransferirFundoOpen(true)
+          }}
           className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-600 hover:bg-amber-500/20 transition-colors"
         >
           <Vault className="h-4 w-4" />
@@ -423,8 +435,6 @@ export default function ContasPagarPage() {
             )}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
-            <FiltroSelect label="Espaço" value={filterEspaco} onChange={setFilterEspaco}
-              options={[['', 'Todos os espaços'], ['Todos', 'Geral (Todos)'], ...espacosNomes.map(e => [e, e] as [string, string])]} />
             <FiltroSelect label="Categoria" value={filterCategoria} onChange={v => setFilterCategoria(v as CategoriaContaPagar | '')}
               options={[['', 'Todas as categorias'], ...CATEGORIAS.map(c => [c, categoriaLabel[c]] as [string, string])]} />
             <FiltroSelect label="Subcategoria" value={filterSubcategoria} onChange={setFilterSubcategoria}
@@ -634,8 +644,12 @@ interface ContaFormModalProps {
 
 function ContaFormModal({ conta, onClose, onSave }: ContaFormModalProps) {
   const { espacosNomes } = useEspacos()
+  // Só usado pra travar o espaço de contas NOVAS — editar uma conta existente
+  // continua livre pra trocar o espaço (ela já pode pertencer a outro
+  // diferente do que está ativo agora, isso é legítimo).
+  const { espacoUnico } = useEspacoAtivo()
   const isEdit = !!conta
-  const [form, setForm] = useState<FormState>(() => conta ? contaParaForm(conta) : { ...FORM_EMPTY, espaco: espacosNomes[0] ?? '' })
+  const [form, setForm] = useState<FormState>(() => conta ? contaParaForm(conta) : { ...FORM_EMPTY, espaco: espacoUnico ?? espacosNomes[0] ?? '' })
   const [saving, setSaving] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const cameraRef = useRef<HTMLInputElement>(null)
@@ -850,6 +864,11 @@ function ContaFormModal({ conta, onClose, onSave }: ContaFormModalProps) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-app-muted mb-1">Espaço vinculado *</label>
+              {!isEdit ? (
+                <p className="w-full rounded-lg border border-app-border2 bg-app-surface3 px-3 py-1.5 text-sm text-app-text2">
+                  {form.espaco}
+                </p>
+              ) : (
               <select value={form.espaco} onChange={e => setForm(f => ({ ...f, espaco: e.target.value }))}
                 className="w-full cursor-pointer rounded-lg border border-app-border2 bg-app-surface2 px-3 py-1.5 text-sm text-app-text focus:outline-none"
                 onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
@@ -858,6 +877,7 @@ function ContaFormModal({ conta, onClose, onSave }: ContaFormModalProps) {
                 <option value="Todos">Todos (Geral)</option>
                 {espacosNomes.map(e => <option key={e} value={e}>{e}</option>)}
               </select>
+              )}
             </div>
             <div>
               {form.categoria === 'retirada_socio' ? (
@@ -1022,7 +1042,8 @@ function TransferirFundoCaixaModal({ onClose, onSave, onSaved }: {
   onSaved: () => void
 }) {
   const { espacosNomes } = useEspacos()
-  const [espaco, setEspaco] = useState(espacosNomes[0] ?? '')
+  const { espacoUnico } = useEspacoAtivo()
+  const [espaco, setEspaco] = useState(espacoUnico ?? espacosNomes[0] ?? '')
   const [valor, setValor] = useState('')
   const [data, setData] = useState(() => new Date().toISOString().split('T')[0])
   const [hora, setHora] = useState(() => new Date().toTimeString().slice(0, 5))
@@ -1112,14 +1133,18 @@ function TransferirFundoCaixaModal({ onClose, onSave, onSaved }: {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-app-subtle mb-0.5 block">Espaço<span className="text-red-400 ml-0.5">*</span></label>
-              <select
-                value={espaco}
-                onChange={e => setEspaco(e.target.value)}
-                className={`w-full cursor-pointer rounded-lg border ${submitted && errors.espaco ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
-              >
-                <option value="">— Selecione —</option>
-                {espacosNomes.map(e => <option key={e} value={e}>{e}</option>)}
-              </select>
+              {espacoUnico ? (
+                <p className="w-full rounded-lg border border-app-border2 bg-app-surface3 px-2.5 py-1.5 text-sm text-app-text2">{espaco}</p>
+              ) : (
+                <select
+                  value={espaco}
+                  onChange={e => setEspaco(e.target.value)}
+                  className={`w-full cursor-pointer rounded-lg border ${submitted && errors.espaco ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
+                >
+                  <option value="">— Selecione —</option>
+                  {espacosNomes.map(e => <option key={e} value={e}>{e}</option>)}
+                </select>
+              )}
             </div>
             <div>
               <label className="text-xs text-app-subtle mb-0.5 block">Valor (R$)<span className="text-red-400 ml-0.5">*</span></label>

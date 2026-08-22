@@ -7,42 +7,30 @@ import EventList from '@/components/agenda/EventList'
 import GoogleCalendarView from '@/components/agenda/GoogleCalendarView'
 import EventoDrawer from '@/components/eventos/EventoDrawer'
 import NovoEventoModal from '@/components/eventos/NovoEventoModal'
+import Toast from '@/components/shared/Toast'
 import { useEventos } from '@/contexts/EventosContext'
 import { useCurrentUser } from '@/contexts/UserContext'
+import { useEspacoAtivo, MSG_ESPACO_ESPECIFICO_NECESSARIO } from '@/contexts/EspacoAtivoContext'
 import type { Evento, Espaco } from '@/types'
-
-const ESPACOS_LISTA: Espaco[] = ['Usine', 'Fabrique', 'House Pacaembu', 'Complexo Jussara', 'Espaço Solon']
-
-const espacoDotColors: Record<Espaco, string> = {
-  'Usine':            'bg-violet-500',
-  'Fabrique':         'bg-indigo-500',
-  'House Pacaembu':   'bg-sky-500',
-  'Complexo Jussara': 'bg-emerald-500',
-  'Espaço Solon':     'bg-orange-500',
-}
 
 export default function AgendaPage() {
   const { eventos, addEvento, updateEvento, deleteEvento } = useEventos()
   const { role } = useCurrentUser()
+  const { espacosEmEscopo, espacoUnico, precisaEspacoEspecifico } = useEspacoAtivo()
 
   const [selectedDate, setSelectedDate]     = useState<Date | null>(null)
   const [selectedEvento, setSelectedEvento] = useState<Evento | null>(null)
-  const [espacosFiltro, setEspacosFiltro]   = useState<Set<Espaco>>(new Set())
   const [novoEventoOpen, setNovoEventoOpen] = useState(false)
-
-  function toggleEspaco(espaco: Espaco) {
-    setEspacosFiltro(prev => {
-      const next = new Set(prev)
-      if (next.has(espaco)) next.delete(espaco)
-      else next.add(espaco)
-      return next
-    })
+  const [toastMsg, setToastMsg] = useState<string | null>(null)
+  function showToast(msg: string) {
+    setToastMsg(msg)
+    setTimeout(() => setToastMsg(null), 3500)
   }
 
   const eventosFiltrados = useMemo(() => {
-    if (espacosFiltro.size === 0) return eventos
-    return eventos.filter(e => espacosFiltro.has(e.espaco))
-  }, [eventos, espacosFiltro])
+    if (!espacosEmEscopo) return eventos
+    return eventos.filter(e => espacosEmEscopo.includes(e.espaco))
+  }, [eventos, espacosEmEscopo])
 
   async function handleUpdate(updated: Evento) {
     await updateEvento(updated)
@@ -57,40 +45,11 @@ export default function AgendaPage() {
   return (
     <div className="space-y-4 max-w-7xl mx-auto">
 
-      {/* Topo: filtros + botão Novo Evento */}
+      {/* Espaço já é definido globalmente pelo Dashboard — aqui só mostra
+          quantos eventos estão em escopo e o botão de criar. */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs text-app-subtle font-medium shrink-0">Filtrar por espaço:</span>
-
-        <button
-          onClick={() => setEspacosFiltro(new Set())}
-          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-            espacosFiltro.size === 0
-              ? 'text-white font-bold shadow-md'
-              : 'bg-[#F0F2F5] text-[#667781] hover:bg-[#E9EDEF]'
-          }`}
-          style={espacosFiltro.size === 0 ? { backgroundColor: '#25D366' } : undefined}
-        >
-          Todos
-        </button>
-
-        {ESPACOS_LISTA.map(espaco => (
-          <button
-            key={espaco}
-            onClick={() => toggleEspaco(espaco)}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-              espacosFiltro.has(espaco)
-                ? 'text-white font-bold shadow-md'
-                : 'bg-[#F0F2F5] text-[#667781] hover:bg-[#E9EDEF]'
-            }`}
-            style={espacosFiltro.has(espaco) ? { backgroundColor: '#25D366' } : undefined}
-          >
-            <span className={`h-2 w-2 rounded-full shrink-0 ${espacoDotColors[espaco]}`} />
-            {espaco}
-          </button>
-        ))}
-
-        {espacosFiltro.size > 0 && (
-          <span className="text-xs text-app-subtle ml-1">
+        {espacosEmEscopo && (
+          <span className="text-xs text-app-subtle">
             {eventosFiltrados.length} evento{eventosFiltrados.length !== 1 ? 's' : ''}
           </span>
         )}
@@ -98,7 +57,10 @@ export default function AgendaPage() {
         {/* Botão Novo Evento */}
         {role !== 'socio' && (
           <button
-            onClick={() => setNovoEventoOpen(true)}
+            onClick={() => {
+              if (precisaEspacoEspecifico()) { showToast(MSG_ESPACO_ESPECIFICO_NECESSARIO); return }
+              setNovoEventoOpen(true)
+            }}
             className="ml-auto flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white shrink-0 transition-opacity"
             style={{ backgroundColor: '#25D366' }}
             onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#128C7E' }}
@@ -137,10 +99,13 @@ export default function AgendaPage() {
 
       {novoEventoOpen && (
         <NovoEventoModal
+          espacoPadrao={(espacoUnico ?? undefined) as Espaco | undefined}
           onClose={() => setNovoEventoOpen(false)}
           onSave={addEvento}
         />
       )}
+
+      <Toast message={toastMsg} />
     </div>
   )
 }
