@@ -1,12 +1,11 @@
 'use client'
 
-import { useEspacos } from '@/contexts/EspacosContext'
-
 export type Periodo = 'semanal' | 'mensal' | 'trimestral' | 'semestral' | 'anual'
 
+// Espaço saiu daqui — a seleção agora é global (Dashboard/EspacoAtivoContext),
+// esse filtro cuida só do período.
 export interface RelatorioFilters {
   periodo: Periodo
-  espacos: string[]
   dataInicio: string
   dataFim: string
 }
@@ -25,21 +24,8 @@ interface FilterBarProps {
 }
 
 export default function FilterBar({ filters, onChange }: FilterBarProps) {
-  const { espacosConfig } = useEspacos()
-
   function setPeriodo(periodo: Periodo) {
     onChange({ ...filters, periodo })
-  }
-
-  function toggleEspaco(nome: string) {
-    const next = filters.espacos.includes(nome)
-      ? filters.espacos.filter((e) => e !== nome)
-      : [...filters.espacos, nome]
-    onChange({ ...filters, espacos: next })
-  }
-
-  function setTodos() {
-    onChange({ ...filters, espacos: [] })
   }
 
   return (
@@ -85,40 +71,6 @@ export default function FilterBar({ filters, onChange }: FilterBarProps) {
               className="rounded-lg border border-app-border2 bg-app-surface2 px-3 py-1.5 text-sm text-app-text2 focus:border-violet-500 focus:outline-none"
             />
           </div>
-        </div>
-      </div>
-
-      {/* Space selector */}
-      <div>
-        <p className="text-xs font-medium text-app-subtle uppercase tracking-wider mb-2">Espaços</p>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={setTodos}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all border ${
-              filters.espacos.length === 0
-                ? 'border-violet-500/40 bg-violet-500/10 text-violet-300'
-                : 'border-app-border2 bg-app-surface2 text-app-muted hover:text-app-text'
-            }`}
-          >
-            Todos
-          </button>
-          {espacosConfig.map((e) => {
-            const active = filters.espacos.includes(e.nome)
-            return (
-              <button
-                key={e.slug}
-                onClick={() => toggleEspaco(e.nome)}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all border ${
-                  active
-                    ? `${e.bgClass} ${e.borderClass} ${e.colorClass}`
-                    : 'border-app-border2 bg-app-surface2 text-app-muted hover:text-app-text'
-                }`}
-              >
-                <span className={`h-2 w-2 rounded-full ${e.dotClass}`} />
-                {e.nome}
-              </button>
-            )
-          })}
         </div>
       </div>
     </div>

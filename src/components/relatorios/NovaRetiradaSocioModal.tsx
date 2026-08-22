@@ -35,6 +35,9 @@ interface BoletoExtracao {
 }
 
 interface Props {
+  // Quando presente, o espaço vem travado nesse valor (seleção global do
+  // Dashboard) — o campo aparece só como texto, não como select.
+  espacoPadrao?: string
   onClose: () => void
   onSave: (c: ContaPagar) => Promise<void>
   onSaved: () => void
@@ -44,9 +47,9 @@ interface Props {
 // isDespesaOperacional em ContasPagarContext) — cada retirada fica vinculada
 // exatamente ao sócio que recebeu o dinheiro (campo `fornecedor`), nunca
 // rateada automaticamente pelo percentual societário.
-export default function NovaRetiradaSocioModal({ onClose, onSave, onSaved }: Props) {
+export default function NovaRetiradaSocioModal({ espacoPadrao, onClose, onSave, onSaved }: Props) {
   const { espacosNomes } = useEspacos()
-  const [espaco, setEspaco] = useState(espacosNomes[0] ?? '')
+  const [espaco, setEspaco] = useState(espacoPadrao ?? espacosNomes[0] ?? '')
   const [socio, setSocio] = useState('')
   const [valor, setValor] = useState('')
   const [data, setData] = useState(() => new Date().toISOString().split('T')[0])
@@ -173,14 +176,18 @@ export default function NovaRetiradaSocioModal({ onClose, onSave, onSaved }: Pro
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-app-subtle mb-0.5 block">Espaço<span className="text-red-400 ml-0.5">*</span></label>
-              <select
-                value={espaco}
-                onChange={e => { setEspaco(e.target.value); setSocio('') }}
-                className={`w-full cursor-pointer rounded-lg border ${submitted && errors.espaco ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
-              >
-                <option value="">— Selecione —</option>
-                {espacosNomes.map(e => <option key={e} value={e}>{e}</option>)}
-              </select>
+              {espacoPadrao ? (
+                <p className="w-full rounded-lg border border-app-border2 bg-app-surface3 px-2.5 py-1.5 text-sm text-app-text2">{espaco}</p>
+              ) : (
+                <select
+                  value={espaco}
+                  onChange={e => { setEspaco(e.target.value); setSocio('') }}
+                  className={`w-full cursor-pointer rounded-lg border ${submitted && errors.espaco ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
+                >
+                  <option value="">— Selecione —</option>
+                  {espacosNomes.map(e => <option key={e} value={e}>{e}</option>)}
+                </select>
+              )}
             </div>
             <div>
               <label className="text-xs text-app-subtle mb-0.5 block">Sócio<span className="text-red-400 ml-0.5">*</span></label>

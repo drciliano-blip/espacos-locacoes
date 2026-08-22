@@ -11,6 +11,7 @@ import { useReceitas, type Receita } from '@/contexts/ReceitasContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
 import type { ContaPagar } from '@/types'
 import { useEspacos } from '@/contexts/EspacosContext'
+import { useEspacoAtivo, MSG_ESPACO_ESPECIFICO_NECESSARIO } from '@/contexts/EspacoAtivoContext'
 import { useFundos } from '@/contexts/FundosContext'
 import { useRepasses } from '@/contexts/RepassesContext'
 import { useCurrentUser } from '@/contexts/UserContext'
@@ -31,7 +32,7 @@ import Toast from '@/components/shared/Toast'
 
 function getDefaultFilters(): RelatorioFilters {
   const { inicio, fim } = getPeriodRange('anual')
-  return { periodo: 'anual', espacos: [], dataInicio: inicio, dataFim: fim }
+  return { periodo: 'anual', dataInicio: inicio, dataFim: fim }
 }
 
 const PERIODO_LABELS: Record<string, string> = {
@@ -54,6 +55,7 @@ export default function FechamentoClient() {
   const { receitas, addReceita, editarReceita, deleteReceita, categorias } = useReceitas()
   const { contas: contasPagar, addConta, updateConta, deleteConta } = useContasPagar()
   const { espacosConfig } = useEspacos()
+  const { espacosEmEscopo: selectedSpaces, espacoUnico, precisaEspacoEspecifico } = useEspacoAtivo()
   const { fundos, movimentacoes, addFundo } = useFundos()
   const { repasses, addRepasse } = useRepasses()
   const { role } = useCurrentUser()
@@ -111,13 +113,13 @@ export default function FechamentoClient() {
     }
   }
 
-  const selectedSpaces = filters.espacos.length > 0 ? filters.espacos : undefined
+  // selectedSpaces/espacoUnico vêm do contexto global (EspacoAtivoContext) —
+  // Financeiro não tem mais filtro de espaço próprio.
   const espacos = useMemo(
     () => selectedSpaces ? espacosConfig.filter(e => selectedSpaces.includes(e.nome)) : espacosConfig,
     [espacosConfig, selectedSpaces],
   )
-  const espacoUnico = selectedSpaces?.length === 1 ? selectedSpaces[0] : undefined
-  const espacosLabel = filters.espacos.length === 0 ? 'Todos os espaços' : filters.espacos.join(', ')
+  const espacosLabel = espacoUnico ?? (selectedSpaces?.length ? selectedSpaces.join(', ') : 'Todos os espaços')
   const periodoLabel = PERIODO_LABELS[filters.periodo] ?? filters.periodo
 
   const fechamento = useMemo(
@@ -649,11 +651,17 @@ export default function FechamentoClient() {
           <h4 className="text-xs font-semibold text-app-muted uppercase tracking-wide">Sócios</h4>
           {podeLancar && (
             <div className="flex items-center gap-2">
-              <button onClick={() => setNovoAporteOpen(true)}
+              <button onClick={() => {
+                if (precisaEspacoEspecifico()) { showToast(MSG_ESPACO_ESPECIFICO_NECESSARIO); return }
+                setNovoAporteOpen(true)
+              }}
                 className="flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-600 hover:bg-violet-500/20 transition-colors">
                 <Plus className="h-3.5 w-3.5" />Aporte
               </button>
-              <button onClick={() => setNovaRetiradaOpen(true)}
+              <button onClick={() => {
+                if (precisaEspacoEspecifico()) { showToast(MSG_ESPACO_ESPECIFICO_NECESSARIO); return }
+                setNovaRetiradaOpen(true)
+              }}
                 className="flex items-center gap-1.5 rounded-lg border border-fuchsia-500/30 bg-fuchsia-500/10 px-3 py-1.5 text-xs font-medium text-fuchsia-600 hover:bg-fuchsia-500/20 transition-colors">
                 <Plus className="h-3.5 w-3.5" />Retirada
               </button>
@@ -755,7 +763,7 @@ export default function FechamentoClient() {
         <NovaReceitaModal
           categorias={categorias}
           fixedTipoEntrada="aporte_societario"
-          espacoPadrao={espacoUnico}
+          espacoPadrao={espacoUnico ?? undefined}
           onClose={() => setNovoAporteOpen(false)}
           onSave={async input => {
             const nova = await addReceita(input)
@@ -767,6 +775,7 @@ export default function FechamentoClient() {
 
       {novaRetiradaOpen && (
         <NovaRetiradaSocioModal
+          espacoPadrao={espacoUnico ?? undefined}
           onClose={() => setNovaRetiradaOpen(false)}
           onSave={addConta}
           onSaved={() => showToast('Retirada de sócio registrada.')}
