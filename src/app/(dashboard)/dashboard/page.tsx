@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { DollarSign, CalendarCheck, TrendingUp, AlertCircle, BarChart3, ChevronDown } from 'lucide-react'
+import { DollarSign, CalendarCheck, TrendingUp, AlertCircle, BarChart3, ChevronDown, Check } from 'lucide-react'
 import KPICard from '@/components/dashboard/KPICard'
 import RevenueChart from '@/components/dashboard/RevenueChart'
 import OccupancyChart from '@/components/dashboard/OccupancyChart'
 import { formatCurrency } from '@/lib/utils'
 import { useEspacos } from '@/contexts/EspacosContext'
+import { useEspacoAtivo } from '@/contexts/EspacoAtivoContext'
 import { useEventos } from '@/contexts/EventosContext'
 import { useReceitas, isReceitaOperacional } from '@/contexts/ReceitasContext'
 import type { TipoEvento } from '@/types'
@@ -45,8 +46,26 @@ export default function DashboardPage() {
   const espacoColors: Record<string, string> = Object.fromEntries(
     espacosConfig.map(e => [e.nome, COR_HEX[e.cor] ?? '#8b5cf6'])
   )
-  const [espacoSelecionado, setEspacoSelecionado] = useState<EspacoFiltro>('Todos')
+  // Dashboard é a ÚNICA tela com seletor de espaço — a seleção aqui vale pro
+  // sistema inteiro (EspacoAtivoContext). "Todos" localmente é só uma forma
+  // de exibir o modo consolidado (espacoUnico null) sem espalhar `null` por
+  // toda a JSX abaixo, que já lida com a string literal 'Todos'.
+  const { espacoUnico, espacosConsolidado, setEspacoUnico, setTodos, setEspacosConsolidado } = useEspacoAtivo()
+  const espacoSelecionado: EspacoFiltro = espacoUnico ?? 'Todos'
   const [comparativo, setComparativo] = useState(false)
+
+  // No modo Comparativo, os pills viram checkboxes: marcado = incluído no
+  // subconjunto comparado/somado. espacosConsolidado vazio é o estado
+  // canônico "todos incluídos" (evita ficar re-serializando a lista inteira
+  // toda vez que nada foi excluído).
+  function espacoIncluidoNoComparativo(esp: string): boolean {
+    return espacosConsolidado.length === 0 || espacosConsolidado.includes(esp)
+  }
+  function toggleComparativoEspaco(esp: string) {
+    const incluidosAtualmente = espacosConsolidado.length === 0 ? espacosNomes : espacosConsolidado
+    const novo = incluidosAtualmente.includes(esp) ? incluidosAtualmente.filter(e => e !== esp) : [...incluidosAtualmente, esp]
+    setEspacosConsolidado(novo.length === espacosNomes.length ? [] : novo)
+  }
 
   const eventosFiltrados = useMemo(() =>
     espacoSelecionado === 'Todos' ? eventos : eventos.filter(e => e.espaco === espacoSelecionado),
@@ -97,8 +116,10 @@ export default function DashboardPage() {
     .sort((a, b) => a.data.localeCompare(b.data))
     .slice(0, 5)
 
-  // Dados comparativos por espaço
-  const comparativoData = espacosNomes.map((esp) => {
+  // Dados comparativos por espaço — respeita o subconjunto escolhido no modo
+  // Comparativo (espacosConsolidado vazio = todos os espaços).
+  const espacosParaComparar = espacosConsolidado.length > 0 ? espacosNomes.filter(e => espacosConsolidado.includes(e)) : espacosNomes
+  const comparativoData = espacosParaComparar.map((esp) => {
     const evs = eventos.filter(e => e.espaco === esp)
     const pags = pagamentos.filter(p => p.espaco === esp)
     const receita = pags.filter(p => p.status === 'pago' && isReceitaOperacional(p)).reduce((s, p) => s + p.valor, 0)
@@ -124,33 +145,37 @@ export default function DashboardPage() {
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex flex-wrap items-center gap-1.5 bg-app-surface border border-app-border rounded-xl p-1 shadow-sm">
             <button
-              onClick={() => { setEspacoSelecionado('Todos'); setComparativo(false) }}
+              onClick={() => comparativo ? setEspacosConsolidado([]) : setTodos()}
               className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-                espacoSelecionado === 'Todos' && !comparativo
+                (comparativo ? espacosConsolidado.length === 0 : espacoSelecionado === 'Todos')
                   ? 'text-white font-bold shadow-md'
                   : 'bg-[#F0F2F5] text-[#667781] hover:bg-[#E9EDEF]'
               }`}
-              style={espacoSelecionado === 'Todos' && !comparativo ? { backgroundColor: '#25D366' } : undefined}
+              style={(comparativo ? espacosConsolidado.length === 0 : espacoSelecionado === 'Todos') ? { backgroundColor: '#25D366' } : undefined}
             >
               Todos
             </button>
-            {espacosNomes.map((esp) => (
-              <button
-                key={esp}
-                onClick={() => { setEspacoSelecionado(esp); setComparativo(false) }}
-                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-                  espacoSelecionado === esp && !comparativo
-                    ? 'text-white font-bold shadow-md'
-                    : 'bg-[#F0F2F5] text-[#667781] hover:bg-[#E9EDEF]'
-                }`}
-                style={espacoSelecionado === esp && !comparativo ? { backgroundColor: '#25D366' } : undefined}
-              >
-                {esp.split(' ')[0]}
-              </button>
-            ))}
+            {espacosNomes.map((esp) => {
+              const ativo = comparativo ? espacoIncluidoNoComparativo(esp) : espacoSelecionado === esp
+              return (
+                <button
+                  key={esp}
+                  onClick={() => comparativo ? toggleComparativoEspaco(esp) : setEspacoUnico(esp)}
+                  className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                    ativo
+                      ? 'text-white font-bold shadow-md'
+                      : 'bg-[#F0F2F5] text-[#667781] hover:bg-[#E9EDEF]'
+                  }`}
+                  style={ativo ? { backgroundColor: '#25D366' } : undefined}
+                >
+                  {comparativo && ativo && <Check className="h-3 w-3" />}
+                  {esp.split(' ')[0]}
+                </button>
+              )
+            })}
           </div>
           <button
-            onClick={() => { setComparativo(!comparativo); setEspacoSelecionado('Todos') }}
+            onClick={() => { setComparativo(!comparativo); setTodos() }}
             className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-all ${
               comparativo
                 ? 'border-[#25D366]/30 bg-[#25D366]/10 text-[#128C7E]'
@@ -161,6 +186,9 @@ export default function DashboardPage() {
             Comparativo
           </button>
         </div>
+        {comparativo && (
+          <p className="text-xs text-app-subtle">Marque quais espaços entram no comparativo/soma abaixo — desmarque pra excluir um específico.</p>
+        )}
 
         {/* Indicador de espaço ativo */}
         {espacoSelecionado !== 'Todos' && !comparativo && (

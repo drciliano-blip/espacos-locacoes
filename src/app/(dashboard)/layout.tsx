@@ -4,6 +4,7 @@ import Header from '@/components/layout/Header'
 import { createClient } from '@/lib/supabase/server'
 import { EventosProvider } from '@/contexts/EventosContext'
 import { EspacosProvider } from '@/contexts/EspacosContext'
+import { EspacoAtivoProvider } from '@/contexts/EspacoAtivoContext'
 import { ReceitasProvider } from '@/contexts/ReceitasContext'
 import { ContratosProvider } from '@/contexts/ContratosContext'
 import { ContasPagarProvider } from '@/contexts/ContasPagarContext'
@@ -38,29 +39,31 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <UserProvider role={role}>
       <AtividadesProvider>
         <EspacosProvider>
-          <ReceitasProvider>
-            <EventosProvider>
-              <ContratosProvider>
-                <ContasPagarProvider>
-                  <RepassesProvider>
-                    <FundosProvider>
-                      <SidebarUIProvider>
-                        <div id="app-shell" className="flex h-screen bg-app-bg overflow-hidden">
-                          <Sidebar userRole={role} />
-                          <div id="app-shell-inner" className="flex flex-1 flex-col overflow-hidden">
-                            <Header userName={profile.nome} userRole={role} />
-                            <main id="app-main" className="flex-1 overflow-y-auto p-6">
-                              {children}
-                            </main>
+          <EspacoAtivoProvider>
+            <ReceitasProvider>
+              <EventosProvider>
+                <ContratosProvider>
+                  <ContasPagarProvider>
+                    <RepassesProvider>
+                      <FundosProvider>
+                        <SidebarUIProvider>
+                          <div id="app-shell" className="flex h-screen bg-app-bg overflow-hidden">
+                            <Sidebar userRole={role} />
+                            <div id="app-shell-inner" className="flex flex-1 flex-col overflow-hidden">
+                              <Header userName={profile.nome} userRole={role} />
+                              <main id="app-main" className="flex-1 overflow-y-auto p-6">
+                                {children}
+                              </main>
+                            </div>
                           </div>
-                        </div>
-                      </SidebarUIProvider>
-                    </FundosProvider>
-                  </RepassesProvider>
-                </ContasPagarProvider>
-              </ContratosProvider>
-            </EventosProvider>
-          </ReceitasProvider>
+                        </SidebarUIProvider>
+                      </FundosProvider>
+                    </RepassesProvider>
+                  </ContasPagarProvider>
+                </ContratosProvider>
+              </EventosProvider>
+            </ReceitasProvider>
+          </EspacoAtivoProvider>
         </EspacosProvider>
       </AtividadesProvider>
     </UserProvider>
