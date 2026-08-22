@@ -32,6 +32,12 @@ export interface Receita {
   parcelaLabel?: string
   tipoEntrada: TipoEntrada
   socioResponsavel?: string
+  // Espelham os mesmos campos já existentes em ContaPagar — populados só pelo
+  // fluxo de Conciliação Bancária ("Criar lançamento a partir desta
+  // movimentação"), nunca pelo formulário normal de Nova Entrada.
+  comprovanteInstituicao?: string
+  comprovanteIdentificador?: string
+  horaRecebimento?: string
 }
 
 // Só receita de evento conta como faturamento/receita operacional — aporte
@@ -59,6 +65,9 @@ interface ReceitaRow {
   parcela_label: string | null
   tipo_entrada: string
   socio_responsavel: string | null
+  comprovante_instituicao: string | null
+  comprovante_identificador: string | null
+  hora_recebimento: string | null
 }
 
 function fromRow(row: ReceitaRow): Receita {
@@ -81,6 +90,9 @@ function fromRow(row: ReceitaRow): Receita {
     parcelaLabel: row.parcela_label ?? undefined,
     tipoEntrada: (row.tipo_entrada as TipoEntrada) ?? 'evento',
     socioResponsavel: row.socio_responsavel ?? undefined,
+    comprovanteInstituicao: row.comprovante_instituicao ?? undefined,
+    comprovanteIdentificador: row.comprovante_identificador ?? undefined,
+    horaRecebimento: row.hora_recebimento ?? undefined,
   }
 }
 
@@ -98,6 +110,9 @@ export interface NovaReceitaInput {
   observacoes?: string
   tipoEntrada?: TipoEntrada
   socioResponsavel?: string
+  comprovanteInstituicao?: string
+  comprovanteIdentificador?: string
+  horaRecebimento?: string
 }
 
 export interface ParcelaPlano {
@@ -198,6 +213,9 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
         observacoes: input.observacoes ?? null,
         tipo_entrada: input.tipoEntrada ?? 'evento',
         socio_responsavel: input.socioResponsavel ?? null,
+        comprovante_instituicao: input.comprovanteInstituicao ?? null,
+        comprovante_identificador: input.comprovanteIdentificador ?? null,
+        hora_recebimento: input.horaRecebimento ?? null,
         created_by: user?.id ?? null,
       })
       .select(SELECT)
