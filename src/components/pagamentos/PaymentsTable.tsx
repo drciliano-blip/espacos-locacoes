@@ -11,6 +11,11 @@ import FileList from '@/components/shared/FileList'
 import FileSearchModal from '@/components/shared/FileSearchModal'
 import EditarEntradaModal from './EditarEntradaModal'
 import Toast from '@/components/shared/Toast'
+import type { OrigemLancamento } from '@/types'
+
+const ORIGEM_LABEL: Record<OrigemLancamento, string> = {
+  agenda: 'Agenda', manual: 'Manual', extrato_bancario: 'Extrato Bancário', automatico: 'Automático',
+}
 
 type StatusReceita = Receita['status']
 
@@ -58,6 +63,7 @@ export default function PaymentsTable({ receitas, categorias }: PaymentsTablePro
   const [categoriaFilter, setCategoriaFilter] = useState<string>('todos')
   const [tipoFilter, setTipoFilter]   = useState<TipoEntrada | 'todos'>('todos')
   const [socioFilter, setSocioFilter] = useState<string>('todos')
+  const [origemFilter, setOrigemFilter] = useState<OrigemLancamento | 'nao_classificado' | 'todos'>('todos')
   const [valorMin, setValorMin]       = useState('')
   const [valorMax, setValorMax]       = useState('')
   const [dataInicio, setDataInicio]   = useState('')
@@ -82,14 +88,15 @@ export default function PaymentsTable({ receitas, categorias }: PaymentsTablePro
       const matchCategoria = categoriaFilter === 'todos' || p.categoriaId === categoriaFilter
       const matchTipo       = tipoFilter === 'todos' || p.tipoEntrada === tipoFilter
       const matchSocio      = socioFilter === 'todos' || p.socioResponsavel === socioFilter
+      const matchOrigem     = origemFilter === 'todos' || (origemFilter === 'nao_classificado' ? !p.origem : p.origem === origemFilter)
       const matchValorMin   = !valorMin || p.valor >= parseCurrencyBR(valorMin)
       const matchValorMax   = !valorMax || p.valor <= parseCurrencyBR(valorMax)
       const ref          = p.dataRecebimento ?? p.data
       const matchInicio  = !dataInicio || ref >= dataInicio
       const matchFim     = !dataFim    || ref <= dataFim
-      return matchSearch && matchStatus && matchEspaco && matchCategoria && matchTipo && matchSocio && matchValorMin && matchValorMax && matchInicio && matchFim
+      return matchSearch && matchStatus && matchEspaco && matchCategoria && matchTipo && matchSocio && matchOrigem && matchValorMin && matchValorMax && matchInicio && matchFim
     })
-  }, [receitas, search, statusFilter, espacoFilter, categoriaFilter, tipoFilter, socioFilter, valorMin, valorMax, dataInicio, dataFim])
+  }, [receitas, search, statusFilter, espacoFilter, categoriaFilter, tipoFilter, socioFilter, origemFilter, valorMin, valorMax, dataInicio, dataFim])
 
   const totals = useMemo(() => ({
     total:    filtered.reduce((s, p) => s + p.valor, 0),
@@ -197,6 +204,15 @@ export default function PaymentsTable({ receitas, categorias }: PaymentsTablePro
             >
               <option value="todos">Todos espaços</option>
               {espacosNomes.map((e) => <option key={e} value={e}>{e}</option>)}
+            </select>
+            <select
+              value={origemFilter}
+              onChange={(e) => setOrigemFilter(e.target.value as OrigemLancamento | 'nao_classificado' | 'todos')}
+              className="rounded-lg border border-app-border2 bg-app-surface2 px-3 py-2 text-sm text-app-text2 focus:outline-none cursor-pointer"
+            >
+              <option value="todos">Todas as origens</option>
+              {(Object.keys(ORIGEM_LABEL) as OrigemLancamento[]).map(o => <option key={o} value={o}>{ORIGEM_LABEL[o]}</option>)}
+              <option value="nao_classificado">Não classificado</option>
             </select>
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-app-subtle">Valor de</span>

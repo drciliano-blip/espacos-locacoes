@@ -15,7 +15,11 @@ import { saveFile, getFiles, getFileUrl, hashFile } from '@/lib/file-storage'
 import FileList from '@/components/shared/FileList'
 import FileSearchModal from '@/components/shared/FileSearchModal'
 import Toast from '@/components/shared/Toast'
-import type { ContaPagar, CategoriaContaPagar, StatusContaPagar } from '@/types'
+import type { ContaPagar, CategoriaContaPagar, StatusContaPagar, OrigemLancamento } from '@/types'
+
+const ORIGEM_LABEL: Record<OrigemLancamento, string> = {
+  agenda: 'Agenda', manual: 'Manual', extrato_bancario: 'Extrato Bancário', automatico: 'Automático',
+}
 
 interface BoletoExtracao {
   descricao: string | null
@@ -184,6 +188,7 @@ export default function ContasPagarPage() {
   const [tab,               setTab]               = useState<'apagar' | 'pagas' | 'atraso'>('apagar')
   const [filterCategoria,   setFilterCategoria]   = useState<CategoriaContaPagar | ''>('')
   const [filterSubcategoria,setFilterSubcategoria]= useState('')
+  const [filterOrigem,      setFilterOrigem]      = useState<OrigemLancamento | 'nao_classificado' | ''>('')
   const [filterVencDe,      setFilterVencDe]      = useState('')
   const [filterVencAte,     setFilterVencAte]     = useState('')
   const [filterPagDe,       setFilterPagDe]       = useState('')
@@ -277,6 +282,7 @@ export default function ContasPagarPage() {
     if (espacosEmEscopo    && !espacosEmEscopo.includes(c.espaco))    return false
     if (filterCategoria    && c.categoria    !== filterCategoria)    return false
     if (filterSubcategoria && c.subcategoria !== filterSubcategoria) return false
+    if (filterOrigem       && (filterOrigem === 'nao_classificado' ? !!c.origem : c.origem !== filterOrigem)) return false
     if (filterVencDe       && c.dataVencimento < filterVencDe)       return false
     if (filterVencAte      && c.dataVencimento > filterVencAte)      return false
     if (filterPagDe        && (!c.dataPagamento || c.dataPagamento < filterPagDe))  return false
@@ -285,7 +291,7 @@ export default function ContasPagarPage() {
     if (filterValorMin     && c.valor < parseCurrencyBR(filterValorMin)) return false
     if (filterValorMax     && c.valor > parseCurrencyBR(filterValorMax)) return false
     return true
-  }, [espacosEmEscopo, filterCategoria, filterSubcategoria, filterVencDe, filterVencAte, filterPagDe, filterPagAte, filterFornecedor, filterValorMin, filterValorMax])
+  }, [espacosEmEscopo, filterCategoria, filterSubcategoria, filterOrigem, filterVencDe, filterVencAte, filterPagDe, filterPagAte, filterFornecedor, filterValorMin, filterValorMax])
 
   const filtered = useMemo(() => todasContas.filter(c => {
     const status = statusEfetivo(c)
@@ -323,9 +329,9 @@ export default function ContasPagarPage() {
   const totalAtrasado = contasNoEspacoAtivo.filter(c => statusEfetivo(c) === 'atrasado').reduce((s, c) => s + c.valor, 0)
   const totalGeral    = contasNoEspacoAtivo.reduce((s, c) => s + c.valor, 0)
 
-  const hasFilters = !!(filterCategoria || filterSubcategoria || filterVencDe || filterVencAte || filterPagDe || filterPagAte || filterFornecedor || filterValorMin || filterValorMax)
+  const hasFilters = !!(filterCategoria || filterSubcategoria || filterOrigem || filterVencDe || filterVencAte || filterPagDe || filterPagAte || filterFornecedor || filterValorMin || filterValorMax)
   function clearFilters() {
-    setFilterCategoria(''); setFilterSubcategoria('')
+    setFilterCategoria(''); setFilterSubcategoria(''); setFilterOrigem('')
     setFilterVencDe(''); setFilterVencAte(''); setFilterPagDe(''); setFilterPagAte('')
     setFilterFornecedor(''); setFilterValorMin(''); setFilterValorMax('')
   }
@@ -439,6 +445,8 @@ export default function ContasPagarPage() {
               options={[['', 'Todas as categorias'], ...CATEGORIAS.map(c => [c, categoriaLabel[c]] as [string, string])]} />
             <FiltroSelect label="Subcategoria" value={filterSubcategoria} onChange={setFilterSubcategoria}
               options={[['', 'Todas subcategorias'], ...SUBCATEGORIAS.map(s => [s, subcategoriaLabel[s]] as [string, string])]} />
+            <FiltroSelect label="Origem" value={filterOrigem} onChange={v => setFilterOrigem(v as OrigemLancamento | 'nao_classificado' | '')}
+              options={[['', 'Todas as origens'], ...Object.entries(ORIGEM_LABEL) as [string, string][], ['nao_classificado', 'Não classificado']]} />
             <FiltroTexto label="Fornecedor/Beneficiário" value={filterFornecedor} onChange={setFilterFornecedor} placeholder="Buscar por nome…" />
             <FiltroData label="Vencimento — de" value={filterVencDe} onChange={setFilterVencDe} />
             <FiltroData label="Vencimento — até" value={filterVencAte} onChange={setFilterVencAte} />
