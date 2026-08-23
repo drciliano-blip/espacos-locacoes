@@ -54,6 +54,7 @@ interface MovimentacaoRow {
   favorecido_pagador: string | null
   lancamento_tipo: string | null
   lancamento_id: string | null
+  classificacao_especial: string | null
 }
 
 function extratoFromRow(row: ExtratoRow): ExtratoBancario {
@@ -88,6 +89,7 @@ function movimentacaoFromRow(row: MovimentacaoRow): MovimentacaoBancaria {
     favorecidoPagador: row.favorecido_pagador ?? undefined,
     lancamentoTipo: (row.lancamento_tipo ?? undefined) as MovimentacaoBancaria['lancamentoTipo'],
     lancamentoId: row.lancamento_id ?? undefined,
+    classificacaoEspecial: (row.classificacao_especial ?? undefined) as MovimentacaoBancaria['classificacaoEspecial'],
   }
 }
 
@@ -128,6 +130,7 @@ interface ConciliacaoContextValue {
   importarExtrato: (input: ImportarExtratoInput) => Promise<ImportarExtratoResultado>
   vincularMovimentacao: (movimentacaoId: string, lancamentoTipo: 'receita' | 'conta_pagar', lancamentoId: string) => Promise<void>
   desvincularMovimentacao: (movimentacaoId: string) => Promise<void>
+  marcarClassificacaoEspecial: (movimentacaoIds: string[], classificacao: 'transferencia' | 'ignorado') => Promise<void>
   excluirExtrato: (id: string) => Promise<void>
 }
 
@@ -281,6 +284,20 @@ export function ConciliacaoProvider({ children }: { children: ReactNode }) {
     setMovimentacoes(prev => prev.map(m => m.id === movimentacaoId ? { ...m, lancamentoTipo: undefined, lancamentoId: undefined } : m))
   }
 
+  // Em lote — usado pela Classificação em Lote pra marcar várias
+  // movimentações de uma vez como Transferência ou Ignorado.
+  async function marcarClassificacaoEspecial(movimentacaoIds: string[], classificacao: 'transferencia' | 'ignorado') {
+    if (movimentacaoIds.length === 0) return
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('movimentacoes_bancarias')
+      .update({ classificacao_especial: classificacao })
+      .in('id', movimentacaoIds)
+    if (error) throw error
+    const idsSet = new Set(movimentacaoIds)
+    setMovimentacoes(prev => prev.map(m => idsSet.has(m.id) ? { ...m, classificacaoEspecial: classificacao } : m))
+  }
+
   async function excluirExtrato(id: string) {
     const alvo = extratos.find(e => e.id === id)
     const supabase = createClient()
@@ -298,7 +315,7 @@ export function ConciliacaoProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <ConciliacaoContext.Provider value={{ extratos, movimentacoes, loading, importarExtrato, vincularMovimentacao, desvincularMovimentacao, excluirExtrato }}>
+    <ConciliacaoContext.Provider value={{ extratos, movimentacoes, loading, importarExtrato, vincularMovimentacao, desvincularMovimentacao, marcarClassificacaoEspecial, excluirExtrato }}>
       {children}
     </ConciliacaoContext.Provider>
   )

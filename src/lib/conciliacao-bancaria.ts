@@ -27,6 +27,9 @@ export interface MovimentacaoBancaria {
   favorecidoPagador?: string
   lancamentoTipo?: 'receita' | 'conta_pagar'
   lancamentoId?: string
+  // Movimentação resolvida sem virar lançamento — nunca entra no matching
+  // abaixo (ver Classificação em Lote / Importação Histórica).
+  classificacaoEspecial?: 'transferencia' | 'ignorado'
 }
 
 export type StatusConciliacao =
@@ -35,6 +38,8 @@ export type StatusConciliacao =
   | 'nao_encontrado_banco'
   | 'divergente'
   | 'duplicidade_possivel'
+  | 'transferencia'
+  | 'ignorado'
 
 export interface LancamentoResumo {
   tipo: 'receita' | 'conta_pagar'
@@ -85,7 +90,7 @@ function diasEntre(a: string, b: string): number {
   return Math.abs(ta - tb) / 86_400_000
 }
 
-function normalizarTexto(s?: string): string {
+export function normalizarTexto(s?: string): string {
   return (s ?? '')
     .toLowerCase()
     .normalize('NFD')
@@ -180,6 +185,12 @@ export function conciliar(
   // em vez de mostrar "conciliado" apontando pra um lançamento fantasma.
   const movsSemVinculoValido: MovimentacaoBancaria[] = []
   for (const mov of movimentacoes) {
+    // Transferência/Ignorado (Classificação em Lote) nunca entra no
+    // matching — é resolvida sem virar lançamento, sai direto com esse status.
+    if (mov.classificacaoEspecial) {
+      itens.push({ movimentacao: mov, status: mov.classificacaoEspecial === 'transferencia' ? 'transferencia' : 'ignorado' })
+      continue
+    }
     if (mov.lancamentoTipo && mov.lancamentoId) {
       const chave = `${mov.lancamentoTipo}:${mov.lancamentoId}`
       const lancamento = lancamentosPorId.get(chave)
@@ -270,6 +281,8 @@ export function conciliar(
     nao_encontrado_banco: 0,
     divergente: 0,
     duplicidade_possivel: 0,
+    transferencia: 0,
+    ignorado: 0,
   }
   for (const item of itens) porStatus[item.status]++
 

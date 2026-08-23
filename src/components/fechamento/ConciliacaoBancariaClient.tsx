@@ -25,6 +25,8 @@ const STATUS_LABEL: Record<StatusConciliacao, string> = {
   nao_encontrado_banco: 'Não encontrado no banco',
   divergente: 'Possível divergência',
   duplicidade_possivel: 'Possível duplicidade',
+  transferencia: 'Transferência entre contas',
+  ignorado: 'Ignorado',
 }
 
 const STATUS_COLOR: Record<StatusConciliacao, string> = {
@@ -33,6 +35,8 @@ const STATUS_COLOR: Record<StatusConciliacao, string> = {
   nao_encontrado_banco: 'text-orange-500 bg-orange-500/10 border-orange-500/20',
   divergente: 'text-amber-600 bg-amber-500/10 border-amber-500/20',
   duplicidade_possivel: 'text-fuchsia-600 bg-fuchsia-500/10 border-fuchsia-500/20',
+  transferencia: 'text-sky-600 bg-sky-500/10 border-sky-500/20',
+  ignorado: 'text-zinc-500 bg-zinc-500/10 border-zinc-500/20',
 }
 
 function getDefaultFilters(): RelatorioFilters {
@@ -72,7 +76,10 @@ function AcaoConferencia({
       </button>
     )
   }
-  if (!item.movimentacao || item.lancamento) return null
+  // Transferência/Ignorado (Classificação em Lote) já é uma resolução final —
+  // não oferece Criar/Vincular (isso é revertido pela tela de Classificação
+  // em Lote, não por aqui).
+  if (!item.movimentacao || item.lancamento || item.status === 'transferencia' || item.status === 'ignorado') return null
 
   async function handleVincular() {
     const alvo = candidatos.find(c => `${c.tipo}:${c.id}` === selecionado)
