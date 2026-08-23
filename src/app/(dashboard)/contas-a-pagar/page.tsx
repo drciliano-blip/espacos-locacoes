@@ -769,6 +769,9 @@ function ContaFormModal({ conta, onClose, onSave }: ContaFormModalProps) {
       // criada/editada por aqui (não pelo "+ Retirada" de Financeiro → Sócios)
       // é origem "Conta Paga" — mostrado no histórico do sócio.
       origemLancamento: conta?.origemLancamento ?? (form.categoria === 'retirada_socio' ? 'contas_a_pagar' : undefined),
+      // Preserva a origem já registrada ao editar — só fica sem valor (e cai
+      // no default "Manual" do addConta) quando a conta é nova de verdade.
+      origem: conta?.origem,
     }
     try {
       if (pendingFile) {
@@ -1086,6 +1089,7 @@ function TransferirFundoCaixaModal({ onClose, onSave, onSaved }: {
         horaPagamento: hora || undefined,
         fornecedor: responsavel.trim(),
         observacoes: observacoes.trim() || undefined,
+        origem: 'automatico',
       })
       if (comprovante) {
         try {

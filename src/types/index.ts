@@ -121,6 +121,11 @@ export interface Contrato {
   eventoId?: string
 }
 
+// De onde um lançamento (receita ou conta a pagar) veio — pra filtrar nas
+// listas. Distinto do ContaPagar.origemLancamento abaixo, que é um campo mais
+// antigo e estreito, só pra Retirada Sócio.
+export type OrigemLancamento = 'agenda' | 'manual' | 'extrato_bancario' | 'automatico'
+
 // Feature 1: Conta a Pagar
 export interface ContaPagar {
   id: string
@@ -148,6 +153,9 @@ export interface ContaPagar {
   // Sócio, pra mostrar a origem no histórico do sócio (Financeiro → Sócios).
   // Ausente em lançamentos antigos (origem não rastreada até aqui).
   origemLancamento?: 'retirada_manual' | 'contas_a_pagar'
+  // De onde este lançamento veio (Agenda/Manual/Extrato Bancário/Automático)
+  // — ausente em registros criados antes desta coluna existir.
+  origem?: OrigemLancamento
 }
 
 // Feature 2: Usuário do sistema

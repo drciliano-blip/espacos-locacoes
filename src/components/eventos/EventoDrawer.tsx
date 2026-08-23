@@ -122,6 +122,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
       dataPagamento: new Date().toISOString().split('T')[0],
       fornecedor: evento.cliente,
       eventoId: evento.id,
+      origem: 'automatico',
     })
     await onUpdate({ ...evento, status: 'cancelado' })
     setCancelarEventoOpen(false)

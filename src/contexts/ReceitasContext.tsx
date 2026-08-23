@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAtividades } from '@/contexts/AtividadesContext'
+import type { OrigemLancamento } from '@/types'
 
 export interface CategoriaReceita {
   id: string
@@ -38,6 +39,9 @@ export interface Receita {
   comprovanteInstituicao?: string
   comprovanteIdentificador?: string
   horaRecebimento?: string
+  // De onde este lançamento veio (Agenda/Manual/Extrato Bancário/Automático)
+  // — ausente em registros criados antes desta coluna existir.
+  origem?: OrigemLancamento
 }
 
 // Só receita de evento conta como faturamento/receita operacional — aporte
@@ -68,6 +72,7 @@ interface ReceitaRow {
   comprovante_instituicao: string | null
   comprovante_identificador: string | null
   hora_recebimento: string | null
+  origem: string | null
 }
 
 function fromRow(row: ReceitaRow): Receita {
@@ -93,6 +98,7 @@ function fromRow(row: ReceitaRow): Receita {
     comprovanteInstituicao: row.comprovante_instituicao ?? undefined,
     comprovanteIdentificador: row.comprovante_identificador ?? undefined,
     horaRecebimento: row.hora_recebimento ?? undefined,
+    origem: (row.origem as OrigemLancamento) ?? undefined,
   }
 }
 
@@ -113,6 +119,7 @@ export interface NovaReceitaInput {
   comprovanteInstituicao?: string
   comprovanteIdentificador?: string
   horaRecebimento?: string
+  origem?: OrigemLancamento
 }
 
 export interface ParcelaPlano {
@@ -216,6 +223,7 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
         comprovante_instituicao: input.comprovanteInstituicao ?? null,
         comprovante_identificador: input.comprovanteIdentificador ?? null,
         hora_recebimento: input.horaRecebimento ?? null,
+        origem: input.origem ?? 'manual',
         created_by: user?.id ?? null,
       })
       .select(SELECT)
@@ -269,6 +277,7 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
         parcela_numero: parcela.numero,
         parcela_label: parcela.label,
         tipo_entrada: 'evento',
+        origem: 'agenda',
       }
       if (match) {
         await supabase.from('receitas').update(payload).eq('id', match.id)

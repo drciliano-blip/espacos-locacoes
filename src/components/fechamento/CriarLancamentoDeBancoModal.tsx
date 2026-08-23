@@ -95,6 +95,7 @@ export default function CriarLancamentoDeBancoModal({
           tipoEntrada,
           comprovanteIdentificador: movimentacao.identificadorTransacao,
           horaRecebimento: movimentacao.hora,
+          origem: 'extrato_bancario',
         })
         await onVincular(movimentacao.id, 'receita', nova.id)
       } else {
@@ -113,6 +114,7 @@ export default function CriarLancamentoDeBancoModal({
           comprovanteIdentificador: movimentacao.identificadorTransacao,
           fornecedor: pessoa.trim() || undefined,
           observacoes: observacoes.trim() || undefined,
+          origem: 'extrato_bancario',
         })
         await onVincular(movimentacao.id, 'conta_pagar', id)
       }
