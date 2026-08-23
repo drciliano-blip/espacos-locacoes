@@ -199,6 +199,13 @@ export default function ConciliacaoBancariaClient() {
     [movimentacoesEmEscopo, receitasEmEscopo, contasPagarEmEscopo],
   )
 
+  // Movimentações sem vínculo e sem classificação especial — candidatas à
+  // Classificação em Lote (Importação Histórica).
+  const pendentesCount = useMemo(
+    () => movimentacoesEmEscopo.filter(m => !m.lancamentoTipo && !m.classificacaoEspecial).length,
+    [movimentacoesEmEscopo],
+  )
+
   const itensFiltrados = useMemo(() => resultado.itens.filter(item => {
     if (statusFiltro !== 'todos' && item.status !== statusFiltro) return false
     if (direcaoFiltro !== 'todas' && direcaoDoItem(item) !== direcaoFiltro) return false
@@ -236,16 +243,26 @@ export default function ConciliacaoBancariaClient() {
           Conciliação Bancária
         </h1>
         {podeVer && (
-          <button
-            onClick={() => setImportOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-white transition-colors"
-            style={{ backgroundColor: '#25D366' }}
-            onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#128C7E' }}
-            onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#25D366' }}
-          >
-            <Plus className="h-4 w-4" />
-            Importar Extrato
-          </button>
+          <div className="flex items-center gap-2">
+            {pendentesCount > 0 && (
+              <Link
+                href="/fechamento/conciliacao/classificar"
+                className="flex items-center gap-1.5 rounded-lg border border-app-border2 bg-app-surface px-3 py-2 text-sm font-medium text-app-text hover:bg-app-surface2 transition-colors"
+              >
+                Classificar pendências em lote ({pendentesCount})
+              </Link>
+            )}
+            <button
+              onClick={() => setImportOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-white transition-colors"
+              style={{ backgroundColor: '#25D366' }}
+              onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#128C7E' }}
+              onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#25D366' }}
+            >
+              <Plus className="h-4 w-4" />
+              Importar Extrato
+            </button>
+          </div>
         )}
       </div>
 
