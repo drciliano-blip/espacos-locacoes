@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ChevronLeft, Plus, Landmark, ArrowUpCircle, ArrowDownCircle } from 'lucide-react'
-import { useConciliacao, type ImportarExtratoResultado } from '@/contexts/ConciliacaoContext'
+import { ChevronLeft, Plus, Landmark, ArrowUpCircle, ArrowDownCircle, Trash2 } from 'lucide-react'
+import { useConciliacao, type ImportarExtratoResultado, type ExtratoBancario } from '@/contexts/ConciliacaoContext'
 import { useCurrentUser } from '@/contexts/UserContext'
 import { useEspacoAtivo, MSG_ESPACO_ESPECIFICO_NECESSARIO } from '@/contexts/EspacoAtivoContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
@@ -54,13 +54,14 @@ function direcaoDoItem(item: ItemConciliacao): 'entrada' | 'saida' {
 // certo já existe, só falta apontar pra ele); "Desvincular" desfaz um vínculo
 // manual (o automático nunca precisa — é recalculado sozinho a cada render).
 function AcaoConferencia({
-  item, candidatos, onCriar, onVincular, onDesvincular,
+  item, candidatos, onCriar, onVincular, onDesvincular, onDesmarcar,
 }: {
   item: ItemConciliacao
   candidatos: LancamentoResumo[]
   onCriar: () => void
   onVincular: (l: LancamentoResumo) => Promise<void>
   onDesvincular: () => Promise<void>
+  onDesmarcar: () => Promise<void>
 }) {
   const [selecionado, setSelecionado] = useState('')
   const [processando, setProcessando] = useState(false)
@@ -76,10 +77,20 @@ function AcaoConferencia({
       </button>
     )
   }
-  // Transferência/Ignorado (Classificação em Lote) já é uma resolução final —
-  // não oferece Criar/Vincular (isso é revertido pela tela de Classificação
-  // em Lote, não por aqui).
-  if (!item.movimentacao || item.lancamento || item.status === 'transferencia' || item.status === 'ignorado') return null
+  // Transferência/Ignorado (Classificação em Lote) é uma resolução que dá pra
+  // desfazer — sem isso a movimentação ficava travada nesse status pra sempre.
+  if (item.status === 'transferencia' || item.status === 'ignorado') {
+    return (
+      <button
+        onClick={async () => { setProcessando(true); try { await onDesmarcar() } finally { setProcessando(false) } }}
+        disabled={processando}
+        className="text-[11px] text-app-subtle hover:text-red-500 underline underline-offset-2 disabled:opacity-40"
+      >
+        Desmarcar
+      </button>
+    )
+  }
+  if (!item.movimentacao || item.lancamento) return null
 
   async function handleVincular() {
     const alvo = candidatos.find(c => `${c.tipo}:${c.id}` === selecionado)
@@ -124,7 +135,7 @@ function AcaoConferencia({
 // Tela de conferência banco x sistema — status nunca é persistido, sempre
 // recalculado aqui a partir do que está carregado (ver src/lib/conciliacao-bancaria.ts).
 export default function ConciliacaoBancariaClient() {
-  const { extratos, movimentacoes, loading, importarExtrato, vincularMovimentacao, desvincularMovimentacao } = useConciliacao()
+  const { extratos, movimentacoes, loading, importarExtrato, vincularMovimentacao, desvincularMovimentacao, desmarcarClassificacaoEspecial, excluirExtrato } = useConciliacao()
   const { receitas, categorias, addReceita } = useReceitas()
   const { contas: contasPagar, addConta } = useContasPagar()
   const { role } = useCurrentUser()
@@ -136,6 +147,8 @@ export default function ConciliacaoBancariaClient() {
   const [direcaoFiltro, setDirecaoFiltro] = useState<'todas' | 'entrada' | 'saida'>('todas')
   const [importOpen, setImportOpen] = useState(false)
   const [criarLancamentoAlvo, setCriarLancamentoAlvo] = useState<MovimentacaoBancaria | null>(null)
+  const [extratoParaExcluir, setExtratoParaExcluir] = useState<ExtratoBancario | null>(null)
+  const [excluindo, setExcluindo] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   function showToast(msg: string) {
     setToastMsg(msg)
@@ -162,6 +175,29 @@ export default function ConciliacaoBancariaClient() {
       showToast('Vínculo removido — movimentação volta pra conferência automática.')
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Falha ao desvincular.')
+    }
+  }
+
+  async function handleDesmarcar(mov: MovimentacaoBancaria) {
+    try {
+      await desmarcarClassificacaoEspecial(mov.id)
+      showToast('Classificação removida — movimentação volta pra conferência automática.')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Falha ao desmarcar.')
+    }
+  }
+
+  async function handleExcluirExtrato() {
+    if (!extratoParaExcluir) return
+    setExcluindo(true)
+    try {
+      await excluirExtrato(extratoParaExcluir.id)
+      showToast('Extrato excluído — as movimentações dele saíram da conferência.')
+      setExtratoParaExcluir(null)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Falha ao excluir o extrato.')
+    } finally {
+      setExcluindo(false)
     }
   }
 
@@ -402,6 +438,7 @@ export default function ConciliacaoBancariaClient() {
                               onCriar={() => handleAbrirCriar(item.movimentacao!)}
                               onVincular={l => handleVincularExistente(item.movimentacao!, l)}
                               onDesvincular={() => handleDesvincular(item.movimentacao!)}
+                              onDesmarcar={() => handleDesmarcar(item.movimentacao!)}
                             />
                           )}
                         </td>
@@ -422,7 +459,7 @@ export default function ConciliacaoBancariaClient() {
                 <table className="w-full text-xs border-collapse">
                   <thead>
                     <tr className="border-b border-app-border bg-app-surface2">
-                      {['Arquivo', 'Espaço', 'Banco/Conta', 'Período', 'Movimentações', 'Importado em'].map(h => (
+                      {['Arquivo', 'Espaço', 'Banco/Conta', 'Período', 'Movimentações', 'Importado em', ''].map(h => (
                         <th key={h} className="px-2 py-2 text-left font-medium text-app-subtle uppercase tracking-wide whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
@@ -436,6 +473,15 @@ export default function ConciliacaoBancariaClient() {
                         <td className="px-2 py-2 text-app-text2 whitespace-nowrap">{e.periodoInicio && e.periodoFim ? `${e.periodoInicio} a ${e.periodoFim}` : '—'}</td>
                         <td className="px-2 py-2 text-app-text2 whitespace-nowrap">{movimentacoes.filter(m => m.extratoId === e.id).length} de {e.totalMovimentacoes}</td>
                         <td className="px-2 py-2 text-app-subtle whitespace-nowrap">{new Date(e.createdAt).toLocaleDateString('pt-BR')}</td>
+                        <td className="px-2 py-2 whitespace-nowrap">
+                          <button
+                            onClick={() => setExtratoParaExcluir(e)}
+                            className="flex items-center gap-1 text-[11px] text-app-subtle hover:text-red-500 transition-colors"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            Excluir
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -466,6 +512,27 @@ export default function ConciliacaoBancariaClient() {
           onVincular={vincularMovimentacao}
           onCriado={() => showToast('Lançamento criado e vinculado à movimentação.')}
         />
+      )}
+
+      {extratoParaExcluir && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setExtratoParaExcluir(null)}>
+          <div className="w-full max-w-sm rounded-2xl border border-app-border bg-app-surface p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-bold text-app-text mb-2">Excluir extrato?</h3>
+            <p className="text-sm text-app-muted mb-5">
+              "{extratoParaExcluir.nomeArquivo}" e suas {movimentacoes.filter(m => m.extratoId === extratoParaExcluir.id).length} movimentação(ões) serão removidas da conferência. Isso não exclui nenhuma receita/conta a pagar já criada a partir delas — só o vínculo com o extrato.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setExtratoParaExcluir(null)} disabled={excluindo}
+                className="rounded-lg border border-app-border2 px-4 py-2 text-sm text-app-muted hover:bg-app-surface2 transition-colors disabled:opacity-50">
+                Cancelar
+              </button>
+              <button onClick={handleExcluirExtrato} disabled={excluindo}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 transition-colors disabled:opacity-50">
+                {excluindo ? 'Excluindo…' : 'Excluir'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <Toast message={toastMsg} />

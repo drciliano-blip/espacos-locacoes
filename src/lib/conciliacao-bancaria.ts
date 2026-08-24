@@ -306,8 +306,14 @@ export function conciliar(
 // (primeiros 40 chars) é suficiente pra bater igual em reimportações e
 // diferente entre movimentações reais distintas no mesmo dia.
 export function computeDedupeHash(mov: Pick<MovimentacaoBancaria, 'data' | 'valor' | 'tipo' | 'descricao' | 'identificadorTransacao'>): string {
+  // O identificador sozinho NÃO é confiável pra dedupe — CHECKNUM (número de
+  // cheque) se repete entre contas diferentes, e FITID só é garantidamente
+  // único dentro da mesma conta no banco, não entre contas diferentes. Sem
+  // combinar com data/valor/tipo, duas movimentações genuinamente diferentes
+  // que só coincidem no identificador eram tratadas como duplicata e a
+  // segunda era descartada silenciosamente na importação.
   const base = mov.identificadorTransacao
-    ? `id:${normalizarIdentificador(mov.identificadorTransacao)}`
+    ? `id:${normalizarIdentificador(mov.identificadorTransacao)}|${mov.data}|${mov.valor.toFixed(2)}|${mov.tipo}`
     : `${mov.data}|${mov.valor.toFixed(2)}|${mov.tipo}|${normalizarTexto(mov.descricao).slice(0, 40)}`
   let hash = 0
   for (let i = 0; i < base.length; i++) {

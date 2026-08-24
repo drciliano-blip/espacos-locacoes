@@ -131,6 +131,7 @@ interface ConciliacaoContextValue {
   vincularMovimentacao: (movimentacaoId: string, lancamentoTipo: 'receita' | 'conta_pagar', lancamentoId: string) => Promise<void>
   desvincularMovimentacao: (movimentacaoId: string) => Promise<void>
   marcarClassificacaoEspecial: (movimentacaoIds: string[], classificacao: 'transferencia' | 'ignorado') => Promise<void>
+  desmarcarClassificacaoEspecial: (movimentacaoId: string) => Promise<void>
   excluirExtrato: (id: string) => Promise<void>
 }
 
@@ -298,6 +299,19 @@ export function ConciliacaoProvider({ children }: { children: ReactNode }) {
     setMovimentacoes(prev => prev.map(m => idsSet.has(m.id) ? { ...m, classificacaoEspecial: classificacao } : m))
   }
 
+  // Desfaz uma classificação especial (Transferência/Ignorado) — sem isso a
+  // movimentação ficava travada nesse status pra sempre, sem nenhuma forma de
+  // voltar pra conferência normal.
+  async function desmarcarClassificacaoEspecial(movimentacaoId: string) {
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('movimentacoes_bancarias')
+      .update({ classificacao_especial: null })
+      .eq('id', movimentacaoId)
+    if (error) throw error
+    setMovimentacoes(prev => prev.map(m => m.id === movimentacaoId ? { ...m, classificacaoEspecial: undefined } : m))
+  }
+
   async function excluirExtrato(id: string) {
     const alvo = extratos.find(e => e.id === id)
     const supabase = createClient()
@@ -315,7 +329,7 @@ export function ConciliacaoProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <ConciliacaoContext.Provider value={{ extratos, movimentacoes, loading, importarExtrato, vincularMovimentacao, desvincularMovimentacao, marcarClassificacaoEspecial, excluirExtrato }}>
+    <ConciliacaoContext.Provider value={{ extratos, movimentacoes, loading, importarExtrato, vincularMovimentacao, desvincularMovimentacao, marcarClassificacaoEspecial, desmarcarClassificacaoEspecial, excluirExtrato }}>
       {children}
     </ConciliacaoContext.Provider>
   )
