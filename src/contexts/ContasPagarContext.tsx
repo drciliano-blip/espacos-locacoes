@@ -19,6 +19,18 @@ export function isDespesaObra(c: ContaPagar): boolean {
   return c.categoria === 'obra'
 }
 
+// "atrasado" não é um valor gravado no banco — é calculado a partir do
+// vencimento, pra toda conta pendente vencida virar "Em atraso" automaticamente,
+// sem precisar de um job rodando. Só "pago" é um estado confirmado manualmente.
+// Único lugar que decide isso — qualquer tela que precise saber se uma conta
+// está atrasada (lista de Contas a Pagar, sino de notificações, etc.) usa esta
+// função em vez de comparar `c.status` cru.
+export function statusEfetivo(conta: ContaPagar): StatusContaPagar {
+  if (conta.status === 'pago') return 'pago'
+  const hoje = new Date().toISOString().split('T')[0]
+  return conta.dataVencimento < hoje ? 'atrasado' : 'pendente'
+}
+
 interface ContaPagarRow {
   id: string
   descricao: string

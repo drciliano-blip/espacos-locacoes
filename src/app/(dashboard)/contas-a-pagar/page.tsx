@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useEspacoAtivo, MSG_ESPACO_ESPECIFICO_NECESSARIO } from '@/contexts/EspacoAtivoContext'
-import { useContasPagar } from '@/contexts/ContasPagarContext'
+import { useContasPagar, statusEfetivo } from '@/contexts/ContasPagarContext'
 import { DIVISAO_SOCIOS } from '@/lib/socios-config'
 import { formatCurrency, parseCurrencyBR, formatDate } from '@/lib/utils'
 import { saveFile, getFiles, getFileUrl, hashFile } from '@/lib/file-storage'
@@ -108,15 +108,6 @@ const statusBadge: Record<StatusContaPagar, string> = {
   atrasado:  'bg-red-500/10 text-red-600 border-red-500/20',
 }
 const statusLabel: Record<StatusContaPagar, string> = { pago: 'Pago', pendente: 'Pendente', atrasado: 'Atrasado' }
-
-// "atrasado" não é um valor gravado no banco — é calculado a partir do vencimento,
-// pra toda conta pendente vencida virar "Em atraso" automaticamente, sem precisar
-// de um job rodando. Só "pago" é um estado que precisa ser confirmado manualmente.
-function statusEfetivo(conta: ContaPagar): StatusContaPagar {
-  if (conta.status === 'pago') return 'pago'
-  const hoje = new Date().toISOString().split('T')[0]
-  return conta.dataVencimento < hoje ? 'atrasado' : 'pendente'
-}
 
 const CATEGORIAS: CategoriaContaPagar[] = ['operacional', 'obra', 'financeiro', 'retirada_socio', 'fundo_caixa', 'reembolso_evento']
 const categoriaLabel: Record<CategoriaContaPagar, string> = {
