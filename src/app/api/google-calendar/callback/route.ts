@@ -1,8 +1,33 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
+
+// Códigos de erro padrão do OAuth do Google — sem isso o usuário via o texto
+// cru ("access_denied") na tela, sem entender que é configuração do Google
+// Cloud Console (app em modo "Testing" sem o e-mail como test user, ou escopo
+// restrito sem o app verificado), não um bug do sistema.
+const ERROS_GOOGLE: Record<string, string> = {
+  access_denied: 'O Google bloqueou o acesso — geralmente porque esse e-mail não está autorizado a testar o app ainda (o app do Google Cloud está em modo "Testing" e precisa desse e-mail adicionado como "test user" no OAuth Consent Screen), ou porque o app pede uma permissão que exige verificação do Google. Contate quem administra as credenciais do Google Cloud do sistema.',
+  admin_policy_enforced: 'A política do Google Workspace desse e-mail bloqueou a conexão. Contate o administrador do domínio Google da empresa.',
+  invalid_client: 'As credenciais do Google (Client ID/Secret) configuradas no sistema estão inválidas ou expiradas. Contate quem administra o sistema.',
+}
+
+function mensagemErroGoogle(codigo: string): string {
+  return ERROS_GOOGLE[codigo] ?? codigo
+}
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
+
+  // Essa rota é o alvo do redirect do Google — o navegador ainda é o mesmo do
+  // usuário logado, então o cookie de sessão do Supabase continua presente.
+  // Sem essa checagem, qualquer um que descobrisse essa URL (com um code/state
+  // válidos de algum jeito) conseguiria ligar um Google Calendar a um espaço
+  // sem estar autenticado no sistema.
+  const supabaseAuth = await createClient()
+  const { data: { user } } = await supabaseAuth.auth.getUser()
+  if (!user) return NextResponse.redirect(`${url.origin}/login`)
+
   const code = url.searchParams.get('code')
   const espacoId = url.searchParams.get('state')
   const errorParam = url.searchParams.get('error')
@@ -20,7 +45,8 @@ export async function GET(request: Request) {
   const voltarPara = slug ? `/espacos/${slug}` : '/espacos'
 
   if (errorParam || !code || !espacoId) {
-    return NextResponse.redirect(`${url.origin}${voltarPara}?google_error=${encodeURIComponent(errorParam ?? 'faltou código de autorização')}`)
+    const mensagem = errorParam ? mensagemErroGoogle(errorParam) : 'Faltou o código de autorização — tente conectar de novo.'
+    return NextResponse.redirect(`${url.origin}${voltarPara}?google_error=${encodeURIComponent(mensagem)}`)
   }
 
   const redirectUri = `${url.origin}/api/google-calendar/callback`

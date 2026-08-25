@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getValidAccessToken } from '@/lib/google-calendar-tokens'
+import { createClient } from '@/lib/supabase/server'
 
 export async function GET(request: Request) {
+  const supabaseAuth = await createClient()
+  const { data: { user } } = await supabaseAuth.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })
+
   const url = new URL(request.url)
   const espacoId = url.searchParams.get('espacoId')
   if (!espacoId) return NextResponse.json({ error: 'espacoId é obrigatório.' }, { status: 400 })
@@ -25,6 +30,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const supabaseAuth = await createClient()
+  const { data: { user } } = await supabaseAuth.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })
+
   const { espacoId, summary, date, startTime, endTime, location } = await request.json()
   if (!espacoId || !summary || !date) {
     return NextResponse.json({ error: 'espacoId, summary e date são obrigatórios.' }, { status: 400 })

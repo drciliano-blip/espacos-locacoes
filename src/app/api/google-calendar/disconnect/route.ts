@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 
 export async function POST(request: Request) {
+  const supabaseAuth = await createClient()
+  const { data: { user } } = await supabaseAuth.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })
+
   const { espacoId } = await request.json()
   if (!espacoId) return NextResponse.json({ error: 'espacoId é obrigatório.' }, { status: 400 })
 
