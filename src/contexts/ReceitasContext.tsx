@@ -136,11 +136,20 @@ interface SyncParcelasInput {
   parcelas: ParcelaPlano[]
 }
 
-interface BaixaReceitaInput {
+// Patch de uma parcela/receita já existente — usado tanto pra "dar baixa"
+// quanto pra corrigir qualquer campo depois, mesmo já paga (nenhum campo do
+// Plano de Pagamento fica travado só por já ter sido pago).
+export interface BaixaReceitaInput {
   status: Receita['status']
+  valor?: number
+  data?: string
   dataRecebimento?: string
+  horaRecebimento?: string
   metodoPagamento?: string
   observacoes?: string
+  comprovanteInstituicao?: string
+  comprovanteIdentificador?: string
+  parcelaLabel?: string
 }
 
 // Edição completa — usada pelo formulário de editar uma entrada manual
@@ -300,9 +309,15 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
     const supabase = createClient()
     const payload = {
       status: patch.status,
+      valor: patch.valor,
+      data: patch.data,
       data_recebimento: patch.dataRecebimento ?? null,
+      hora_recebimento: patch.horaRecebimento ?? null,
       metodo_pagamento: patch.metodoPagamento ?? null,
       observacoes: patch.observacoes ?? null,
+      comprovante_instituicao: patch.comprovanteInstituicao ?? null,
+      comprovante_identificador: patch.comprovanteIdentificador ?? null,
+      parcela_label: patch.parcelaLabel ?? null,
     }
     const { data, error } = await supabase.from('receitas').update(payload).eq('id', id).select(SELECT).single()
     if (error) throw error

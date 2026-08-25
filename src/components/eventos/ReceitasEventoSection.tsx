@@ -11,7 +11,7 @@ import AnexarRelatorioModal from '@/components/eventos/AnexarRelatorioModal'
 import PlanoPagamentoSection from '@/components/eventos/PlanoPagamentoSection'
 import FileList from '@/components/shared/FileList'
 import type { Evento } from '@/types'
-import type { ParcelaPlano } from '@/contexts/ReceitasContext'
+import type { ParcelaPlano, BaixaReceitaInput } from '@/contexts/ReceitasContext'
 
 const statusStyles: Record<string, string> = {
   pago: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
@@ -47,7 +47,7 @@ export default function ReceitasEventoSection() {
     await syncParcelasDoEvento({ eventoId: selected.id, cliente: selected.cliente, espaco: selected.espaco, parcelas })
   }
 
-  async function handleBaixa(id: string, patch: { status: 'pago'; dataRecebimento: string; metodoPagamento?: string }) {
+  async function handleBaixa(id: string, patch: BaixaReceitaInput) {
     await updateReceita(id, patch)
   }
 

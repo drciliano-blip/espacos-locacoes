@@ -5,7 +5,7 @@ import { X, Save, Edit3, Users, DollarSign, User, Calendar, ClipboardCheck, Pape
 import type { Evento, StatusVistoria, TipoEvento, Contrato, TipoMinuta } from '@/types'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useCurrentUser } from '@/contexts/UserContext'
-import { useReceitas } from '@/contexts/ReceitasContext'
+import { useReceitas, type BaixaReceitaInput } from '@/contexts/ReceitasContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { useContratos } from '@/contexts/ContratosContext'
 import FileList from '@/components/shared/FileList'
@@ -138,7 +138,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
     await syncParcelasDoEvento({ eventoId: evento.id, cliente: evento.cliente, espaco: evento.espaco, parcelas: novasParcelas })
   }
 
-  async function handleBaixa(id: string, patch: { status: 'pago'; dataRecebimento: string; metodoPagamento?: string }) {
+  async function handleBaixa(id: string, patch: BaixaReceitaInput) {
     await updateReceita(id, patch)
   }
 

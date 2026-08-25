@@ -1,9 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { CheckCircle2, Pencil, Plus, Save, Trash2, X } from 'lucide-react'
+import { Pencil, Plus, Save, Trash2, X } from 'lucide-react'
 import { formatCurrency, formatDate, parseCurrencyBR } from '@/lib/utils'
-import type { Receita, ParcelaPlano } from '@/contexts/ReceitasContext'
+import FileAttachButton from '@/components/shared/FileAttachButton'
+import FileList from '@/components/shared/FileList'
+import type { Receita, ParcelaPlano, BaixaReceitaInput } from '@/contexts/ReceitasContext'
 
 const GREEN = '#25D366'
 const DARK_GREEN = '#128C7E'
@@ -14,6 +16,7 @@ const statusStyles: Record<string, string> = {
   atrasado: 'bg-red-500/10 text-red-400 border-red-500/20',
 }
 const statusLabels: Record<string, string> = { pago: 'Pago', pendente: 'Pendente', atrasado: 'Atrasado' }
+const FORMAS_PAGAMENTO = ['PIX', 'Transferência', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Cheque']
 
 interface DraftParcela {
   numero: number
@@ -29,7 +32,7 @@ interface Props {
   parcelas: Receita[]
   podeEditarPlano: boolean
   onSync: (parcelas: ParcelaPlano[]) => Promise<void>
-  onBaixa: (id: string, patch: { status: 'pago'; dataRecebimento: string; metodoPagamento?: string }) => Promise<void>
+  onBaixa: (id: string, patch: BaixaReceitaInput) => Promise<void>
 }
 
 function toDraft(parcelas: Receita[]): DraftParcela[] {
@@ -45,13 +48,223 @@ function toDraft(parcelas: Receita[]): DraftParcela[] {
     }))
 }
 
+// Formulário completo de uma parcela — sempre disponível, qualquer status.
+// Nenhum campo do Plano de Pagamento fica travado só por já ter sido pago:
+// se algo foi lançado errado (valor, data, comprovante), corrige aqui.
+interface EditarParcelaForm {
+  valor: string
+  data: string
+  status: Receita['status']
+  dataRecebimento: string
+  horaRecebimento: string
+  metodoPagamento: string
+  observacoes: string
+  parcelaLabel: string
+}
+
+function formFromParcela(p: Receita): EditarParcelaForm {
+  return {
+    valor: String(p.valor),
+    data: p.data,
+    status: p.status,
+    dataRecebimento: p.dataRecebimento ?? '',
+    horaRecebimento: p.horaRecebimento ?? '',
+    metodoPagamento: p.metodoPagamento ?? '',
+    observacoes: p.observacoes ?? '',
+    parcelaLabel: p.parcelaLabel ?? p.descricao,
+  }
+}
+
+function EditarParcelaModal({ parcela, onClose, onSalvar }: {
+  parcela: Receita
+  onClose: () => void
+  onSalvar: (patch: BaixaReceitaInput) => Promise<void>
+}) {
+  const [form, setForm] = useState<EditarParcelaForm>(() => formFromParcela(parcela))
+  const [submitted, setSubmitted] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [filesVersion, setFilesVersion] = useState(0)
+
+  function set<K extends keyof EditarParcelaForm>(k: K, v: EditarParcelaForm[K]) {
+    setForm(f => ({ ...f, [k]: v }))
+  }
+
+  const errors = {
+    valor: !form.valor || parseCurrencyBR(form.valor) <= 0,
+    data: !form.data,
+    dataRecebimento: form.status === 'pago' && !form.dataRecebimento,
+  }
+  const hasErrors = Object.values(errors).some(Boolean)
+
+  async function handleSalvar() {
+    setSubmitted(true)
+    if (hasErrors) return
+    setSaving(true)
+    try {
+      await onSalvar({
+        status: form.status,
+        valor: parseCurrencyBR(form.valor),
+        data: form.data,
+        dataRecebimento: form.dataRecebimento || undefined,
+        horaRecebimento: form.horaRecebimento || undefined,
+        metodoPagamento: form.metodoPagamento || undefined,
+        observacoes: form.observacoes.trim() || undefined,
+        comprovanteInstituicao: parcela.comprovanteInstituicao,
+        comprovanteIdentificador: parcela.comprovanteIdentificador,
+        parcelaLabel: form.parcelaLabel.trim() || undefined,
+      })
+      onClose()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl border border-app-border bg-app-surface shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-app-border sticky top-0 bg-app-surface z-10">
+          <p className="text-sm font-semibold text-app-text">Editar parcela</p>
+          <button onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-lg text-app-subtle hover:bg-app-surface2 transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div>
+            <label className="text-xs text-app-subtle mb-0.5 block">Identificação da parcela</label>
+            <input
+              value={form.parcelaLabel}
+              onChange={e => set('parcelaLabel', e.target.value)}
+              className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-app-subtle mb-0.5 block">Valor (R$)<span className="text-red-400 ml-0.5">*</span></label>
+              <input
+                type="text" inputMode="decimal"
+                value={form.valor}
+                onChange={e => set('valor', e.target.value)}
+                className={`w-full rounded-lg border ${submitted && errors.valor ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-app-subtle mb-0.5 block">Vencimento<span className="text-red-400 ml-0.5">*</span></label>
+              <input
+                type="date"
+                value={form.data}
+                onChange={e => set('data', e.target.value)}
+                className={`w-full rounded-lg border ${submitted && errors.data ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-app-subtle mb-0.5 block">Status</label>
+            <select
+              value={form.status}
+              onChange={e => set('status', e.target.value as Receita['status'])}
+              className="w-full cursor-pointer rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
+            >
+              <option value="pendente">Pendente</option>
+              <option value="pago">Pago</option>
+              <option value="atrasado">Atrasado</option>
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-app-subtle mb-0.5 block">
+                Data de pagamento{form.status === 'pago' && <span className="text-red-400 ml-0.5">*</span>}
+              </label>
+              <input
+                type="date"
+                value={form.dataRecebimento}
+                onChange={e => set('dataRecebimento', e.target.value)}
+                className={`w-full rounded-lg border ${submitted && errors.dataRecebimento ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-app-subtle mb-0.5 block">Hora do pagamento</label>
+              <input
+                type="time"
+                value={form.horaRecebimento}
+                onChange={e => set('horaRecebimento', e.target.value)}
+                className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-app-subtle mb-0.5 block">Forma de pagamento</label>
+            <select
+              value={form.metodoPagamento}
+              onChange={e => set('metodoPagamento', e.target.value)}
+              className="w-full cursor-pointer rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
+            >
+              <option value="">— Selecione —</option>
+              {FORMAS_PAGAMENTO.map(f => <option key={f} value={f}>{f}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs text-app-subtle mb-0.5 block">Observações</label>
+            <textarea
+              value={form.observacoes}
+              onChange={e => set('observacoes', e.target.value)}
+              rows={2}
+              className="w-full resize-none rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-app-subtle mb-1 block">Comprovante</label>
+            <FileAttachButton
+              module="receitas"
+              entityId={parcela.id}
+              entityName={form.parcelaLabel || parcela.descricao}
+              espaco={parcela.espaco}
+              categoria="comprovante"
+              label="Anexar comprovante"
+              onUploaded={() => setFilesVersion(v => v + 1)}
+            />
+            <div key={filesVersion} className="mt-2">
+              <FileList module="receitas" entityId={parcela.id} entityName={form.parcelaLabel || parcela.descricao} compact />
+            </div>
+          </div>
+
+          {submitted && hasErrors && (
+            <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5">
+              <p className="text-xs text-red-400">Preencha os campos obrigatórios (valor, vencimento{form.status === 'pago' ? ', data de pagamento' : ''}).</p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 px-5 py-4 border-t border-app-border">
+          <button onClick={onClose} className="rounded-lg border border-app-border2 px-4 py-2 text-sm text-app-muted hover:bg-app-surface2 transition-colors">
+            Cancelar
+          </button>
+          <button
+            onClick={handleSalvar}
+            disabled={saving}
+            className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 transition-colors"
+            style={{ backgroundColor: GREEN }}
+          >
+            <Save className="h-3.5 w-3.5" />
+            {saving ? 'Salvando…' : 'Salvar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEditarPlano, onSync, onBaixa }: Props) {
   const [editando, setEditando] = useState(false)
   const [draft, setDraft] = useState<DraftParcela[]>(() => toDraft(parcelas))
   const [saving, setSaving] = useState(false)
-  const [baixaId, setBaixaId] = useState<string | null>(null)
-  const [dataBaixa, setDataBaixa] = useState('')
-  const [metodoBaixa, setMetodoBaixa] = useState('')
+  const [parcelaEditando, setParcelaEditando] = useState<Receita | null>(null)
 
   const totalPlano = parcelas.reduce((s, p) => s + p.valor, 0)
   const totalPago = parcelas.filter(p => p.status === 'pago').reduce((s, p) => s + p.valor, 0)
@@ -86,18 +299,6 @@ export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEdita
     } finally {
       setSaving(false)
     }
-  }
-
-  function abrirBaixa(id: string) {
-    setBaixaId(id)
-    setDataBaixa(new Date().toISOString().split('T')[0])
-    setMetodoBaixa('')
-  }
-
-  async function confirmarBaixa() {
-    if (!baixaId || !dataBaixa) return
-    await onBaixa(baixaId, { status: 'pago', dataRecebimento: dataBaixa, metodoPagamento: metodoBaixa || undefined })
-    setBaixaId(null)
   }
 
   return (
@@ -155,18 +356,13 @@ export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEdita
                   {statusLabels[p.status]}
                 </span>
                 <span className="text-sm font-semibold text-app-text w-24 text-right">{formatCurrency(p.valor)}</span>
-                {p.status !== 'pago' && (
-                  <button
-                    onClick={() => abrirBaixa(p.id)}
-                    className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-white transition-colors"
-                    style={{ backgroundColor: GREEN }}
-                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = DARK_GREEN }}
-                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = GREEN }}
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    Dar baixa
-                  </button>
-                )}
+                <button
+                  onClick={() => setParcelaEditando(p)}
+                  className="flex items-center gap-1 rounded-lg border border-app-border2 px-2.5 py-1 text-xs font-medium text-app-muted hover:bg-app-surface2 transition-colors"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Editar
+                </button>
               </div>
             </div>
           ))}
@@ -231,44 +427,12 @@ export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEdita
         </div>
       )}
 
-      {baixaId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setBaixaId(null)}>
-          <div className="w-full max-w-sm rounded-2xl border border-app-border bg-app-surface shadow-2xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-app-text">Dar baixa na parcela</p>
-              <button onClick={() => setBaixaId(null)} className="flex h-7 w-7 items-center justify-center rounded-lg text-app-subtle hover:bg-app-surface2 transition-colors">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div>
-              <label className="text-xs text-app-subtle mb-0.5 block">Data do pagamento</label>
-              <input
-                type="date"
-                value={dataBaixa}
-                onChange={e => setDataBaixa(e.target.value)}
-                className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-app-subtle mb-0.5 block">Método (opcional)</label>
-              <input
-                value={metodoBaixa}
-                onChange={e => setMetodoBaixa(e.target.value)}
-                placeholder="Ex: PIX"
-                className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
-              />
-            </div>
-            <button
-              onClick={confirmarBaixa}
-              disabled={!dataBaixa}
-              className="w-full flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 transition-colors"
-              style={{ backgroundColor: GREEN }}
-            >
-              <CheckCircle2 className="h-4 w-4" />
-              Confirmar baixa
-            </button>
-          </div>
-        </div>
+      {parcelaEditando && (
+        <EditarParcelaModal
+          parcela={parcelaEditando}
+          onClose={() => setParcelaEditando(null)}
+          onSalvar={patch => onBaixa(parcelaEditando.id, patch)}
+        />
       )}
     </div>
   )
