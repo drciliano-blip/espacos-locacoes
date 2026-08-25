@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { X, Save, Calendar, DollarSign, User, ClipboardCheck, Paperclip, Camera, Sparkles, Plus, Trash2, MessageSquareText, IdCard, Building2, FileSignature } from 'lucide-react'
-import type { Evento, Espaco, TipoEvento, FormaPagamento, Contrato, TipoMinuta } from '@/types'
+import type { Evento, Espaco, TipoEvento, FormaPagamento, Contrato, TipoMinuta, FichaCliente } from '@/types'
 import FileAttachButton from '@/components/shared/FileAttachButton'
 import FileList from '@/components/shared/FileList'
 import Toast from '@/components/shared/Toast'
@@ -204,8 +204,78 @@ function emptyDraft(espacoPadrao?: Espaco): Draft {
   }
 }
 
+// FichaCliente.valorLocacao/valorSinal vêm do formulário público como string
+// decimal simples (ex: "5000.00"), não no formato BR que o campo de valor
+// exibe/espera (ex: "5000,00") — sem essa conversão, parseCurrencyBR (chamado
+// só na hora de salvar) poderia interpretar o ponto como separador de milhar.
+function valorParaCampo(valor?: string): string {
+  const n = valor ? Number(valor) : NaN
+  return Number.isFinite(n) && n > 0 ? n.toFixed(2).replace('.', ',') : ''
+}
+
+// Preenche o formulário direto a partir de uma ficha já recebida e salva —
+// mesmo mapeamento de campos que processarFicha() já faz a partir da leitura
+// por IA, só que lendo campos estruturados (sem precisar de parseDataBR/IA).
+function draftFromFicha(ficha: FichaCliente, espacosNomes: string[], espacoPadrao?: Espaco): { draft: Draft; parcelas: ParcelaDraft[] | null } {
+  const valor = valorParaCampo(ficha.valorLocacao)
+  const valorSinal = valorParaCampo(ficha.valorSinal)
+  const formaPagamento = (matchFromList(ficha.formaPagamento ?? null, FORMAS_PAGAMENTO) as FormaPagamento) || ''
+
+  const draft: Draft = {
+    ...emptyDraft(espacoPadrao),
+    cliente: ficha.nomeCompleto,
+    telefoneContato: ficha.telefoneCelular ? maskPhone(ficha.telefoneCelular) : '',
+    data: ficha.dataEvento,
+    espaco: espacoPadrao ?? (matchFromList(ficha.espacoDesejado, espacosNomes) as Espaco) ?? '',
+    tipo: ficha.tipoEvento ?? '',
+    horaInicio: ficha.horaInicioEvento ?? '',
+    horaFim: ficha.horaTerminoEvento ?? '',
+    valor,
+    formaPagamento,
+    valorSinal,
+    dataVencimentoSaldo: ficha.dataVencimentoSaldo ?? '',
+    nomeEvento: ficha.nomeEvento ?? '',
+    horaInicioMontagem: ficha.horaInicioMontagem ?? '',
+    cpf: ficha.cpf ? maskCPF(ficha.cpf) : '',
+    rg: ficha.rg ?? '',
+    dataNascimento: ficha.dataNascimento ?? '',
+    email: ficha.email ?? '',
+    endereco: ficha.endereco ? {
+      rua: ficha.endereco.rua ?? '',
+      numero: ficha.endereco.numero ?? '',
+      complemento: ficha.endereco.complemento ?? '',
+      bairro: ficha.endereco.bairro ?? '',
+      cidade: ficha.endereco.cidade ?? '',
+      estado: ficha.endereco.estado ?? '',
+      cep: ficha.endereco.cep ? maskCEP(ficha.endereco.cep) : '',
+    } : ENDERECO_VAZIO,
+    pessoaJuridica: ficha.pessoaJuridica,
+    razaoSocial: ficha.razaoSocial ?? '',
+    nomeFantasia: ficha.nomeFantasia ?? '',
+    cnpj: ficha.cnpj ? maskCNPJ(ficha.cnpj) : '',
+    enderecoEmpresa: ficha.enderecoEmpresa ? {
+      rua: ficha.enderecoEmpresa.rua ?? '',
+      numero: ficha.enderecoEmpresa.numero ?? '',
+      complemento: ficha.enderecoEmpresa.complemento ?? '',
+      bairro: ficha.enderecoEmpresa.bairro ?? '',
+      cidade: ficha.enderecoEmpresa.cidade ?? '',
+      estado: ficha.enderecoEmpresa.estado ?? '',
+      cep: ficha.enderecoEmpresa.cep ?? '',
+    } : ENDERECO_VAZIO,
+  }
+
+  const parcelas = formaPagamento === 'Parcelado'
+    ? gerarParcelasPadrao(draft.data, parseCurrencyBR(draft.valor), draft.valorSinal, draft.dataVencimentoSaldo)
+    : null
+
+  return { draft, parcelas }
+}
+
 interface NovoEventoModalProps {
   espacoPadrao?: Espaco
+  // Quando presente, o formulário já abre preenchido com os dados desta
+  // ficha recebida (ver FichasRecebidasSection.tsx, "Criar evento desta ficha").
+  fichaOrigem?: FichaCliente
   onClose: () => void
   onSave: (evento: Evento) => void | Promise<void>
 }
@@ -248,13 +318,13 @@ function Field({
   )
 }
 
-export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoEventoModalProps) {
+export default function NovoEventoModal({ espacoPadrao, fichaOrigem, onClose, onSave }: NovoEventoModalProps) {
   const { espacosNomes } = useEspacos()
   const { syncParcelasDoEvento } = useReceitas()
   const { addContrato } = useContratos()
-  const [draft, setDraft]         = useState<Draft>(() => emptyDraft(espacoPadrao))
+  const [draft, setDraft]         = useState<Draft>(() => fichaOrigem ? draftFromFicha(fichaOrigem, espacosNomes, espacoPadrao).draft : emptyDraft(espacoPadrao))
   const [submitted, setSubmitted] = useState(false)
-  const [parcelas, setParcelas]   = useState<ParcelaDraft[] | null>(null)
+  const [parcelas, setParcelas]   = useState<ParcelaDraft[] | null>(() => fichaOrigem ? draftFromFicha(fichaOrigem, espacosNomes, espacoPadrao).parcelas : null)
   // Generate stable ID upfront so file attachments are linked before save
   // (precisa ser um UUID real: vira o id definitivo do evento no Postgres)
   const [eventId]                 = useState(() => crypto.randomUUID())
@@ -550,6 +620,14 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
         </div>
 
         <div className="p-5 space-y-6">
+
+          {fichaOrigem && (
+            <div className="rounded-lg border border-[#25D366]/30 bg-[#25D366]/5 px-4 py-2.5">
+              <p className="text-xs text-app-text">
+                Preenchido a partir da ficha de <span className="font-medium">{fichaOrigem.nomeCompleto}</span> — confira os dados antes de salvar.
+              </p>
+            </div>
+          )}
 
           {/* ── Preenchimento automático via ficha do cliente ───────────── */}
           <section className="rounded-lg border border-[#25D366]/30 bg-[#25D366]/5 p-4 space-y-2">

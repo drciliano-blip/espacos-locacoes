@@ -1,12 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Inbox, ChevronDown, ChevronUp, Mail, Phone, Calendar, FileSignature } from 'lucide-react'
+import { Inbox, ChevronDown, ChevronUp, Mail, Phone, Calendar, FileSignature, CalendarPlus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency } from '@/lib/utils'
 import FileList from '@/components/shared/FileList'
 import GerarContratoModal from '@/components/contratos/GerarContratoModal'
-import type { FichaCliente } from '@/types'
+import NovoEventoModal from '@/components/eventos/NovoEventoModal'
+import Toast from '@/components/shared/Toast'
+import { useEventos } from '@/contexts/EventosContext'
+import { useEspacoAtivo } from '@/contexts/EspacoAtivoContext'
+import type { FichaCliente, Espaco } from '@/types'
 
 interface FichaRow {
   id: string
@@ -69,9 +73,18 @@ function fromRow(row: FichaRow): FichaCliente {
 }
 
 export default function FichasRecebidasSection() {
+  const { addEvento } = useEventos()
+  const { espacoUnico } = useEspacoAtivo()
   const [fichas, setFichas] = useState<FichaCliente[]>([])
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [gerarContratoFicha, setGerarContratoFicha] = useState<FichaCliente | null>(null)
+  const [criarEventoFicha, setCriarEventoFicha] = useState<FichaCliente | null>(null)
+  const [toastMsg, setToastMsg] = useState<string | null>(null)
+
+  function showToast(msg: string) {
+    setToastMsg(msg)
+    setTimeout(() => setToastMsg(null), 3500)
+  }
 
   useEffect(() => {
     const supabase = createClient()
@@ -113,6 +126,13 @@ export default function FichasRecebidasSection() {
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => setCriarEventoFicha(f)}
+                  className="flex items-center gap-1.5 rounded-lg border border-app-border2 bg-app-surface px-3 py-1.5 text-xs font-medium text-app-text hover:bg-app-surface2 transition-colors"
+                >
+                  <CalendarPlus className="h-3.5 w-3.5" />
+                  Criar evento desta ficha
+                </button>
                 <button
                   onClick={() => setGerarContratoFicha(f)}
                   className="flex items-center gap-1.5 rounded-lg border border-[#25D366]/30 bg-[#25D366]/10 px-3 py-1.5 text-xs font-medium text-[#128C7E] hover:bg-[#25D366]/20 transition-colors"
@@ -168,6 +188,21 @@ export default function FichasRecebidasSection() {
           onClose={() => setGerarContratoFicha(null)}
         />
       )}
+
+      {criarEventoFicha && (
+        <NovoEventoModal
+          fichaOrigem={criarEventoFicha}
+          espacoPadrao={(espacoUnico ?? undefined) as Espaco | undefined}
+          onClose={() => setCriarEventoFicha(null)}
+          onSave={async evento => {
+            await addEvento(evento)
+            setCriarEventoFicha(null)
+            showToast('Evento criado a partir da ficha.')
+          }}
+        />
+      )}
+
+      <Toast message={toastMsg} />
     </div>
   )
 }
