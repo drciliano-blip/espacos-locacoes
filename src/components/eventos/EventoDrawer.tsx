@@ -571,7 +571,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
         {tab === 'documentos' && (
           <div className="p-5 space-y-3">
             <div className="flex flex-wrap gap-2">
-              <FileAttachButton module="agenda" entityId={evento.id} entityName={`${evento.cliente} — ${evento.espaco}`} espaco={evento.espaco} categoria="contrato" label="Anexar contrato" />
+              <FileAttachButton module="agenda" entityId={evento.id} entityName={`${evento.cliente} — ${evento.espaco}`} espaco={evento.espaco} categoria="contrato" label="Anexar contrato" permiteColarTexto />
               <FileAttachButton module="agenda" entityId={evento.id} entityName={`${evento.cliente} — ${evento.espaco}`} espaco={evento.espaco} categoria="comprovante_sinal" label="Anexar comprovante do sinal" />
               <FileAttachButton module="agenda" entityId={evento.id} entityName={`${evento.cliente} — ${evento.espaco}`} espaco={evento.espaco} categoria="documento_identidade" label="Anexar CNH/RG de quem assina" />
             </div>

@@ -934,6 +934,7 @@ export default function NovoEventoModal({ espacoPadrao, onClose, onSave }: NovoE
                   categoria="contrato"
                   label="Anexar contrato do evento"
                   onUploaded={() => setFileCount(n => n + 1)}
+                  permiteColarTexto
                 />
                 <FileAttachButton
                   module="agenda"

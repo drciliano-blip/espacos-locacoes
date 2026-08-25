@@ -7,34 +7,8 @@ import type { TipoMinuta } from '@/lib/contract-templates'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { formatCurrency } from '@/lib/utils'
 import { saveFile, getFiles, type StoredFile } from '@/lib/file-storage'
+import { gerarPdfFile } from '@/lib/pdf-from-text'
 import type { Contrato, FichaCliente, Evento } from '@/types'
-
-async function gerarPdfFile(texto: string, nomeArquivo: string): Promise<File> {
-  const { jsPDF } = await import('jspdf')
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' })
-  const margin = 48
-  const pageWidth = doc.internal.pageSize.getWidth()
-  const pageHeight = doc.internal.pageSize.getHeight()
-  const maxWidth = pageWidth - margin * 2
-  const lineHeight = 14
-
-  doc.setFont('times', 'normal')
-  doc.setFontSize(11)
-  const lines = doc.splitTextToSize(texto, maxWidth) as string[]
-
-  let y = margin
-  for (const line of lines) {
-    if (y > pageHeight - margin) {
-      doc.addPage()
-      y = margin
-    }
-    doc.text(line, margin, y)
-    y += lineHeight
-  }
-
-  const blob = doc.output('blob')
-  return new File([blob], nomeArquivo, { type: 'application/pdf' })
-}
 
 // Versão .docx do contrato — permite que o funcionário corrija algo direto no
 // Word antes de reenviar pro cliente assinar, sem precisar mexer no PDF.
