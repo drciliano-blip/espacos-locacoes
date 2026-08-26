@@ -68,6 +68,20 @@ export const GRUPOS_SOCIOS: Record<string, Record<string, string[]>> = {
   },
 }
 
+// Regra especial — Complexo Jussara: Trupe Labels tem 10% de participação no
+// resultado, mas 0% de participação na obra (não entra em SOCIOS_OBRA). A
+// reserva "Obra Jussara" (um Fundo genérico, ver FundosContext) reduz o
+// Disponível do Espaço igualmente pra todo mundo antes de dividir por %, o
+// que faria a Trupe perder parte do que lhe cabe por uma despesa que não é
+// dela. Compensa-se devolvendo ao repasse da Trupe o seu percentual sobre o
+// valor reservado nesse fundo específico — nunca sobre outras
+// reservas/Fundo de Caixa, que continuam descontados normalmente dela.
+// Nome do fundo casado por igualdade exata (maiúsc./minúsc. e espaços nas
+// pontas ignorados), como cadastrado hoje em Financeiro → Fundos.
+export const AJUSTE_RESERVA_OBRA: Record<string, { fundoNome: string; socioIsento: string }> = {
+  'Complexo Jussara': { fundoNome: 'OBRA JUSSARA', socioIsento: 'Trupe Labels' },
+}
+
 // Investimentos societários pontuais (ex: compra de participação) — só um
 // registro informativo pro Quadro Societário. Nunca é receita, nunca entra no
 // Fechamento da Obra nem no Resultado Operacional.
