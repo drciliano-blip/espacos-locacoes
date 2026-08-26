@@ -21,7 +21,8 @@ export const DIVISAO_SOCIOS: Record<string, SocioSplit[]> = {
     { nome: 'Trupe Labels', percentual: 10 },
   ],
   'Espaço Solon': [
-    { nome: 'GCR', percentual: 80 },
+    { nome: 'Camilo', percentual: 40 },
+    { nome: 'Alex', percentual: 40 },
     { nome: 'RUB', percentual: 20 },
   ],
   'House Pacaembu': [
