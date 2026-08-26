@@ -83,12 +83,17 @@ export interface FechamentoResultado {
   // para Distribuição.
   totalRetiradasSocioAcumulado: number
 
+  // Disponível do Espaço — subtotal intermediário: Resultado Operacional
+  // acumulado menos tudo que está reservado agora (Fundo de Caixa + reservas
+  // genéricas). Não é uma dedução, é o resultado depois de descontar as
+  // reservas — a partir daqui é que se desconta o que os sócios já retiraram.
+  disponivelDoEspaco: number
+
   // Disponível para Distribuição — é uma posição atual, não um fluxo de
-  // período: Resultado Operacional acumulado menos tudo que está reservado
-  // agora (Fundo de Caixa + reservas genéricas) menos tudo que os sócios já
-  // retiraram. Dinheiro reservado ou já retirado nunca é distribuível de
-  // novo. Só esse valor deve alimentar o cálculo de repasse aos sócios,
-  // nunca o Resultado bruto.
+  // período: Disponível do Espaço menos tudo que os sócios já retiraram.
+  // Dinheiro reservado ou já retirado nunca é distribuível de novo. Só esse
+  // valor deve alimentar o cálculo de repasse aos sócios, nunca o Resultado
+  // bruto.
   disponivelParaDistribuicao: number
 
   // Mesma conta do disponivelParaDistribuicao, mas por espaço individual —
@@ -221,12 +226,14 @@ export function calcularFechamento(
 
   const resultadoAcumulado = entradasOperAllTime - despesasOperAllTime
 
-  // Disponível para Distribuição é uma posição atual (não um fluxo do
-  // período): Resultado Operacional acumulado menos tudo que está reservado
-  // agora (Fundo de Caixa + reservas genéricas) menos tudo que os sócios já
-  // retiraram — nenhum desses três é despesa (não mexem no Resultado), mas
-  // reduzem o quanto ainda pode sair da empresa pros sócios.
-  const disponivelParaDistribuicao = resultadoAcumulado - saldoFundoAtual - totalReservasGenericas - retiradasAllTime
+  // Disponível do Espaço é um subtotal intermediário (não uma dedução): o
+  // Resultado Operacional acumulado depois de descontar o que está reservado
+  // agora (Fundo de Caixa + reservas genéricas). Disponível para Distribuição
+  // é uma posição atual (não um fluxo do período): esse subtotal menos tudo
+  // que os sócios já retiraram — nenhum desses três é despesa (não mexem no
+  // Resultado), mas reduzem o quanto ainda pode sair da empresa pros sócios.
+  const disponivelDoEspaco = resultadoAcumulado - saldoFundoAtual - totalReservasGenericas
+  const disponivelParaDistribuicao = disponivelDoEspaco - retiradasAllTime
 
   // Mesma conta, mas por espaço individual — só entram fundos vinculados
   // àquele espaço específico (fundo sem espaço não dá pra atribuir a um só).
@@ -255,7 +262,7 @@ export function calcularFechamento(
     aportesObra, despesasObra,
     saldoFundoAtual, saldoDisponivelForaFundo, totalReservasGenericas, resultadoAcumulado,
     totalRetiradasSocioAcumulado: retiradasAllTime,
-    disponivelParaDistribuicao, disponivelPorEspaco,
+    disponivelDoEspaco, disponivelParaDistribuicao, disponivelPorEspaco,
     obraPorEspaco,
   }
 }

@@ -353,6 +353,7 @@ export default function FechamentoClient() {
         ['Disponível para Distribuição (posição atual, acumulada)'],
         ['Resultado Operacional acumulado', fechamento.resultadoAcumulado],
         ['(-) Fundo de Caixa/Reservas', fechamento.saldoFundoAtual + fechamento.totalReservasGenericas],
+        ['= Disponível do Espaço', fechamento.disponivelDoEspaco],
         ['(-) Já retirado pelos sócios', fechamento.totalRetiradasSocioAcumulado],
         ['= Disponível para Distribuição', fechamento.disponivelParaDistribuicao],
       ],
@@ -639,10 +640,11 @@ export default function FechamentoClient() {
 
       {/* 4. Disponível para Distribuição — posição acumulada, não um fluxo do
           período: Resultado Operacional acumulado menos o que está reservado
-          agora menos o que os sócios já retiraram. */}
+          agora (= Disponível do Espaço, um subtotal, não uma dedução) menos
+          o que os sócios já retiraram. */}
       <section className="rounded-2xl border border-app-border bg-app-surface p-5 space-y-3">
         <h4 className="text-xs font-semibold text-app-muted uppercase tracking-wide">Disponível para Distribuição</h4>
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 text-xs">
           <div className="rounded-lg border border-app-border2/60 bg-app-bg p-3">
             <p className="text-app-subtle">Resultado Operacional (acumulado)</p>
             <p className="font-semibold text-app-text">{formatCurrency(fechamento.resultadoAcumulado)}</p>
@@ -650,6 +652,10 @@ export default function FechamentoClient() {
           <div className="rounded-lg border border-app-border2/60 bg-app-bg p-3">
             <p className="text-app-subtle">(−) Fundo de Caixa / Reservas</p>
             <p className="font-semibold text-amber-600">{formatCurrency(fechamento.saldoFundoAtual + fechamento.totalReservasGenericas)}</p>
+          </div>
+          <div className="rounded-lg border border-app-border2/60 bg-app-bg p-3">
+            <p className="text-app-subtle">= Disponível do Espaço</p>
+            <p className="font-semibold text-app-text">{formatCurrency(fechamento.disponivelDoEspaco)}</p>
           </div>
           <div className="rounded-lg border border-app-border2/60 bg-app-bg p-3">
             <p className="text-app-subtle">(−) Já retirado pelos sócios</p>
