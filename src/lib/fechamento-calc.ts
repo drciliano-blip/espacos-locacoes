@@ -230,6 +230,11 @@ export function calcularFechamento(
 
   // Mesma conta, mas por espaço individual — só entram fundos vinculados
   // àquele espaço específico (fundo sem espaço não dá pra atribuir a um só).
+  // Retirada de sócio NÃO entra aqui de propósito — isso é "Direito do Sócio"
+  // bruto, antes de dividir por participação; descontar retirada coletiva
+  // nesse ponto faria a retirada de um sócio reduzir o direito dos outros.
+  // O desconto de retirada é individual, por sócio, feito depois de aplicar
+  // o percentual de cada um (ver repasseSociosRows em FechamentoClient.tsx).
   const disponivelPorEspaco = espacosEmEscopo.map(e => {
     const entradasEspaco = somaPaga(entradasAllTime, r => isReceitaOperacional(r) && r.espaco === e.nome, r => r.valor, r => r.status)
     const despesasEspaco = somaPaga(saidasAllTime, c => isDespesaOperacional(c) && c.espaco === e.nome, c => c.valor, c => c.status)
@@ -237,8 +242,7 @@ export function calcularFechamento(
       somaPaga(saidasAllTime, c => c.categoria === 'fundo_caixa' && c.espaco === e.nome, c => c.valor, c => c.status)
       - somaPaga(entradasAllTime, r => r.tipoEntrada === 'retorno_fundo_caixa' && r.espaco === e.nome, r => r.valor, r => r.status)
     const reservasGenericasEspaco = reservasGenericasNoPeriodo(fundos.filter(f => f.espaco === e.nome), movimentacoesFundo)
-    const retiradasEspaco = somaPaga(saidasAllTime, c => c.categoria === 'retirada_socio' && c.espaco === e.nome, c => c.valor, c => c.status)
-    const disponivel = entradasEspaco - despesasEspaco - fundoCaixaEspaco - reservasGenericasEspaco - retiradasEspaco
+    const disponivel = entradasEspaco - despesasEspaco - fundoCaixaEspaco - reservasGenericasEspaco
     return { nome: e.nome, disponivel }
   })
 

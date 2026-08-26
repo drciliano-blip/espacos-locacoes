@@ -296,22 +296,26 @@ export default function FechamentoClient() {
     r.tipoEntrada === 'retorno_fundo_caixa' && (!selectedSpaces?.length || (r.espaco && selectedSpaces.includes(r.espaco))),
   ), [receitas, selectedSpaces])
 
-  // Repasse aos sócios — mesma base do "Disponível para Distribuição" por
-  // espaço (fechamento.disponivelPorEspaco), com o quanto já foi
-  // efetivamente repassado (RepassesContext) descontado. Sempre acumulado,
-  // igual ao resto da seção Sócios agora.
+  // Repasse aos sócios — "Direito do Sócio" (disponivelPorEspaco × %) menos o
+  // que ELE MESMO já retirou (contas_pagar) e já repassou (RepassesContext).
+  // A retirada de um sócio nunca pode reduzir o direito de outro — por isso o
+  // desconto de retirada é filtrado por sócio aqui, depois de aplicar o
+  // percentual, e não dentro de disponivelPorEspaco (que é coletivo).
   const repasseSociosRows = useMemo(() => {
-    const rows: { espaco: string; socio: string; percentual: number; lucro: number; valorDevido: number; jaRepassado: number; valorPendente: number }[] = []
+    const rows: { espaco: string; socio: string; percentual: number; lucro: number; valorDevido: number; retirado: number; jaRepassado: number; valorPendente: number }[] = []
     for (const e of espacos) {
       const lucro = fechamento.disponivelPorEspaco.find(d => d.nome === e.nome)?.disponivel ?? 0
       for (const s of DIVISAO_SOCIOS[e.nome] ?? []) {
         const valorDevido = lucro * (s.percentual / 100)
+        const retirado = contasPagar
+          .filter(c => c.status === 'pago' && c.categoria === 'retirada_socio' && c.espaco === e.nome && c.fornecedor && nomeCanonicoSocio(c.fornecedor) === s.nome)
+          .reduce((sum, c) => sum + c.valor, 0)
         const jaRepassado = repasses.filter(r => r.espaco === e.nome && r.socioNome === s.nome).reduce((sum, r) => sum + r.valor, 0)
-        rows.push({ espaco: e.nome, socio: s.nome, percentual: s.percentual, lucro, valorDevido, jaRepassado, valorPendente: valorDevido - jaRepassado })
+        rows.push({ espaco: e.nome, socio: s.nome, percentual: s.percentual, lucro, valorDevido, retirado, jaRepassado, valorPendente: valorDevido - retirado - jaRepassado })
       }
     }
     return rows
-  }, [espacos, fechamento, repasses])
+  }, [espacos, fechamento, contasPagar, repasses])
 
   // Exportação completa do Financeiro — respeita exatamente o filtro de
   // espaço/período ativo na tela. Cada planilha usa a mesma lista que
@@ -430,8 +434,8 @@ export default function FechamentoClient() {
     const repasseSheet: ExportSheet = {
       name: 'Disponível p Distribuição',
       rows: [
-        ['Espaço', 'Sócio', 'Percentual (%)', 'Disponível do Espaço', 'Valor Devido', 'Já Repassado', 'Valor Pendente'],
-        ...repasseSociosRows.map(r => [r.espaco, r.socio, r.percentual, r.lucro, r.valorDevido, r.jaRepassado, r.valorPendente]),
+        ['Espaço', 'Sócio', 'Percentual (%)', 'Disponível do Espaço', 'Valor Devido', 'Retirado', 'Já Repassado', 'Valor Pendente'],
+        ...repasseSociosRows.map(r => [r.espaco, r.socio, r.percentual, r.lucro, r.valorDevido, r.retirado, r.jaRepassado, r.valorPendente]),
       ],
     }
 
@@ -728,7 +732,7 @@ export default function FechamentoClient() {
             <table className="w-full text-xs border-collapse">
               <thead>
                 <tr className="border-b border-app-border bg-app-surface2">
-                  {['Espaço', 'Sócio', '%', 'Disponível do Espaço', 'Valor Devido', 'Já Repassado', 'Pendente', ...(podeLancar ? [''] : [])].map((h, i) => (
+                  {['Espaço', 'Sócio', '%', 'Disponível do Espaço', 'Valor Devido', 'Retirado', 'Já Repassado', 'Pendente', ...(podeLancar ? [''] : [])].map((h, i) => (
                     <th key={h || `acao-${i}`} className="px-2 py-2 text-left font-medium text-app-subtle uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -741,6 +745,7 @@ export default function FechamentoClient() {
                     <td className="px-2 py-2 text-app-text2 whitespace-nowrap">{r.percentual}%</td>
                     <td className="px-2 py-2 text-app-text2 whitespace-nowrap">{formatCurrency(r.lucro)}</td>
                     <td className="px-2 py-2 text-app-text2 whitespace-nowrap">{formatCurrency(r.valorDevido)}</td>
+                    <td className="px-2 py-2 text-fuchsia-600 whitespace-nowrap">{formatCurrency(r.retirado)}</td>
                     <td className="px-2 py-2 text-app-text2 whitespace-nowrap">{formatCurrency(r.jaRepassado)}</td>
                     <td className={`px-2 py-2 font-semibold whitespace-nowrap ${r.valorPendente > 0.01 ? 'text-amber-500' : 'text-[#128C7E]'}`}>{formatCurrency(r.valorPendente)}</td>
                     {podeLancar && (
@@ -946,8 +951,8 @@ export default function FechamentoClient() {
             totalLabel="Total acumulado" totalValor={formatCurrency(fechamento.totalRetiradasSocioAcumulado)}
           />
           <FullTable
-            titulo="Disponível para Distribuição — por Sócio" headers={['Espaço', 'Sócio', '%', 'Disponível do Espaço', 'Valor Devido', 'Já Repassado', 'Pendente']}
-            rows={repasseSociosRows.map(r => [r.espaco, r.socio, `${r.percentual}%`, formatCurrency(r.lucro), formatCurrency(r.valorDevido), formatCurrency(r.jaRepassado), formatCurrency(r.valorPendente)])}
+            titulo="Disponível para Distribuição — por Sócio" headers={['Espaço', 'Sócio', '%', 'Disponível do Espaço', 'Valor Devido', 'Retirado', 'Já Repassado', 'Pendente']}
+            rows={repasseSociosRows.map(r => [r.espaco, r.socio, `${r.percentual}%`, formatCurrency(r.lucro), formatCurrency(r.valorDevido), formatCurrency(r.retirado), formatCurrency(r.jaRepassado), formatCurrency(r.valorPendente)])}
             totalLabel="Disponível total" totalValor={formatCurrency(fechamento.disponivelParaDistribuicao)}
           />
         </div>
