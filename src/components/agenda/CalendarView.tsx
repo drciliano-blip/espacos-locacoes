@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, isSameMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -18,13 +18,19 @@ interface CalendarViewProps {
   eventos: Evento[]
   onDaySelect: (date: Date | null) => void
   selectedDate: Date | null
+  // Avisa o mês/ano exibido pra quem quiser acompanhar sem precisar controlar
+  // o mês por fora — quem não passar (ex: EspacoPage) continua funcionando
+  // igual, sem nenhum efeito colateral.
+  onMonthChange?: (month: Date) => void
 }
 
-export default function CalendarView({ eventos, onDaySelect, selectedDate }: CalendarViewProps) {
+export default function CalendarView({ eventos, onDaySelect, selectedDate, onMonthChange }: CalendarViewProps) {
   const [currentMonth, setCurrentMonth] = useState(() => {
     const hoje = new Date()
     return new Date(hoje.getFullYear(), hoje.getMonth(), 1)
   })
+
+  useEffect(() => { onMonthChange?.(currentMonth) }, [currentMonth, onMonthChange])
 
   const days = eachDayOfInterval({
     start: startOfMonth(currentMonth),
