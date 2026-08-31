@@ -38,6 +38,7 @@ const tipoEventoBadge: Record<TipoEvento, string> = {
   'Festivo': 'bg-pink-500/15 text-pink-400 border-pink-500/20',
   'Corporativo': 'bg-blue-500/15 text-blue-400 border-blue-500/20',
   'Audiovisual': 'bg-orange-500/15 text-orange-400 border-orange-500/20',
+  'Locação Portaria': 'bg-slate-500/15 text-slate-400 border-slate-500/20',
 }
 
 const TIPOS_CONTRATO: { value: TipoMinuta; label: string }[] = [
@@ -420,6 +421,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                       <option value="Festivo">Festivo</option>
                       <option value="Corporativo">Corporativo</option>
                       <option value="Audiovisual">Audiovisual</option>
+                      <option value="Locação Portaria">Locação Portaria</option>
                     </select>
                   ) : (
                     current.tipoEvento

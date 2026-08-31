@@ -795,6 +795,7 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, onClose, on
                   <option value="Festivo">Festivo</option>
                   <option value="Corporativo">Corporativo</option>
                   <option value="Audiovisual">Audiovisual</option>
+                  <option value="Locação Portaria">Locação Portaria</option>
                 </select>
               </div>
 

@@ -12,7 +12,7 @@ export type Decoracao = 'própria' | 'terceirizada' | 'não aplicável'
 export type StatusVistoria = 'pendente' | 'aprovada' | 'aprovada com ressalvas' | 'reprovada' | 'não realizada'
 
 // Feature 3: Tipo de Evento
-export type TipoEvento = 'Festivo' | 'Corporativo' | 'Audiovisual'
+export type TipoEvento = 'Festivo' | 'Corporativo' | 'Audiovisual' | 'Locação Portaria'
 
 // Feature 2: Níveis de acesso
 export type NivelAcesso = 'admin' | 'financeiro' | 'operacional' | 'visualizador' | 'socio'

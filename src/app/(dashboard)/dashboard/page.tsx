@@ -25,6 +25,7 @@ const tipoEventoColors: Record<TipoEvento, string> = {
   'Festivo': '#ec4899',
   'Corporativo': '#3b82f6',
   'Audiovisual': '#f97316',
+  'Locação Portaria': '#64748b',
 }
 
 const statusBadge: Record<string, string> = {
@@ -132,7 +133,7 @@ export default function DashboardPage() {
   })
 
   // Dados por tipo de evento
-  const tiposData = (['Festivo', 'Corporativo', 'Audiovisual'] as TipoEvento[]).map((tipo) => ({
+  const tiposData = (['Festivo', 'Corporativo', 'Audiovisual', 'Locação Portaria'] as TipoEvento[]).map((tipo) => ({
     tipo,
     total: eventosFiltrados.filter(e => e.tipoEvento === tipo).length,
     receita: eventosFiltrados.filter(e => e.tipoEvento === tipo).reduce((s, e) => s + e.valor, 0),

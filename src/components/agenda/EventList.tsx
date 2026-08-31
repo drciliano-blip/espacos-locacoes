@@ -28,6 +28,7 @@ const tipoEventoColors: Record<TipoEvento, string> = {
   'Festivo': 'bg-pink-500/10 text-pink-400',
   'Corporativo': 'bg-blue-500/10 text-blue-400',
   'Audiovisual': 'bg-orange-500/10 text-orange-400',
+  'Locação Portaria': 'bg-slate-500/10 text-slate-400',
 }
 
 interface EventListProps {
