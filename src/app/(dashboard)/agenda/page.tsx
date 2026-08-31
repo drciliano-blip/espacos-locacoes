@@ -6,6 +6,7 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import CalendarView from '@/components/agenda/CalendarView'
 import EventList, { type AbaAgenda } from '@/components/agenda/EventList'
+import ExportarPdfAgendaModal, { type CamposPdfAgenda, CAMPOS_PDF_PADRAO } from '@/components/agenda/ExportarPdfAgendaModal'
 import GoogleCalendarView from '@/components/agenda/GoogleCalendarView'
 import EventoDrawer from '@/components/eventos/EventoDrawer'
 import NovoEventoModal from '@/components/eventos/NovoEventoModal'
@@ -21,6 +22,11 @@ import { downloadWorkbook, type ExportSheet } from '@/lib/xlsx-export'
 import type { Evento, Espaco } from '@/types'
 
 const statusLabelEvento: Record<string, string> = { confirmado: 'Confirmado', cancelado: 'Cancelado' }
+
+function contatoLabel(evento: Evento): string {
+  if (!evento.responsavel) return '—'
+  return evento.telefoneContato ? `${evento.responsavel} · ${evento.telefoneContato}` : evento.responsavel
+}
 
 // Um evento do próprio dia só vira "passado" depois que o horário de término dele já
 // passou — antes disso, mesmo sendo hoje, ainda conta como "próximo".
@@ -44,6 +50,8 @@ export default function AgendaPage() {
   const [selectedDate, setSelectedDate]     = useState<Date | null>(null)
   const [selectedEvento, setSelectedEvento] = useState<Evento | null>(null)
   const [novoEventoOpen, setNovoEventoOpen] = useState(false)
+  const [pdfModalOpen, setPdfModalOpen] = useState(false)
+  const [camposPdf, setCamposPdf] = useState<CamposPdfAgenda>(CAMPOS_PDF_PADRAO)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   function showToast(msg: string) {
     setToastMsg(msg)
@@ -124,10 +132,10 @@ export default function AgendaPage() {
         ['Filtro aplicado', tituloFiltro],
         ['Espaço', espacosLabel],
         [],
-        ['Data', 'Nome do Evento', 'Valor Total', 'Status', 'Valor Recebido', 'Valor a Receber'],
+        ['Data', 'Nome do Evento', 'Valor Total', 'Status', 'Valor Recebido', 'Valor a Receber', 'Contato Responsável'],
         ...relacaoExibida.map(r => [
           formatDate(r.evento.data), r.evento.cliente, r.evento.valor,
-          statusLabelEvento[r.evento.status] ?? r.evento.status, r.valorRecebido, r.valorAReceber,
+          statusLabelEvento[r.evento.status] ?? r.evento.status, r.valorRecebido, r.valorAReceber, contatoLabel(r.evento),
         ]),
         [],
         ['Quantidade total de eventos', totaisExibidos.quantidade],
@@ -140,6 +148,26 @@ export default function AgendaPage() {
       ? selectedDate.toISOString().split('T')[0]
       : aba === 'mes' ? format(mesExibido, 'yyyy-MM') : aba
     downloadWorkbook([sheet], `relacao-agenda-${sufixo}.xlsx`)
+  }
+
+  // Colunas do PDF — só as marcadas no modal "Exportar PDF" entram no
+  // relatório impresso, nessa ordem fixa. Excel não passa por aqui: continua
+  // trazendo tudo, é o export "completo" pra uso interno.
+  const pdfColunas = useMemo(() => {
+    const todas: { key: keyof CamposPdfAgenda; header: string; cell: (r: (typeof relacaoExibida)[number]) => string }[] = [
+      { key: 'data', header: 'Data', cell: r => formatDate(r.evento.data) },
+      { key: 'nome', header: 'Nome do Evento', cell: r => r.evento.cliente },
+      { key: 'status', header: 'Status', cell: r => statusLabelEvento[r.evento.status] ?? r.evento.status },
+      { key: 'valor', header: 'Valor Negociado', cell: r => formatCurrency(r.evento.valor) },
+      { key: 'contato', header: 'Contato Responsável', cell: r => contatoLabel(r.evento) },
+    ]
+    return todas.filter(c => camposPdf[c.key])
+  }, [camposPdf, relacaoExibida])
+
+  function handleConfirmarPdf(campos: CamposPdfAgenda) {
+    setCamposPdf(campos)
+    setPdfModalOpen(false)
+    setTimeout(() => window.print(), 60)
   }
 
   async function handleUpdate(updated: Evento) {
@@ -176,7 +204,7 @@ export default function AgendaPage() {
             </span>
           )}
 
-          <ExportarRelatorioButton onExcel={handleExportExcelRelacao} onPdf={() => window.print()} label="Exportar Relação" />
+          <ExportarRelatorioButton onExcel={handleExportExcelRelacao} onPdf={() => setPdfModalOpen(true)} label="Exportar Relação" />
 
           {/* Botão Novo Evento */}
           {role !== 'socio' && (
@@ -219,23 +247,16 @@ export default function AgendaPage() {
 
       {/* Relação Agenda — escondida na tela, só aparece no PDF exportado.
           Reflete exatamente o que está em `eventosExibidos` (dia/aba/mês
-          ativo) e o espaço ativo, nunca uma lista à parte recalculada com
-          outro filtro. */}
+          ativo) e o espaço ativo, e só traz as colunas marcadas no modal
+          "Exportar PDF" — nenhuma informação fora da seleção do usuário
+          pode aparecer aqui (ex: compartilhar sem revelar valores). */}
       <div className="hidden print:block space-y-3">
         <FullTable
           titulo={tituloFiltro}
-          headers={['Data', 'Nome do Evento', 'Valor Total', 'Status', 'Valor Recebido', 'Valor a Receber']}
-          rows={relacaoExibida.map(r => [
-            formatDate(r.evento.data), r.evento.cliente, formatCurrency(r.evento.valor),
-            statusLabelEvento[r.evento.status] ?? r.evento.status, formatCurrency(r.valorRecebido), formatCurrency(r.valorAReceber),
-          ])}
-          totalLabel="Valor total contratado" totalValor={formatCurrency(totaisExibidos.valorTotalContratado)}
+          headers={pdfColunas.map(c => c.header)}
+          rows={relacaoExibida.map(r => pdfColunas.map(c => c.cell(r)))}
+          totalLabel="Quantidade de eventos" totalValor={String(totaisExibidos.quantidade)}
         />
-        <div className="grid grid-cols-3 gap-3 text-xs">
-          <p><span className="text-gray-500">Quantidade total de eventos:</span> <span className="font-semibold">{totaisExibidos.quantidade}</span></p>
-          <p><span className="text-gray-500">Total recebido:</span> <span className="font-semibold">{formatCurrency(totaisExibidos.totalRecebido)}</span></p>
-          <p><span className="text-gray-500">Total a receber:</span> <span className="font-semibold">{formatCurrency(totaisExibidos.totalAReceber)}</span></p>
-        </div>
       </div>
 
       {selectedEvento && (
@@ -252,6 +273,14 @@ export default function AgendaPage() {
           espacoPadrao={(espacoUnico ?? undefined) as Espaco | undefined}
           onClose={() => setNovoEventoOpen(false)}
           onSave={addEvento}
+        />
+      )}
+
+      {pdfModalOpen && (
+        <ExportarPdfAgendaModal
+          camposIniciais={camposPdf}
+          onClose={() => setPdfModalOpen(false)}
+          onConfirm={handleConfirmarPdf}
         />
       )}
 

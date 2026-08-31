@@ -1,6 +1,6 @@
 'use client'
 
-import { Clock, MapPin } from 'lucide-react'
+import { Clock, MapPin, User } from 'lucide-react'
 import type { Evento, TipoEvento } from '@/types'
 import { formatDate, formatCurrency } from '@/lib/utils'
 
@@ -111,6 +111,13 @@ export default function EventList({ eventos, selectedDate, aba, onAbaChange, mes
                   {formatCurrency(evento.valor)}
                 </div>
               </div>
+
+              {evento.responsavel && (
+                <div className="mt-2 flex items-center gap-1 text-xs text-app-subtle">
+                  <User className="h-3 w-3" />
+                  {evento.responsavel}{evento.telefoneContato ? ` · ${evento.telefoneContato}` : ''}
+                </div>
+              )}
 
               {evento.observacoes && (
                 <p className="mt-2 text-xs text-app-subtle bg-app-surface/50 rounded px-2 py-1 border border-app-border2/30 text-left">
