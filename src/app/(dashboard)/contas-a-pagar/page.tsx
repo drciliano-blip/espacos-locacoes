@@ -1331,13 +1331,19 @@ function DarBaixaModal({ conta, onClose, onConfirm }: {
 
       // Duplicidade pelos dados da transação — cobre o caso do comprovante ter
       // sido reenviado com outro nome/conteúdo (ex: reexportado), mas ainda
-      // representando o mesmo pagamento já usado em outra conta.
-      const contaConflitante = todasContas.find(c =>
-        c.id !== conta.id && c.status === 'pago' && c.valor === conta.valor && (
-          (!!data.dataPagamento && !!data.horaPagamento && c.dataPagamento === parseDataBR(data.dataPagamento) && c.horaPagamento === data.horaPagamento) ||
-          (!!data.identificadorTransacao && !!c.comprovanteIdentificador && c.comprovanteIdentificador === data.identificadorTransacao)
-        )
-      )
+      // representando o mesmo pagamento já usado em outra conta. Quando os
+      // dois lados têm o ID real da transação, ele é a única fonte confiável
+      // — dois pagamentos legítimos e distintos podem coincidir em
+      // valor/data/hora (ex: dois fornecedores pagos no mesmo minuto), então
+      // valor+data+hora só entra como fallback quando não dá pra comparar
+      // pelo ID real.
+      const contaConflitante = todasContas.find(c => {
+        if (c.id === conta.id || c.status !== 'pago' || c.valor !== conta.valor) return false
+        if (data.identificadorTransacao && c.comprovanteIdentificador) {
+          return c.comprovanteIdentificador === data.identificadorTransacao
+        }
+        return !!data.dataPagamento && !!data.horaPagamento && c.dataPagamento === parseDataBR(data.dataPagamento) && c.horaPagamento === data.horaPagamento
+      })
       if (contaConflitante) {
         setDuplicado(true)
         setErro(`${COMPROVANTE_DUPLICADO_MSG} (mesmos dados de "${contaConflitante.descricao}"${contaConflitante.dataPagamento ? ` — ${formatDate(contaConflitante.dataPagamento)}` : ''})`)
