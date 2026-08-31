@@ -350,6 +350,8 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, onClose, on
     horaFim:      !draft.horaFim,
     valor:        draft.tipoContrato !== 'parceria' && (!draft.valor || parseCurrencyBR(draft.valor) <= 0),
     tipoContrato: !draft.tipoContrato,
+    responsavel:     !draft.responsavel.trim(),
+    telefoneContato: !draft.telefoneContato.trim(),
   }
 
   const hasErrors = Object.values(errors).some(Boolean)
@@ -362,6 +364,8 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, onClose, on
     horaFim: 'Hora fim',
     valor: 'Valor (R$)',
     tipoContrato: 'Qual é o tipo do evento?',
+    responsavel: 'Nome do Responsável',
+    telefoneContato: 'Telefone de Contato',
   }
 
   function set(key: keyof Draft, value: string) {
@@ -974,8 +978,8 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, onClose, on
               Responsável
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
-              <Field label="Nome do Responsável" {...fieldProps('responsavel')}     placeholder="Nome completo" />
-              <Field label="Telefone"            {...fieldProps('telefoneContato')} placeholder="(11) 99999-9999" />
+              <Field label="Nome do Responsável" {...fieldProps('responsavel', true)}     required placeholder="Nome completo" />
+              <Field label="Telefone"            {...fieldProps('telefoneContato', true)} required placeholder="(11) 99999-9999" />
             </div>
           </section>
 
