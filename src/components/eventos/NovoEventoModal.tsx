@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { X, Save, Calendar, DollarSign, User, ClipboardCheck, Paperclip, Camera, Sparkles, Plus, Trash2, MessageSquareText, IdCard, Building2, FileSignature } from 'lucide-react'
+import { X, Save, Calendar, DollarSign, User, ClipboardCheck, Paperclip, Camera, Sparkles, Plus, Trash2, MessageSquareText, IdCard, Building2, FileSignature, AlertTriangle } from 'lucide-react'
 import type { Evento, Espaco, TipoEvento, FormaPagamento, Contrato, TipoMinuta, FichaCliente } from '@/types'
 import FileAttachButton from '@/components/shared/FileAttachButton'
 import FileList from '@/components/shared/FileList'
@@ -11,7 +11,7 @@ import { useReceitas } from '@/contexts/ReceitasContext'
 import { useContratos } from '@/contexts/ContratosContext'
 import GerarContratoDoEventoModal from '@/components/eventos/GerarContratoDoEventoModal'
 import GerarContratoModal from '@/components/contratos/GerarContratoModal'
-import { parseCurrencyBR, maskCPF, maskCNPJ, maskPhone, maskCEP } from '@/lib/utils'
+import { parseCurrencyBR, maskCPF, maskCNPJ, maskPhone, maskCEP, formatDate } from '@/lib/utils'
 
 const FORMAS_PAGAMENTO: FormaPagamento[] = [
   'PIX',
@@ -335,6 +335,7 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, onClose, on
   const [extraindoFicha, setExtraindoFicha] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [toastType, setToastType] = useState<'success' | 'error'>('success')
+  const [avisoDataPassadaAberto, setAvisoDataPassadaAberto] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [colarTextoAberto, setColarTextoAberto] = useState(false)
@@ -496,7 +497,7 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, onClose, on
     setTextoFicha('')
   }
 
-  async function handleSave() {
+  function handleSave() {
     setSubmitted(true)
     setSaveError(null)
     if (hasErrors) {
@@ -506,6 +507,19 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, onClose, on
       return
     }
 
+    // Data digitada errada (ex: ano trocado) é um erro comum e fácil de não
+    // notar — em vez de salvar direto, confirma antes de um evento ir parar
+    // no passado sem querer.
+    const hojeStr = new Date().toISOString().split('T')[0]
+    if (draft.data < hojeStr) {
+      setAvisoDataPassadaAberto(true)
+      return
+    }
+
+    executarSalvar()
+  }
+
+  async function executarSalvar() {
     const endereco = enderecoParaSalvar(draft.endereco)
     const enderecoEmpresa = draft.pessoaJuridica ? enderecoParaSalvar(draft.enderecoEmpresa) : undefined
 
@@ -1086,6 +1100,33 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, onClose, on
         </div>
       </div>
       <Toast message={toastMsg} type={toastType} />
+
+      {avisoDataPassadaAberto && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-app-border bg-app-surface shadow-2xl p-6 space-y-4 text-center">
+            <AlertTriangle className="h-6 w-6 text-amber-500 mx-auto" />
+            <p className="text-sm font-semibold text-app-text">Essa data já passou</p>
+            <p className="text-xs text-app-muted">
+              O evento está sendo cadastrado para {formatDate(draft.data)}, uma data anterior a hoje. Confirma mesmo assim?
+            </p>
+            <div className="flex justify-center gap-2">
+              <button
+                onClick={() => setAvisoDataPassadaAberto(false)}
+                className="rounded-lg border border-app-border2 px-4 py-2 text-sm text-app-muted hover:bg-app-surface2 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => { setAvisoDataPassadaAberto(false); executarSalvar() }}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors"
+                style={{ backgroundColor: GREEN }}
+              >
+                Confirmar mesmo assim
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {eventoSalvo && !gerarContratoDoEventoOpen && !contratoParaGerar && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
