@@ -6,8 +6,10 @@ import type { Evento, StatusVistoria, TipoEvento, Contrato, TipoMinuta } from '@
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useCurrentUser } from '@/contexts/UserContext'
 import { useReceitas, type BaixaReceitaInput } from '@/contexts/ReceitasContext'
+import { useRepasses } from '@/contexts/RepassesContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { useContratos } from '@/contexts/ContratosContext'
+import { aplicarBaixaComRepasseAutomatico } from '@/lib/repasse-socio'
 import FileList from '@/components/shared/FileList'
 import FileAttachButton from '@/components/shared/FileAttachButton'
 import PlanoPagamentoSection from '@/components/eventos/PlanoPagamentoSection'
@@ -62,6 +64,7 @@ interface EventoDrawerProps {
 export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: EventoDrawerProps) {
   const { role } = useCurrentUser()
   const { receitas, syncParcelasDoEvento, updateReceita, deleteReceita } = useReceitas()
+  const { repasses, addRepasse } = useRepasses()
   const { contas, addConta, deleteConta } = useContasPagar()
   const { contratos, addContrato } = useContratos()
   const [tab, setTab] = useState<DrawerTab>('detalhes')
@@ -140,7 +143,9 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
   }
 
   async function handleBaixa(id: string, patch: BaixaReceitaInput) {
-    await updateReceita(id, patch)
+    const parcela = receitas.find(r => r.id === id)
+    if (!parcela) return
+    await aplicarBaixaComRepasseAutomatico(parcela, patch, updateReceita, addRepasse, repasses)
   }
 
   async function handleSave() {
@@ -393,9 +398,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
               <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusBadge[current.status]}`}>
                 {statusLabel[current.status] ?? current.status}
               </span>
-              {current.tipoContrato !== 'parceria' && (
-                <span className="text-xl font-bold" style={{ color: '#25D366' }}>{formatCurrency(current.valor)}</span>
-              )}
+              <span className="text-xl font-bold" style={{ color: '#25D366' }}>{formatCurrency(current.valor)}</span>
             </div>
 
             {/* Informações básicas */}
@@ -490,7 +493,10 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                 {field('Faturamento Bruto', current.faturamentoBruto ? formatCurrency(current.faturamentoBruto) : undefined, 'faturamentoBruto', 'number')}
                 {field('Faturamento Líquido', current.faturamentoLiquido ? formatCurrency(current.faturamentoLiquido) : undefined, 'faturamentoLiquido', 'number')}
                 {current.tipoContrato === 'parceria' ? (
-                  textArea('Condições da Parceria', 'condicoesParceria')
+                  <>
+                    {field('Valor Envolvido', current.valor ? formatCurrency(current.valor) : undefined, 'valor', 'number')}
+                    {textArea('Condições da Parceria', 'condicoesParceria')}
+                  </>
                 ) : (
                   <>
                     {field('Forma de Pagamento', current.formaPagamento, 'formaPagamento', 'select', ['PIX', 'Transferência', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Cheque', 'Parcelado'])}

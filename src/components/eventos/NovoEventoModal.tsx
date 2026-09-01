@@ -868,9 +868,13 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, onClose, on
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
               <Field label="Nº de Pessoas" {...fieldProps('numeroPessoas')} type="number" placeholder="0" />
-              {draft.tipoContrato !== 'parceria' && (
-                <Field label="Valor (R$)" {...fieldProps('valor', true)} type="currency" required placeholder="0,00" />
-              )}
+              <Field
+                label={draft.tipoContrato === 'parceria' ? 'Valor envolvido (R$)' : 'Valor (R$)'}
+                {...fieldProps('valor', draft.tipoContrato !== 'parceria')}
+                type="currency"
+                required={draft.tipoContrato !== 'parceria'}
+                placeholder="0,00"
+              />
 
               {draft.tipoContrato === 'parceria' ? (
                 <div className="col-span-2">

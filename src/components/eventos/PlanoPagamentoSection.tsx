@@ -5,6 +5,7 @@ import { Pencil, Plus, Save, Trash2, X } from 'lucide-react'
 import { formatCurrency, formatDate, parseCurrencyBR } from '@/lib/utils'
 import FileAttachButton from '@/components/shared/FileAttachButton'
 import FileList from '@/components/shared/FileList'
+import { DIVISAO_SOCIOS } from '@/lib/socios-config'
 import type { Receita, ParcelaPlano, BaixaReceitaInput } from '@/contexts/ReceitasContext'
 
 const GREEN = '#25D366'
@@ -16,7 +17,7 @@ const statusStyles: Record<string, string> = {
   atrasado: 'bg-red-500/10 text-red-400 border-red-500/20',
 }
 const statusLabels: Record<string, string> = { pago: 'Pago', pendente: 'Pendente', atrasado: 'Atrasado' }
-const FORMAS_PAGAMENTO = ['PIX', 'Transferência', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Cheque']
+const FORMAS_PAGAMENTO = ['PIX', 'Transferência', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Cheque', 'Repasse Sócio']
 
 interface DraftParcela {
   numero: number
@@ -60,6 +61,7 @@ interface EditarParcelaForm {
   metodoPagamento: string
   observacoes: string
   parcelaLabel: string
+  socioRepasse: string
 }
 
 function formFromParcela(p: Receita): EditarParcelaForm {
@@ -72,6 +74,7 @@ function formFromParcela(p: Receita): EditarParcelaForm {
     metodoPagamento: p.metodoPagamento ?? '',
     observacoes: p.observacoes ?? '',
     parcelaLabel: p.parcelaLabel ?? p.descricao,
+    socioRepasse: p.socioResponsavel ?? '',
   }
 }
 
@@ -89,10 +92,13 @@ function EditarParcelaModal({ parcela, onClose, onSalvar }: {
     setForm(f => ({ ...f, [k]: v }))
   }
 
+  const sociosDoEspaco = DIVISAO_SOCIOS[parcela.espaco ?? ''] ?? []
+
   const errors = {
     valor: !form.valor || parseCurrencyBR(form.valor) <= 0,
     data: !form.data,
     dataRecebimento: form.status === 'pago' && !form.dataRecebimento,
+    socioRepasse: form.metodoPagamento === 'Repasse Sócio' && !form.socioRepasse,
   }
   const hasErrors = Object.values(errors).some(Boolean)
 
@@ -112,6 +118,7 @@ function EditarParcelaModal({ parcela, onClose, onSalvar }: {
         comprovanteInstituicao: parcela.comprovanteInstituicao,
         comprovanteIdentificador: parcela.comprovanteIdentificador,
         parcelaLabel: form.parcelaLabel.trim() || undefined,
+        socioRepasse: form.metodoPagamento === 'Repasse Sócio' ? form.socioRepasse : undefined,
       })
       onClose()
     } finally {
@@ -208,6 +215,25 @@ function EditarParcelaModal({ parcela, onClose, onSalvar }: {
             </select>
           </div>
 
+          {form.metodoPagamento === 'Repasse Sócio' && (
+            <div>
+              <label className="text-xs text-app-subtle mb-0.5 block">
+                Sócio<span className="text-red-400 ml-0.5">*</span>
+              </label>
+              <select
+                value={form.socioRepasse}
+                onChange={e => set('socioRepasse', e.target.value)}
+                className={`w-full cursor-pointer rounded-lg border ${submitted && errors.socioRepasse ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
+              >
+                <option value="">— Selecione —</option>
+                {sociosDoEspaco.map(s => <option key={s.nome} value={s.nome}>{s.nome}</option>)}
+              </select>
+              <p className="text-xs text-app-subtle mt-1">
+                Registra automaticamente um repasse pra esse sócio no valor da parcela, descontando do que ele ainda tem a receber.
+              </p>
+            </div>
+          )}
+
           <div>
             <label className="text-xs text-app-subtle mb-0.5 block">Observações</label>
             <textarea
@@ -236,7 +262,7 @@ function EditarParcelaModal({ parcela, onClose, onSalvar }: {
 
           {submitted && hasErrors && (
             <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5">
-              <p className="text-xs text-red-400">Preencha os campos obrigatórios (valor, vencimento{form.status === 'pago' ? ', data de pagamento' : ''}).</p>
+              <p className="text-xs text-red-400">Preencha os campos obrigatórios (valor, vencimento{form.status === 'pago' ? ', data de pagamento' : ''}{form.metodoPagamento === 'Repasse Sócio' ? ', sócio' : ''}).</p>
             </div>
           )}
         </div>

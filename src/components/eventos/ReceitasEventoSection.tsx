@@ -4,7 +4,9 @@ import { useState, useMemo } from 'react'
 import { Search, Plus, Calendar, Paperclip, FileText } from 'lucide-react'
 import { useEventos } from '@/contexts/EventosContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
+import { useRepasses } from '@/contexts/RepassesContext'
 import { useCurrentUser } from '@/contexts/UserContext'
+import { aplicarBaixaComRepasseAutomatico } from '@/lib/repasse-socio'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import NovaReceitaModal from '@/components/pagamentos/NovaReceitaModal'
 import AnexarRelatorioModal from '@/components/eventos/AnexarRelatorioModal'
@@ -23,6 +25,7 @@ const statusLabels: Record<string, string> = { pago: 'Pago', pendente: 'Pendente
 export default function ReceitasEventoSection() {
   const { eventos } = useEventos()
   const { receitas, categorias, addReceita, syncParcelasDoEvento, updateReceita } = useReceitas()
+  const { repasses, addRepasse } = useRepasses()
   const { role } = useCurrentUser()
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Evento | null>(null)
@@ -48,7 +51,9 @@ export default function ReceitasEventoSection() {
   }
 
   async function handleBaixa(id: string, patch: BaixaReceitaInput) {
-    await updateReceita(id, patch)
+    const parcela = receitas.find(r => r.id === id)
+    if (!parcela) return
+    await aplicarBaixaComRepasseAutomatico(parcela, patch, updateReceita, addRepasse, repasses)
   }
 
   if (!selected) {

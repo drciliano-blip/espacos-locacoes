@@ -7,7 +7,7 @@ export type Espaco =
 
 export type StatusPagamento = 'pago' | 'pendente' | 'atrasado'
 export type StatusEvento = 'confirmado' | 'cancelado'
-export type FormaPagamento = 'PIX' | 'Transferência' | 'Dinheiro' | 'Cartão de Crédito' | 'Cartão de Débito' | 'Cheque' | 'Parcelado'
+export type FormaPagamento = 'PIX' | 'Transferência' | 'Dinheiro' | 'Cartão de Crédito' | 'Cartão de Débito' | 'Cheque' | 'Parcelado' | 'Repasse Sócio'
 export type Decoracao = 'própria' | 'terceirizada' | 'não aplicável'
 export type StatusVistoria = 'pendente' | 'aprovada' | 'aprovada com ressalvas' | 'reprovada' | 'não realizada'
 

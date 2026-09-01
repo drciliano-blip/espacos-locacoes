@@ -12,6 +12,10 @@ export interface RepasseSocio {
   valor: number
   data: string
   observacoes?: string
+  // Preenchido só quando o repasse foi gerado automaticamente a partir do
+  // pagamento de uma parcela via "Repasse Sócio" — nulo pra repasses
+  // registrados manualmente (ver src/lib/repasse-socio.ts).
+  receitaId?: string
 }
 
 interface RepasseRow {
@@ -21,6 +25,7 @@ interface RepasseRow {
   valor: number | string
   data: string
   observacoes: string | null
+  receita_id: string | null
 }
 
 function fromRow(row: RepasseRow): RepasseSocio {
@@ -31,15 +36,17 @@ function fromRow(row: RepasseRow): RepasseSocio {
     valor: Number(row.valor),
     data: row.data,
     observacoes: row.observacoes ?? undefined,
+    receitaId: row.receita_id ?? undefined,
   }
 }
 
-interface NovoRepasseInput {
+export interface NovoRepasseInput {
   espaco: string
   socioNome: string
   valor: number
   data: string
   observacoes?: string
+  receitaId?: string
 }
 
 interface RepassesContextValue {
@@ -79,6 +86,7 @@ export function RepassesProvider({ children }: { children: ReactNode }) {
         valor: input.valor,
         data: input.data,
         observacoes: input.observacoes ?? null,
+        receita_id: input.receitaId ?? null,
         created_by: user?.id ?? null,
       })
       .select(SELECT)

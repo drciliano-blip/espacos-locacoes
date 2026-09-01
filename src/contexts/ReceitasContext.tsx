@@ -150,6 +150,11 @@ export interface BaixaReceitaInput {
   comprovanteInstituicao?: string
   comprovanteIdentificador?: string
   parcelaLabel?: string
+  // Sócio que está pagando essa parcela usando o repasse dele (só quando
+  // metodoPagamento === 'Repasse Sócio') — grava na coluna socio_responsavel,
+  // já existente e usada até aqui só por aportes/retiradas. Ver
+  // src/lib/repasse-socio.ts pra quem consome isso pra gerar o repasse.
+  socioRepasse?: string
 }
 
 // Edição completa — usada pelo formulário de editar uma entrada manual
@@ -318,6 +323,7 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
       comprovante_instituicao: patch.comprovanteInstituicao ?? null,
       comprovante_identificador: patch.comprovanteIdentificador ?? null,
       parcela_label: patch.parcelaLabel ?? null,
+      socio_responsavel: patch.socioRepasse ?? null,
     }
     const { data, error } = await supabase.from('receitas').update(payload).eq('id', id).select(SELECT).single()
     if (error) throw error
