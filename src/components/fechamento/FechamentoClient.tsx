@@ -388,9 +388,9 @@ export default function FechamentoClient() {
         [],
         ['Disponível para Distribuição (posição atual, acumulada)'],
         ['Resultado Operacional acumulado', fechamento.resultadoAcumulado],
-        ['(-) Fundo de Caixa/Reservas', fechamento.saldoFundoAtual + fechamento.totalReservasGenericas],
+        ['(-) Fundo de Caixa/Reservas', fechamento.fundoReservaDeduzido],
         ['= Disponível do Espaço', fechamento.disponivelDoEspaco],
-        ['(-) Já retirado pelos sócios', fechamento.totalRetiradasSocioAcumulado],
+        ['(-) Já retirado pelos sócios', fechamento.retiradaDeduzida],
         ['= Disponível para Distribuição', fechamento.disponivelParaDistribuicao],
       ],
     }
@@ -695,7 +695,7 @@ export default function FechamentoClient() {
           </div>
           <div className="rounded-lg border border-app-border2/60 bg-app-bg p-3">
             <p className="text-app-subtle">(−) Fundo de Caixa / Reservas</p>
-            <p className="font-semibold text-amber-600">{formatCurrency(fechamento.saldoFundoAtual + fechamento.totalReservasGenericas)}</p>
+            <p className="font-semibold text-amber-600">{formatCurrency(fechamento.fundoReservaDeduzido)}</p>
           </div>
           <div className="rounded-lg border border-app-border2/60 bg-app-bg p-3">
             <p className="text-app-subtle">= Disponível do Espaço</p>
@@ -703,7 +703,7 @@ export default function FechamentoClient() {
           </div>
           <div className="rounded-lg border border-app-border2/60 bg-app-bg p-3">
             <p className="text-app-subtle">(−) Já retirado pelos sócios</p>
-            <p className="font-semibold text-fuchsia-600">{formatCurrency(fechamento.totalRetiradasSocioAcumulado)}</p>
+            <p className="font-semibold text-fuchsia-600">{formatCurrency(fechamento.retiradaDeduzida)}</p>
           </div>
           <div className="rounded-lg border border-[#25D366]/25 bg-[#25D366]/5 p-3">
             <p className="text-app-subtle">= Disponível para Distribuição</p>
