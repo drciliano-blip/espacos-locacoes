@@ -70,10 +70,12 @@ export interface FechamentoResultado {
   // Caixa (esse é saldoFundoAtual).
   totalReservasGenericas: number
 
-  // Resultado Operacional acumulado desde sempre (dentro do escopo de espaço
-  // filtrado) — usado só pra compor Disponível para Distribuição abaixo,
-  // nunca pro card "Resultado Operacional" do topo (esse é o `resultado`
-  // travado ao período do FilterBar).
+  // Resultado usado pra compor Disponível para Distribuição abaixo — nunca
+  // pro card "Resultado Operacional" do topo (esse é o `resultado` travado
+  // ao período do FilterBar). Acumulado desde sempre pra cada espaço, EXCETO
+  // espaço(s) de ESPACOS_SEM_RESERVA_COLETIVA (ver socios-config.ts), cuja
+  // parte aqui já é travada ao período do FilterBar — mistura os dois quando
+  // o escopo tem espaços dos dois tipos.
   resultadoAcumulado: number
 
   // Total retirado pelos sócios desde sempre (dentro do escopo de espaço
@@ -236,53 +238,57 @@ export function calcularFechamento(
   const fundosEmEscopo = fundos.filter(f => !f.espaco || !selectedSpaces?.length || selectedSpaces.includes(f.espaco))
   const totalReservasGenericas = reservasGenericasNoPeriodo(fundosEmEscopo, movimentacoesFundo)
 
-  const resultadoAcumulado = entradasOperAllTime - despesasOperAllTime
-
-  // Espaços com regra própria (ESPACOS_SEM_RESERVA_COLETIVA) não têm reserva
-  // coletiva — o fundo/reserva e a retirada que pertencem a eles dentro do
-  // escopo filtrado são devolvidos aqui, antes de calcular o Disponível para
-  // Distribuição agregado. Fora dessa lista, devolvida = 0 e nada muda.
-  const espacosSemReservaEmEscopo = espacosEmEscopo.filter(e => ESPACOS_SEM_RESERVA_COLETIVA.includes(e.nome))
-  const fundoReservaDevolvida = espacosSemReservaEmEscopo.reduce((s, e) => {
+  // Por espaço individual — cada um calculado na sua própria base: espaços
+  // de ESPACOS_SEM_RESERVA_COLETIVA (ver socios-config.ts) usam o Resultado
+  // Operacional do PERÍODO filtrado (igual ao card "Resultado Operacional"
+  // do Resumo Financeiro) e nunca descontam fundo/reserva; os demais usam a
+  // posição acumulada desde sempre, como já era, descontando Fundo de Caixa
+  // + reservas genéricas do próprio espaço. Retirada de sócio NÃO entra
+  // aqui de propósito — isso é "Direito do Sócio" bruto, antes de dividir
+  // por participação; descontar retirada coletiva nesse ponto faria a
+  // retirada de um sócio reduzir o direito dos outros. O desconto de
+  // retirada é individual, por sócio, feito depois de aplicar o percentual
+  // de cada um (ver repasseSociosRows em FechamentoClient.tsx).
+  const disponivelPorEspacoDetalhado = espacosEmEscopo.map(e => {
+    if (ESPACOS_SEM_RESERVA_COLETIVA.includes(e.nome)) {
+      const entradasEspacoPeriodo = somaPaga(entradasOperacionais, r => r.espaco === e.nome, r => r.valor, r => r.status)
+      const despesasEspacoPeriodo = somaPaga(despesasOperacionais, c => c.espaco === e.nome, c => c.valor, c => c.status)
+      const resultadoEspaco = entradasEspacoPeriodo - despesasEspacoPeriodo
+      return { nome: e.nome, resultadoEspaco, fundoReservaEspaco: 0, disponivel: resultadoEspaco }
+    }
+    const entradasEspaco = somaPaga(entradasAllTime, r => isReceitaOperacional(r) && r.espaco === e.nome, r => r.valor, r => r.status)
+    const despesasEspaco = somaPaga(saidasAllTime, c => isDespesaOperacional(c) && c.espaco === e.nome, c => c.valor, c => c.status)
     const fundoCaixaEspaco =
       somaPaga(saidasAllTime, c => c.categoria === 'fundo_caixa' && c.espaco === e.nome, c => c.valor, c => c.status)
       - somaPaga(entradasAllTime, r => r.tipoEntrada === 'retorno_fundo_caixa' && r.espaco === e.nome, r => r.valor, r => r.status)
     const reservasGenericasEspaco = reservasGenericasNoPeriodo(fundos.filter(f => f.espaco === e.nome), movimentacoesFundo)
-    return s + fundoCaixaEspaco + reservasGenericasEspaco
-  }, 0)
+    const resultadoEspaco = entradasEspaco - despesasEspaco
+    const fundoReservaEspaco = fundoCaixaEspaco + reservasGenericasEspaco
+    return { nome: e.nome, resultadoEspaco, fundoReservaEspaco, disponivel: resultadoEspaco - fundoReservaEspaco }
+  })
+  const disponivelPorEspaco = disponivelPorEspacoDetalhado.map(({ nome, disponivel }) => ({ nome, disponivel }))
+
+  // Fundos/reservas sem espaço específico (da empresa toda) não entram no
+  // loop por espaço acima — somados uma vez só aqui.
+  const reservasSemEspacoAllTime = reservasGenericasNoPeriodo(fundos.filter(f => !f.espaco), movimentacoesFundo)
+
+  // Totais agregados — soma do que cada espaço já calculou na sua própria
+  // base (ver acima). Pra escopos sem nenhum espaço de
+  // ESPACOS_SEM_RESERVA_COLETIVA, essa soma bate exatamente com o cálculo
+  // "acumulado − fundo − reservas" de sempre (nenhuma mudança de valor).
+  const resultadoAcumulado = disponivelPorEspacoDetalhado.reduce((s, d) => s + d.resultadoEspaco, 0)
+  const fundoReservaDeduzido = disponivelPorEspacoDetalhado.reduce((s, d) => s + d.fundoReservaEspaco, 0) + reservasSemEspacoAllTime
+  const disponivelDoEspaco = resultadoAcumulado - fundoReservaDeduzido
+
+  // Retirada dos espaços de ESPACOS_SEM_RESERVA_COLETIVA nunca entra nesse
+  // desconto coletivo — continua sendo abatida só individualmente, por
+  // sócio, em repasseSociosRows.
+  const espacosSemReservaEmEscopo = espacosEmEscopo.filter(e => ESPACOS_SEM_RESERVA_COLETIVA.includes(e.nome))
   const retiradaDevolvida = espacosSemReservaEmEscopo.reduce(
     (s, e) => s + somaPaga(saidasAllTime, c => c.categoria === 'retirada_socio' && c.espaco === e.nome, c => c.valor, c => c.status), 0,
   )
-
-  // Disponível do Espaço é um subtotal intermediário (não uma dedução): o
-  // Resultado Operacional acumulado depois de descontar o que está reservado
-  // agora (Fundo de Caixa + reservas genéricas). Disponível para Distribuição
-  // é uma posição atual (não um fluxo do período): esse subtotal menos tudo
-  // que os sócios já retiraram — nenhum desses três é despesa (não mexem no
-  // Resultado), mas reduzem o quanto ainda pode sair da empresa pros sócios.
-  const fundoReservaDeduzido = saldoFundoAtual + totalReservasGenericas - fundoReservaDevolvida
   const retiradaDeduzida = retiradasAllTime - retiradaDevolvida
-  const disponivelDoEspaco = resultadoAcumulado - fundoReservaDeduzido
   const disponivelParaDistribuicao = disponivelDoEspaco - retiradaDeduzida
-
-  // Mesma conta, mas por espaço individual — só entram fundos vinculados
-  // àquele espaço específico (fundo sem espaço não dá pra atribuir a um só).
-  // Retirada de sócio NÃO entra aqui de propósito — isso é "Direito do Sócio"
-  // bruto, antes de dividir por participação; descontar retirada coletiva
-  // nesse ponto faria a retirada de um sócio reduzir o direito dos outros.
-  // O desconto de retirada é individual, por sócio, feito depois de aplicar
-  // o percentual de cada um (ver repasseSociosRows em FechamentoClient.tsx).
-  const disponivelPorEspaco = espacosEmEscopo.map(e => {
-    const semReservaColetiva = ESPACOS_SEM_RESERVA_COLETIVA.includes(e.nome)
-    const entradasEspaco = somaPaga(entradasAllTime, r => isReceitaOperacional(r) && r.espaco === e.nome, r => r.valor, r => r.status)
-    const despesasEspaco = somaPaga(saidasAllTime, c => isDespesaOperacional(c) && c.espaco === e.nome, c => c.valor, c => c.status)
-    const fundoCaixaEspaco = semReservaColetiva ? 0 :
-      somaPaga(saidasAllTime, c => c.categoria === 'fundo_caixa' && c.espaco === e.nome, c => c.valor, c => c.status)
-      - somaPaga(entradasAllTime, r => r.tipoEntrada === 'retorno_fundo_caixa' && r.espaco === e.nome, r => r.valor, r => r.status)
-    const reservasGenericasEspaco = semReservaColetiva ? 0 : reservasGenericasNoPeriodo(fundos.filter(f => f.espaco === e.nome), movimentacoesFundo)
-    const disponivel = entradasEspaco - despesasEspaco - fundoCaixaEspaco - reservasGenericasEspaco
-    return { nome: e.nome, disponivel }
-  })
 
   const obraPorEspaco = calcularObraPorEspaco(entradasAllTime, saidasAllTime, espacosEmEscopo, nomesComObra)
 
