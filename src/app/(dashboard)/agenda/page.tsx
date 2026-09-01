@@ -5,6 +5,7 @@ import { Plus } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import CalendarView from '@/components/agenda/CalendarView'
+import ConsultarDisponibilidadeSection from '@/components/agenda/ConsultarDisponibilidadeSection'
 import EventList, { type AbaAgenda } from '@/components/agenda/EventList'
 import ExportarPdfAgendaModal, { type CamposPdfAgenda, CAMPOS_PDF_PADRAO } from '@/components/agenda/ExportarPdfAgendaModal'
 import GoogleCalendarView from '@/components/agenda/GoogleCalendarView'
@@ -47,6 +48,7 @@ export default function AgendaPage() {
   const { role } = useCurrentUser()
   const { espacosEmEscopo, espacoUnico, precisaEspacoEspecifico } = useEspacoAtivo()
 
+  const [abaPrincipal, setAbaPrincipal] = useState<'agenda' | 'disponibilidade'>('agenda')
   const [selectedDate, setSelectedDate]     = useState<Date | null>(null)
   const [selectedEvento, setSelectedEvento] = useState<Evento | null>(null)
   const [novoEventoOpen, setNovoEventoOpen] = useState(false)
@@ -182,6 +184,30 @@ export default function AgendaPage() {
 
   return (
     <div className="max-w-7xl mx-auto">
+      {/* Alterna entre a Agenda normal e a consulta de disponibilidade —
+          áreas propositalmente separadas, cada uma com seu próprio bloco de
+          impressão, nunca misturadas no mesmo PDF. */}
+      <div className="print:hidden flex items-center gap-1.5 bg-app-surface border border-app-border rounded-xl p-1 shadow-sm w-fit mb-4">
+        <button
+          onClick={() => setAbaPrincipal('agenda')}
+          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${abaPrincipal === 'agenda' ? 'text-white font-bold shadow-md' : 'bg-[#F0F2F5] text-[#667781] hover:bg-[#E9EDEF]'}`}
+          style={abaPrincipal === 'agenda' ? { backgroundColor: '#25D366' } : undefined}
+        >
+          Agenda
+        </button>
+        <button
+          onClick={() => setAbaPrincipal('disponibilidade')}
+          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${abaPrincipal === 'disponibilidade' ? 'text-white font-bold shadow-md' : 'bg-[#F0F2F5] text-[#667781] hover:bg-[#E9EDEF]'}`}
+          style={abaPrincipal === 'disponibilidade' ? { backgroundColor: '#25D366' } : undefined}
+        >
+          Consultar Disponibilidade
+        </button>
+      </div>
+
+      {abaPrincipal === 'disponibilidade' && <ConsultarDisponibilidadeSection />}
+
+      {abaPrincipal === 'agenda' && (
+        <>
       {/* Cabeçalho impresso — escondido na tela, só aparece no PDF exportado
           pela "Exportar Relação" (window.print, restrito ao bloco abaixo
           porque o resto da página fica print:hidden). */}
@@ -258,6 +284,8 @@ export default function AgendaPage() {
           totalLabel="Quantidade de eventos" totalValor={String(totaisExibidos.quantidade)}
         />
       </div>
+        </>
+      )}
 
       {selectedEvento && (
         <EventoDrawer
