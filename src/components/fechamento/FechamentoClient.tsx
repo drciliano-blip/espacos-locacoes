@@ -67,6 +67,7 @@ export default function FechamentoClient() {
   const [novoAporteOpen, setNovoAporteOpen] = useState(false)
   const [novaRetiradaOpen, setNovaRetiradaOpen] = useState(false)
   const [drillDown, setDrillDown] = useState<{ tipo: 'aportes' | 'retiradas'; titulo: string; nomes: string[]; naoIdentificado?: boolean } | null>(null)
+  const [repasseDrillDown, setRepasseDrillDown] = useState<{ espaco: string; socio: string } | null>(null)
   const [editandoAporteId, setEditandoAporteId] = useState<string | null>(null)
   const [editandoRetiradaId, setEditandoRetiradaId] = useState<string | null>(null)
   const [repasseAlvo, setRepasseAlvo] = useState<{ espaco: string; socio: string } | null>(null)
@@ -200,6 +201,22 @@ export default function FechamentoClient() {
         valor: c.valor, descricao: c.descricao, observacoes: c.observacoes, origem: origemRetiradaLabel(c),
       }))
   }, [drillDown, aportesSocioEscopo, retiradasSocioEscopo, nomesSociosDisponiveis])
+
+  // Repasses individuais em escopo — cada linha é um "Registrar repasse"
+  // (data, valor, observações), nunca só o total (jaRepassado). Acumulado
+  // desde sempre, mesma regra dos demais dados de sócio: não trava no
+  // período do filtro.
+  const repassesEmEscopo = useMemo(
+    () => repasses.filter(r => espacos.some(e => e.nome === r.espaco)),
+    [repasses, espacos],
+  )
+  const repasseDrillDownRows: LancamentoSocioRow[] = useMemo(() => {
+    if (!repasseDrillDown) return []
+    return repassesEmEscopo
+      .filter(r => r.espaco === repasseDrillDown.espaco && r.socioNome === repasseDrillDown.socio)
+      .map(r => ({ id: r.id, data: r.data, socio: r.socioNome, espaco: r.espaco, valor: r.valor, descricao: 'Repasse', observacoes: r.observacoes }))
+      .sort((a, b) => b.data.localeCompare(a.data))
+  }, [repasseDrillDown, repassesEmEscopo])
 
   // Fundos genéricos (Reservas) em escopo — um fundo sem espaço é da empresa
   // toda, então aparece independente do filtro de espaço; um fundo com espaço
@@ -466,8 +483,16 @@ export default function FechamentoClient() {
       ],
     }
 
+    const repassesIndividuaisSheet: ExportSheet = {
+      name: 'Repasses Individuais',
+      rows: [
+        ['Data', 'Sócio', 'Espaço', 'Valor', 'Observações'],
+        ...repassesEmEscopo.map(r => [r.data, r.socioNome, r.espaco, r.valor, r.observacoes ?? '']),
+      ],
+    }
+
     downloadWorkbook(
-      [resumoSheet, receitasSheet, despesasSheet, aportesObraSheet, despesasObraSheet, fundoCaixaSheet, reservasSheet, sociosResumoSheet, aportesSociosSheet, retiradasSociosSheet, repasseSheet],
+      [resumoSheet, receitasSheet, despesasSheet, aportesObraSheet, despesasObraSheet, fundoCaixaSheet, reservasSheet, sociosResumoSheet, aportesSociosSheet, retiradasSociosSheet, repasseSheet, repassesIndividuaisSheet],
       `financeiro-${filters.dataInicio}-a-${filters.dataFim}.xlsx`,
     )
   }
@@ -799,7 +824,18 @@ export default function FechamentoClient() {
                     <td className="px-2 py-2 text-app-text2 whitespace-nowrap">{formatCurrency(r.valorDevido)}</td>
                     <td className="px-2 py-2 text-emerald-600 whitespace-nowrap">{r.ajusteReservaObra > 0 ? `+${formatCurrency(r.ajusteReservaObra)}` : formatCurrency(0)}</td>
                     <td className="px-2 py-2 text-fuchsia-600 whitespace-nowrap">{formatCurrency(r.retirado)}</td>
-                    <td className="px-2 py-2 text-app-text2 whitespace-nowrap">{formatCurrency(r.jaRepassado)}</td>
+                    <td className="px-2 py-2 whitespace-nowrap">
+                      {r.jaRepassado > 0 ? (
+                        <button
+                          onClick={() => setRepasseDrillDown({ espaco: r.espaco, socio: r.socio })}
+                          className="text-app-text2 hover:text-[#128C7E] hover:underline transition-colors"
+                        >
+                          {formatCurrency(r.jaRepassado)}
+                        </button>
+                      ) : (
+                        <span className="text-app-text2">{formatCurrency(r.jaRepassado)}</span>
+                      )}
+                    </td>
                     <td className={`px-2 py-2 font-semibold whitespace-nowrap ${r.valorPendente > 0.01 ? 'text-amber-500' : 'text-[#128C7E]'}`}>{formatCurrency(r.valorPendente)}</td>
                     {podeLancar && (
                       <td className="px-2 py-2 print-hidden whitespace-nowrap">
@@ -858,6 +894,16 @@ export default function FechamentoClient() {
           onClose={() => setDrillDown(null)}
           onEdit={drillDown.tipo === 'aportes' ? id => setEditandoAporteId(id) : id => setEditandoRetiradaId(id)}
           onPrint={() => handlePrintList(drillDown.titulo, drillDownRows)}
+        />
+      )}
+
+      {repasseDrillDown && (
+        <LancamentoSocioListModal
+          titulo={`Repasses — ${repasseDrillDown.socio} (${repasseDrillDown.espaco})`}
+          rows={repasseDrillDownRows}
+          fileModule="contas"
+          onClose={() => setRepasseDrillDown(null)}
+          onPrint={() => handlePrintList(`Repasses — ${repasseDrillDown.socio} (${repasseDrillDown.espaco})`, repasseDrillDownRows)}
         />
       )}
 
@@ -1007,6 +1053,11 @@ export default function FechamentoClient() {
             titulo="Disponível para Distribuição — por Sócio" headers={['Espaço', 'Sócio', '%', 'Disponível do Espaço', 'Valor Devido', 'Ajuste Reserva Obra', 'Retirado', 'Já Repassado', 'Pendente']}
             rows={repasseSociosRows.map(r => [r.espaco, r.socio, `${r.percentual}%`, formatCurrency(r.lucro), formatCurrency(r.valorDevido), formatCurrency(r.ajusteReservaObra), formatCurrency(r.retirado), formatCurrency(r.jaRepassado), formatCurrency(r.valorPendente)])}
             totalLabel="Disponível total" totalValor={formatCurrency(fechamento.disponivelParaDistribuicao)}
+          />
+          <FullTable
+            titulo="Repasses Individuais" headers={['Data', 'Sócio', 'Espaço', 'Valor', 'Observações']}
+            rows={repassesEmEscopo.map(r => [r.data.split('-').reverse().join('/'), r.socioNome, r.espaco, formatCurrency(r.valor), r.observacoes ?? '—'])}
+            totalLabel="Total repassado" totalValor={formatCurrency(repassesEmEscopo.reduce((s, r) => s + r.valor, 0))}
           />
         </div>
       )}
