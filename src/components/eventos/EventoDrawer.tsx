@@ -511,9 +511,11 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
               </div>
             </section>
 
-            {/* Plano de Pagamento (sinal + parcelas) — não se aplica a eventos de Parceria,
-                que usam Condições da Parceria em texto livre no lugar de forma de pagamento fixa */}
-            {!editing && current.tipoContrato !== 'parceria' && (
+            {/* Plano de Pagamento (sinal + parcelas) — também vale pra eventos de
+                Parceria, sobre o "Valor Envolvido" (estimado), pra dar baixa nos
+                pagamentos igual à Locação; Condições da Parceria continua sendo o
+                texto livre com as regras do acordo, isso aqui é só o financeiro. */}
+            {!editing && (
               <PlanoPagamentoSection
                 valorEvento={evento.valor}
                 parcelas={parcelas}
