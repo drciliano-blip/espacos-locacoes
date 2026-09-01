@@ -334,6 +334,7 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, onClose, on
   const scrollRef = useRef<HTMLDivElement>(null)
   const [extraindoFicha, setExtraindoFicha] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
+  const [toastType, setToastType] = useState<'success' | 'error'>('success')
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [colarTextoAberto, setColarTextoAberto] = useState(false)
@@ -376,8 +377,9 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, onClose, on
     setDraft(d => ({ ...d, [campo]: { ...d[campo], [chave]: valor } }))
   }
 
-  function showToast(msg: string) {
+  function showToast(msg: string, type: 'success' | 'error' = 'success') {
     setToastMsg(msg)
+    setToastType(type)
     setTimeout(() => setToastMsg(null), 3500)
   }
 
@@ -388,13 +390,13 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, onClose, on
       const data: FichaExtracao & { error?: string } = await res.json()
 
       if (!res.ok || data.error) {
-        showToast(data.error ?? 'Não foi possível ler a ficha com a IA.')
+        showToast(data.error ?? 'Não foi possível ler a ficha com a IA.', 'error')
         return
       }
 
       const algumCampo = data.nomeCompleto || data.dataEvento || data.valorLocacao
       if (!algumCampo) {
-        showToast('A IA não conseguiu identificar os dados nesta ficha. Preencha os campos manualmente.')
+        showToast('A IA não conseguiu identificar os dados nesta ficha. Preencha os campos manualmente.', 'error')
         return
       }
 
@@ -453,7 +455,7 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, onClose, on
           : 'Campos preenchidos automaticamente pela IA — confira antes de salvar.'
       )
     } catch {
-      showToast('Falha ao conectar com a IA. Preencha os campos manualmente.')
+      showToast('Falha ao conectar com a IA. Preencha os campos manualmente.', 'error')
     } finally {
       setExtraindoFicha(false)
     }
@@ -467,11 +469,11 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, onClose, on
     const isImage = file.type.startsWith('image/')
 
     if (file.type === 'image/heic' || file.type === 'image/heif') {
-      showToast('Fotos em formato HEIC não são lidas pela IA — use o botão "Tirar foto" (gera JPEG) ou converta o arquivo antes de anexar.')
+      showToast('Fotos em formato HEIC não são lidas pela IA — use o botão "Tirar foto" (gera JPEG) ou converta o arquivo antes de anexar.', 'error')
       return
     }
     if (!isPdf && !isImage) {
-      showToast('A leitura automática funciona só com PDF ou imagem.')
+      showToast('A leitura automática funciona só com PDF ou imagem.', 'error')
       return
     }
 
@@ -499,7 +501,7 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, onClose, on
     setSaveError(null)
     if (hasErrors) {
       const faltando = (Object.keys(errors) as (keyof Draft)[]).filter(k => errors[k]).map(k => ERROR_LABELS[k]).filter(Boolean)
-      showToast(`Preencha os campos obrigatórios: ${faltando.join(', ')}`)
+      showToast(`Preencha os campos obrigatórios: ${faltando.join(', ')}`, 'error')
       scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
       return
     }
@@ -546,8 +548,11 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, onClose, on
     try {
       await onSave(evento)
     } catch (err) {
-      setSaveError(getErrorMessage(err))
+      const mensagem = getErrorMessage(err)
+      setSaveError(mensagem)
       setSaving(false)
+      showToast(`Não foi possível salvar o evento: ${mensagem}`, 'error')
+      scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
       return
     }
 
@@ -564,7 +569,7 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, onClose, on
         })
       }
     } catch {
-      showToast('Evento salvo, mas não foi possível gravar o plano de parcelas customizado. Ajuste em Eventos → Receitas.')
+      showToast('Evento salvo, mas não foi possível gravar o plano de parcelas customizado. Ajuste em Eventos → Receitas.', 'error')
     }
     setSaving(false)
     setEventoSalvo(evento)
@@ -1080,7 +1085,7 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, onClose, on
           )}
         </div>
       </div>
-      <Toast message={toastMsg} />
+      <Toast message={toastMsg} type={toastType} />
 
       {eventoSalvo && !gerarContratoDoEventoOpen && !contratoParaGerar && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">

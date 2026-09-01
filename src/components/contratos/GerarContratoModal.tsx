@@ -397,6 +397,10 @@ export default function GerarContratoModal({ origem, onClose }: Props) {
 
           {contractText && (
             <>
+              <div className="flex items-center gap-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2">
+                <Check className="h-3.5 w-3.5 text-emerald-500" />
+                <p className="text-xs font-medium text-emerald-600">Contrato gerado com sucesso!</p>
+              </div>
               <pre className="whitespace-pre-wrap text-sm text-app-text2 bg-app-surface2/40 rounded-lg border border-app-border2/50 p-4 max-h-96 overflow-y-auto font-sans">
                 {contractText}
               </pre>
