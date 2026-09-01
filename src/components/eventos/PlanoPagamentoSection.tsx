@@ -34,6 +34,11 @@ interface Props {
   podeEditarPlano: boolean
   onSync: (parcelas: ParcelaPlano[]) => Promise<void>
   onBaixa: (id: string, patch: BaixaReceitaInput) => Promise<void>
+  // O valor do evento segue o plano, não o contrário: desconto dado, parceria
+  // renegociada etc. sempre mudam a soma das parcelas, então é o plano que
+  // manda no valor "oficial" do evento, atualizado sozinho a cada "Salvar
+  // plano" — nunca precisa bater com um valor travado em outro lugar.
+  onValorEventoChange: (novoValor: number) => Promise<void>
 }
 
 function toDraft(parcelas: Receita[]): DraftParcela[] {
@@ -286,7 +291,7 @@ function EditarParcelaModal({ parcela, onClose, onSalvar }: {
   )
 }
 
-export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEditarPlano, onSync, onBaixa }: Props) {
+export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEditarPlano, onSync, onBaixa, onValorEventoChange }: Props) {
   const [editando, setEditando] = useState(false)
   const [draft, setDraft] = useState<DraftParcela[]>(() => toDraft(parcelas))
   const [saving, setSaving] = useState(false)
@@ -295,7 +300,6 @@ export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEdita
   const totalPlano = parcelas.reduce((s, p) => s + p.valor, 0)
   const totalPago = parcelas.filter(p => p.status === 'pago').reduce((s, p) => s + p.valor, 0)
   const totalAberto = totalPlano - totalPago
-  const diferenca = Math.round((valorEvento - totalPlano) * 100) / 100
 
   function abrirEdicao() {
     setDraft(toDraft(parcelas))
@@ -320,7 +324,9 @@ export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEdita
     if (parcelasValidas.length === 0) return
     setSaving(true)
     try {
+      const novoTotal = Math.round(parcelasValidas.reduce((s, p) => s + parseCurrencyBR(p.valor), 0) * 100) / 100
       await onSync(parcelasValidas.map(p => ({ numero: p.numero, label: p.label.trim(), data: p.data, valor: parseCurrencyBR(p.valor) })))
+      if (novoTotal !== valorEvento) await onValorEventoChange(novoTotal)
       setEditando(false)
     } finally {
       setSaving(false)
@@ -356,13 +362,6 @@ export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEdita
           <p className="text-sm font-bold text-amber-600">{formatCurrency(totalAberto)}</p>
         </div>
       </div>
-
-      {diferenca !== 0 && (
-        <p className="text-xs text-amber-500">
-          O plano soma {formatCurrency(totalPlano)}, mas o evento vale {formatCurrency(valorEvento)}
-          {diferenca > 0 ? ` (faltam ${formatCurrency(diferenca)} para lançar)` : ` (${formatCurrency(Math.abs(diferenca))} a mais que o valor do evento)`}.
-        </p>
-      )}
 
       {!editando ? (
         <div className="space-y-2">

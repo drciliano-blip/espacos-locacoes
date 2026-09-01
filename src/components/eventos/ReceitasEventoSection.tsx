@@ -23,7 +23,7 @@ const statusStyles: Record<string, string> = {
 const statusLabels: Record<string, string> = { pago: 'Pago', pendente: 'Pendente', atrasado: 'Atrasado' }
 
 export default function ReceitasEventoSection() {
-  const { eventos } = useEventos()
+  const { eventos, updateEvento } = useEventos()
   const { receitas, categorias, addReceita, syncParcelasDoEvento, updateReceita } = useReceitas()
   const { repasses, addRepasse } = useRepasses()
   const { role } = useCurrentUser()
@@ -54,6 +54,15 @@ export default function ReceitasEventoSection() {
     const parcela = receitas.find(r => r.id === id)
     if (!parcela) return
     await aplicarBaixaComRepasseAutomatico(parcela, patch, updateReceita, addRepasse, repasses)
+  }
+
+  // O valor do evento segue o plano de pagamento (ver PlanoPagamentoSection) —
+  // desconto dado, parceria renegociada etc. atualizam o valor "oficial"
+  // sozinhos, sem precisar editar os dois lugares separadamente.
+  async function handleValorEventoChange(novoValor: number) {
+    if (!selected) return
+    await updateEvento({ ...selected, valor: novoValor })
+    setSelected(prev => (prev ? { ...prev, valor: novoValor } : prev))
   }
 
   if (!selected) {
@@ -136,6 +145,7 @@ export default function ReceitasEventoSection() {
         podeEditarPlano={role === 'admin'}
         onSync={handleSyncPlano}
         onBaixa={handleBaixa}
+        onValorEventoChange={handleValorEventoChange}
       />
 
       <div className="space-y-2">

@@ -148,6 +148,13 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
     await aplicarBaixaComRepasseAutomatico(parcela, patch, updateReceita, addRepasse, repasses)
   }
 
+  // O valor do evento segue o plano de pagamento (ver PlanoPagamentoSection) —
+  // desconto dado, parceria renegociada etc. atualizam o valor "oficial"
+  // sozinhos, sem precisar editar os dois lugares separadamente.
+  async function handleValorEventoChange(novoValor: number) {
+    await onUpdate({ ...evento, valor: novoValor })
+  }
+
   async function handleSave() {
     setSaving(true)
     try {
@@ -522,6 +529,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                 podeEditarPlano={role === 'admin'}
                 onSync={handleSyncPlano}
                 onBaixa={handleBaixa}
+                onValorEventoChange={handleValorEventoChange}
               />
             )}
 
