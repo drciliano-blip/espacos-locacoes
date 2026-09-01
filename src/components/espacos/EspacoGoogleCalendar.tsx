@@ -122,10 +122,18 @@ export default function EspacoGoogleCalendar({ espacoId, espacoNome }: Props) {
     }
   }
 
+  // Evento de dia inteiro vem só com "date" (ex: '2026-08-15'), sem horário —
+  // `new Date('2026-08-15')` interpreta isso como meia-noite UTC, que em
+  // horário de Brasília já é o dia anterior, fazendo a data exibida "andar"
+  // um dia pra trás. `dateTime` já vem com timezone explícito, esse não sofre
+  // do mesmo problema.
   function fmtDate(ev: GCalEvent) {
-    const raw = ev.start.dateTime ?? ev.start.date ?? ''
-    if (!raw) return ''
-    return new Date(raw).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    if (ev.start.date) {
+      const [y, m, d] = ev.start.date.split('-').map(Number)
+      return new Date(y, m - 1, d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    }
+    if (!ev.start.dateTime) return ''
+    return new Date(ev.start.dateTime).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
   }
 
   function fmtTime(ev: GCalEvent) {
