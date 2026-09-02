@@ -84,12 +84,13 @@ export const AJUSTE_RESERVA_OBRA: Record<string, { fundoNome: string; socioIsent
 }
 
 // Espaços com regra própria: Disponível para Distribuição = Resultado
-// Operacional puro (Receita Operacional − Despesa Operacional), sem
-// descontar Fundo de Caixa/Reservas nem o total já retirado pelos sócios.
-// A retirada continua sendo abatida individualmente, por sócio, na hora do
-// repasse (repasseSociosRows em FechamentoClient.tsx) — só o desconto
-// COLETIVO some pra esses espaços.
-export const ESPACOS_SEM_RESERVA_COLETIVA: string[] = ['Usine']
+// Operacional do período filtrado (Receita Operacional − Despesa
+// Operacional, respeitando o filtro de período da tela — nunca a posição
+// acumulada), sem descontar Fundo de Caixa/Reservas nem o total já retirado
+// pelos sócios. A retirada continua sendo abatida individualmente, por
+// sócio, na hora do repasse (repasseSociosRows em FechamentoClient.tsx) —
+// só o desconto COLETIVO some pra esses espaços.
+export const ESPACOS_SEM_RESERVA_COLETIVA: string[] = ['Usine', 'House Pacaembu']
 
 // Investimentos societários pontuais (ex: compra de participação) — só um
 // registro informativo pro Quadro Societário. Nunca é receita, nunca entra no
