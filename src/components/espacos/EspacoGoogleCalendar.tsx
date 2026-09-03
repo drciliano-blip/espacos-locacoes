@@ -179,7 +179,11 @@ export default function EspacoGoogleCalendar({ espacoId, espacoNome }: Props) {
         >
           Conectar Google Calendar
         </button>
-        {error && <p className="text-xs text-red-500">{error}</p>}
+        {error && (
+          <div className="w-full rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5 text-left">
+            <p className="text-xs text-red-500">{error}</p>
+          </div>
+        )}
       </div>
     )
   }

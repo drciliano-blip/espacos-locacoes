@@ -91,7 +91,20 @@ export async function GET(request: Request) {
       access_token_expires_at: expiresAt,
       connected_at: new Date().toISOString(),
     })
-    if (upsertError) throw new Error(upsertError.message)
+    if (upsertError) throw new Error(`Falha ao salvar: ${upsertError.message}`)
+
+    // Confirma que a linha realmente ficou gravada antes de dizer que deu
+    // certo — sem isso, uma falha silenciosa (ex: cliente admin sem a
+    // service role key configurada em produção) fazia a tela mostrar
+    // "conectado" mesmo sem nada persistido no banco.
+    const { data: confirmacao, error: confirmError } = await supabase
+      .from('espacos_google_calendar')
+      .select('espaco_id')
+      .eq('espaco_id', espacoId)
+      .maybeSingle()
+    if (confirmError || !confirmacao) {
+      throw new Error(`A conexão não foi confirmada no banco após salvar (${confirmError?.message ?? 'linha não encontrada logo após o upsert'}).`)
+    }
 
     return NextResponse.redirect(`${url.origin}${voltarPara}?google=connected`)
   } catch (err) {
