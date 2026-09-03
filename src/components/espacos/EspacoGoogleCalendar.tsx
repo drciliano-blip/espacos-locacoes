@@ -35,11 +35,21 @@ export default function EspacoGoogleCalendar({ espacoId, espacoNome }: Props) {
   const [creating, setCreating] = useState(false)
   const [newEvent, setNewEvent] = useState({ title: '', date: '', startTime: '', endTime: '' })
 
-  const carregarStatus = useCallback(async () => {
+  const carregarStatus = useCallback(async (tentativa = 0) => {
     setLoading(true)
     setError(null)
     try {
       const res = await fetch(`/api/google-calendar/status?espacoId=${espacoId}`)
+      // 401 aqui é quase sempre a sessão do Supabase ainda não pronta —
+      // acontece com frequência quando o navegador suspende a aba em
+      // segundo plano e recarrega a página ao voltar pra ela. Sem retry,
+      // isso derrubava a tela pra "desconectado" mesmo com a conexão real
+      // intacta no banco, obrigando a reconectar à toa.
+      if (res.status === 401 && tentativa < 2) {
+        await new Promise(r => setTimeout(r, 800))
+        return carregarStatus(tentativa + 1)
+      }
+      if (!res.ok) throw new Error(`Erro ${res.status} ao verificar conexão.`)
       const data = await res.json()
       setConnected(!!data.connected)
       setEmail(data.email ?? null)
@@ -53,7 +63,7 @@ export default function EspacoGoogleCalendar({ espacoId, espacoNome }: Props) {
         }
       }
     } catch {
-      setError('Não foi possível verificar a conexão com o Google Calendar.')
+      setError('Não foi possível verificar a conexão com o Google Calendar. Atualize a página.')
     } finally {
       setLoading(false)
     }
@@ -193,7 +203,7 @@ export default function EspacoGoogleCalendar({ espacoId, espacoNome }: Props) {
             <Plus className="h-3.5 w-3.5" />
             Novo evento
           </button>
-          <button onClick={carregarStatus} title="Atualizar" className="flex h-7 w-7 items-center justify-center rounded-lg text-app-muted hover:bg-app-surface2 transition-colors">
+          <button onClick={() => carregarStatus()} title="Atualizar" className="flex h-7 w-7 items-center justify-center rounded-lg text-app-muted hover:bg-app-surface2 transition-colors">
             <RefreshCw className="h-3.5 w-3.5" />
           </button>
           <button onClick={desconectar} disabled={disconnecting} title="Desconectar" className="flex h-7 w-7 items-center justify-center rounded-lg text-app-muted hover:text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-50">
