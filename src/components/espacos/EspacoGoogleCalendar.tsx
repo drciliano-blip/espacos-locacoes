@@ -30,6 +30,7 @@ export default function EspacoGoogleCalendar({ espacoId, espacoNome }: Props) {
   const [email, setEmail] = useState<string | null>(null)
   const [events, setEvents] = useState<GCalEvent[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [debugInfo, setDebugInfo] = useState<string | null>(null)
   const [disconnecting, setDisconnecting] = useState(false)
   const [newEventOpen, setNewEventOpen] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -53,6 +54,10 @@ export default function EspacoGoogleCalendar({ espacoId, espacoNome }: Props) {
       const data = await res.json()
       setConnected(!!data.connected)
       setEmail(data.email ?? null)
+      // Diagnóstico temporário — mostra na tela por que a conexão não foi
+      // encontrada, sem precisar de SQL. Remover depois de identificar a
+      // causa raiz do bug de conexão que some sozinha.
+      setDebugInfo(!data.connected && data.debug ? JSON.stringify(data.debug, null, 2) : null)
       if (data.connected) {
         const evRes = await fetch(`/api/google-calendar/events?espacoId=${espacoId}`)
         const evData = await evRes.json()
@@ -182,6 +187,12 @@ export default function EspacoGoogleCalendar({ espacoId, espacoNome }: Props) {
         {error && (
           <div className="w-full rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5 text-left">
             <p className="text-xs text-red-500">{error}</p>
+          </div>
+        )}
+        {debugInfo && (
+          <div className="w-full rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2.5 text-left">
+            <p className="text-xs font-semibold text-amber-600 mb-1">Diagnóstico temporário:</p>
+            <pre className="text-[10px] text-amber-700 whitespace-pre-wrap break-all">{debugInfo}</pre>
           </div>
         )}
       </div>

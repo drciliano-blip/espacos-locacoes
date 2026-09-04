@@ -18,19 +18,17 @@ export async function GET(request: Request) {
     .eq('espaco_id', espacoId)
     .maybeSingle()
 
-  // Registro de auditoria (diagnóstico) só quando NÃO encontra conexão — pra
-  // saber exatamente em que instante o app deixou de ver a linha, sem
-  // poluir o log a cada checagem normal de status já conectado.
+  // Diagnóstico temporário: quando não acha a conexão, devolve junto todo
+  // dado bruto da consulta (sem depender de gravar em nenhuma outra tabela,
+  // que já se mostrou não confiável pra esse fim) — a tela mostra isso
+  // direto, sem precisar de SQL nem print da Vercel.
+  let debug: Record<string, unknown> | undefined
   if (!data) {
-    try {
-      await supabase.from('atividades').insert({
-        tipo: 'espaco',
-        acao: 'Google Calendar — status não conectado (diagnóstico)',
-        detalhes: `espaco_id=${espacoId} erro_select=${error?.message ?? 'nenhum — linha simplesmente não encontrada'}`,
-        espaco_id: espacoId,
-      })
-    } catch {
-      // log é só diagnóstico
+    const { count } = await supabase.from('espacos_google_calendar').select('*', { count: 'exact', head: true })
+    debug = {
+      espacoIdConsultado: espacoId,
+      erroSupabase: error ? { message: error.message, code: error.code, details: error.details, hint: error.hint } : null,
+      totalLinhasNaTabela: count,
     }
   }
 
@@ -38,5 +36,6 @@ export async function GET(request: Request) {
     connected: !!data,
     email: data?.google_email ?? null,
     connectedAt: data?.connected_at ?? null,
+    debug,
   })
 }
