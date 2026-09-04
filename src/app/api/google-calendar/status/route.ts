@@ -12,11 +12,27 @@ export async function GET(request: Request) {
   if (!espacoId) return NextResponse.json({ error: 'espacoId é obrigatório.' }, { status: 400 })
 
   const supabase = createAdminClient()
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('espacos_google_calendar')
     .select('google_email, connected_at')
     .eq('espaco_id', espacoId)
     .maybeSingle()
+
+  // Registro de auditoria (diagnóstico) só quando NÃO encontra conexão — pra
+  // saber exatamente em que instante o app deixou de ver a linha, sem
+  // poluir o log a cada checagem normal de status já conectado.
+  if (!data) {
+    try {
+      await supabase.from('atividades').insert({
+        tipo: 'espaco',
+        acao: 'Google Calendar — status não conectado (diagnóstico)',
+        detalhes: `espaco_id=${espacoId} erro_select=${error?.message ?? 'nenhum — linha simplesmente não encontrada'}`,
+        espaco_id: espacoId,
+      })
+    } catch {
+      // log é só diagnóstico
+    }
+  }
 
   return NextResponse.json({
     connected: !!data,

@@ -106,9 +106,34 @@ export async function GET(request: Request) {
       throw new Error(`A conexão não foi confirmada no banco após salvar (${confirmError?.message ?? 'linha não encontrada logo após o upsert'}).`)
     }
 
+    // Registro de auditoria permanente (tabela `atividades`, com RLS normal
+    // — diferente de `espacos_google_calendar`) — pra ter um rastro de que
+    // essa conexão realmente foi confirmada nesse instante, mesmo se a linha
+    // em espacos_google_calendar desaparecer depois por algum outro motivo.
+    try {
+      await supabase.from('atividades').insert({
+        tipo: 'espaco',
+        acao: 'Google Calendar conectado (diagnóstico)',
+        detalhes: `espaco_id=${espacoId} email=${email ?? '—'} confirmado=sim`,
+        espaco_id: espacoId,
+      })
+    } catch {
+      // log é só diagnóstico, não deve impedir o fluxo normal
+    }
+
     return NextResponse.redirect(`${url.origin}${voltarPara}?google=connected`)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido ao conectar com o Google.'
+    try {
+      await supabase.from('atividades').insert({
+        tipo: 'espaco',
+        acao: 'Google Calendar — falha ao conectar (diagnóstico)',
+        detalhes: `espaco_id=${espacoId} erro=${message}`,
+        espaco_id: espacoId,
+      })
+    } catch {
+      // log é só diagnóstico, não deve impedir o fluxo normal
+    }
     return NextResponse.redirect(`${url.origin}${voltarPara}?google_error=${encodeURIComponent(message)}`)
   }
 }
