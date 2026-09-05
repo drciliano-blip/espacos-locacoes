@@ -1,6 +1,7 @@
 import { isReceitaOperacional } from '@/contexts/ReceitasContext'
 import { isDespesaOperacional, isDespesaObra } from '@/contexts/ContasPagarContext'
 import { SOCIOS_OBRA, INVESTIMENTOS_SOCIETARIOS, ESPACOS_SEM_RESERVA_COLETIVA, nomeCanonicoSocio, type InvestimentoSocietario } from '@/lib/socios-config'
+import { dataEfetivaReceita, dataEfetivaConta } from '@/lib/fechamento-lock'
 import type { Receita } from '@/contexts/ReceitasContext'
 import type { Fundo, MovimentacaoFundo } from '@/contexts/FundosContext'
 import type { ContaPagar } from '@/types'
@@ -118,19 +119,6 @@ export interface FechamentoResultado {
 
   // Fechamento da Obra — acumulado desde o início, só por espaço com obra.
   obraPorEspaco: ObraEspacoResumo[]
-}
-
-// Data usada pra encaixar um lançamento num período: se já foi pago/recebido,
-// é a data real do pagamento/recebimento — não o vencimento original. Uma
-// conta paga antes de vencer precisa contar no período em que o dinheiro
-// realmente saiu, senão o Financeiro (que filtra por período) fica menor que
-// o total de Contas Pagas (que não filtra por período por padrão) sempre que
-// existir pagamento antecipado.
-function dataEfetivaReceita(r: Receita): string {
-  return r.status === 'pago' && r.dataRecebimento ? r.dataRecebimento : r.data
-}
-function dataEfetivaConta(c: ContaPagar): string {
-  return c.status === 'pago' && c.dataPagamento ? c.dataPagamento : c.dataVencimento
 }
 
 // Net (entradas − saídas) das reservas genéricas (Reserva Impostos, Reserva

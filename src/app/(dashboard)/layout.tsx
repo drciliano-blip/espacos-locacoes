@@ -6,6 +6,7 @@ import { EventosProvider } from '@/contexts/EventosContext'
 import { EspacosProvider } from '@/contexts/EspacosContext'
 import { EspacoAtivoProvider } from '@/contexts/EspacoAtivoContext'
 import { ReceitasProvider } from '@/contexts/ReceitasContext'
+import { FechamentosProvider } from '@/contexts/FechamentosContext'
 import { ContratosProvider } from '@/contexts/ContratosContext'
 import { ContasPagarProvider } from '@/contexts/ContasPagarContext'
 import { RepassesProvider } from '@/contexts/RepassesContext'
@@ -42,33 +43,35 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <AtividadesProvider>
         <EspacosProvider>
           <EspacoAtivoProvider>
-            <ReceitasProvider>
-              <EventosProvider>
-                <ContratosProvider>
-                  <ContasPagarProvider>
-                    <RepassesProvider>
-                      <FundosProvider>
-                        <ConciliacaoProvider>
-                          <PadroesClassificacaoProvider>
-                            <SidebarUIProvider>
-                              <div id="app-shell" className="flex h-screen bg-app-bg overflow-hidden">
-                                <Sidebar userRole={role} />
-                                <div id="app-shell-inner" className="flex flex-1 flex-col overflow-hidden">
-                                  <Header userName={profile.nome} userRole={role} />
-                                  <main id="app-main" className="flex-1 overflow-y-auto p-6">
-                                    {children}
-                                  </main>
+            <FechamentosProvider>
+              <ReceitasProvider>
+                <EventosProvider>
+                  <ContratosProvider>
+                    <ContasPagarProvider>
+                      <RepassesProvider>
+                        <FundosProvider>
+                          <ConciliacaoProvider>
+                            <PadroesClassificacaoProvider>
+                              <SidebarUIProvider>
+                                <div id="app-shell" className="flex h-screen bg-app-bg overflow-hidden">
+                                  <Sidebar userRole={role} />
+                                  <div id="app-shell-inner" className="flex flex-1 flex-col overflow-hidden">
+                                    <Header userName={profile.nome} userRole={role} />
+                                    <main id="app-main" className="flex-1 overflow-y-auto p-6">
+                                      {children}
+                                    </main>
+                                  </div>
                                 </div>
-                              </div>
-                            </SidebarUIProvider>
-                          </PadroesClassificacaoProvider>
-                        </ConciliacaoProvider>
-                      </FundosProvider>
-                    </RepassesProvider>
-                  </ContasPagarProvider>
-                </ContratosProvider>
-              </EventosProvider>
-            </ReceitasProvider>
+                              </SidebarUIProvider>
+                            </PadroesClassificacaoProvider>
+                          </ConciliacaoProvider>
+                        </FundosProvider>
+                      </RepassesProvider>
+                    </ContasPagarProvider>
+                  </ContratosProvider>
+                </EventosProvider>
+              </ReceitasProvider>
+            </FechamentosProvider>
           </EspacoAtivoProvider>
         </EspacosProvider>
       </AtividadesProvider>

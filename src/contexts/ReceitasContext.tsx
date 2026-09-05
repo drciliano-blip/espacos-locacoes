@@ -4,6 +4,8 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAtividades } from '@/contexts/AtividadesContext'
+import { useFechamentos } from '@/contexts/FechamentosContext'
+import { dataEfetivaReceita, periodoFechado, mensagemPeriodoFechado } from '@/lib/fechamento-lock'
 import type { OrigemLancamento } from '@/types'
 
 export interface CategoriaReceita {
@@ -191,6 +193,7 @@ const SELECT = '*, categoria:categorias_receita(slug, nome), espaco:espacos(nome
 
 export function ReceitasProvider({ children }: { children: ReactNode }) {
   const { logAtividade } = useAtividades()
+  const { fechamentos } = useFechamentos()
   const [receitas, setReceitas] = useState<Receita[]>([])
   const [categorias, setCategorias] = useState<CategoriaReceita[]>([])
   const [loading, setLoading] = useState(true)
@@ -209,6 +212,9 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
   useEffect(() => { load() }, [load])
 
   async function addReceita(input: NovaReceitaInput): Promise<Receita> {
+    const bloqueio = periodoFechado(fechamentos, input.espaco, dataEfetivaReceita(input))
+    if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
+
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -271,12 +277,27 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
 
     const { data: existingRows } = await supabase
       .from('receitas')
-      .select('id, parcela_numero, status')
+      .select('id, parcela_numero, status, data, data_recebimento')
       .eq('evento_id', input.eventoId)
       .eq('categoria_id', categoriaRow.id)
 
-    const existing = (existingRows ?? []) as { id: string; parcela_numero: number | null; status: string }[]
+    const existing = (existingRows ?? []) as { id: string; parcela_numero: number | null; status: string; data: string; data_recebimento: string | null }[]
     const numerosNoPlano = new Set(input.parcelas.map(p => p.numero))
+
+    // Valida a trava de período fechado ANTES de mexer em qualquer linha —
+    // tudo ou nada, pra nunca deixar o plano pela metade sincronizado.
+    for (const parcela of input.parcelas) {
+      const match = existing.find(e => e.parcela_numero === parcela.numero)
+      const dataChecagem = match ? dataEfetivaReceita({ status: match.status as Receita['status'], data: match.data, dataRecebimento: match.data_recebimento ?? undefined }) : parcela.data
+      const bloqueio = periodoFechado(fechamentos, input.espaco, dataChecagem)
+      if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
+    }
+    for (const row of existing) {
+      if (row.parcela_numero !== null && !numerosNoPlano.has(row.parcela_numero) && row.status !== 'pago') {
+        const bloqueio = periodoFechado(fechamentos, input.espaco, dataEfetivaReceita({ status: row.status as Receita['status'], data: row.data, dataRecebimento: row.data_recebimento ?? undefined }))
+        if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
+      }
+    }
 
     for (const parcela of input.parcelas) {
       const match = existing.find(e => e.parcela_numero === parcela.numero)
@@ -311,6 +332,12 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
   }
 
   async function updateReceita(id: string, patch: BaixaReceitaInput) {
+    const existente = receitas.find(r => r.id === id)
+    if (existente) {
+      const bloqueio = periodoFechado(fechamentos, existente.espaco, dataEfetivaReceita(existente))
+      if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
+    }
+
     const supabase = createClient()
     const payload = {
       status: patch.status,
@@ -337,6 +364,12 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
   }
 
   async function editarReceita(id: string, patch: EditarReceitaInput) {
+    const existente = receitas.find(r => r.id === id)
+    if (existente) {
+      const bloqueio = periodoFechado(fechamentos, existente.espaco, dataEfetivaReceita(existente))
+      if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
+    }
+
     const supabase = createClient()
     let espacoId: string | null = null
     if (patch.espaco) {
@@ -376,6 +409,10 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
 
   async function deleteReceita(id: string) {
     const alvo = receitas.find(r => r.id === id)
+    if (alvo) {
+      const bloqueio = periodoFechado(fechamentos, alvo.espaco, dataEfetivaReceita(alvo))
+      if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
+    }
     const supabase = createClient()
     const { error } = await supabase.from('receitas').delete().eq('id', id)
     if (error) throw error

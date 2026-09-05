@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
-  ArrowUpCircle, ArrowDownCircle, Wallet, HardHat, Vault, Plus, X, Eye, Landmark,
+  ArrowUpCircle, ArrowDownCircle, Wallet, HardHat, Vault, Plus, X, Eye, Landmark, Lock, RotateCcw,
 } from 'lucide-react'
 import FilterBar, { type RelatorioFilters } from '@/components/relatorios/FilterBar'
 import { getPeriodRange } from '@/lib/relatorios-utils'
@@ -15,9 +15,10 @@ import { useEspacos } from '@/contexts/EspacosContext'
 import { useEspacoAtivo, MSG_ESPACO_ESPECIFICO_NECESSARIO } from '@/contexts/EspacoAtivoContext'
 import { useFundos } from '@/contexts/FundosContext'
 import { useRepasses } from '@/contexts/RepassesContext'
+import { useFechamentos, type Fechamento } from '@/contexts/FechamentosContext'
 import { useCurrentUser } from '@/contexts/UserContext'
 import { DIVISAO_SOCIOS, nomeCanonicoSocio, AJUSTE_RESERVA_OBRA } from '@/lib/socios-config'
-import { formatCurrency, parseCurrencyBR } from '@/lib/utils'
+import { formatCurrency, formatDate, parseCurrencyBR } from '@/lib/utils'
 import { downloadWorkbook, type ExportSheet } from '@/lib/xlsx-export'
 import { CATEGORIA_CONTA_LABEL, SUBCATEGORIA_LABEL } from '@/components/relatorios/LancamentosTables'
 import ExportarRelatorioButton from '@/components/relatorios/ExportarRelatorioButton'
@@ -29,6 +30,7 @@ import EditarEntradaModal from '@/components/pagamentos/EditarEntradaModal'
 import NovaRetiradaSocioModal from '@/components/relatorios/NovaRetiradaSocioModal'
 import EditarRetiradaSocioModal from '@/components/relatorios/EditarRetiradaSocioModal'
 import LancamentoSocioListModal, { type LancamentoSocioRow, origemRetiradaLabel } from '@/components/relatorios/LancamentoSocioListModal'
+import FecharPeriodoModal from './FecharPeriodoModal'
 import Toast from '@/components/shared/Toast'
 
 function getDefaultFilters(): RelatorioFilters {
@@ -59,6 +61,7 @@ export default function FechamentoClient() {
   const { espacosEmEscopo: selectedSpaces, espacoUnico, precisaEspacoEspecifico } = useEspacoAtivo()
   const { fundos, movimentacoes, addFundo } = useFundos()
   const { repasses, addRepasse } = useRepasses()
+  const { fechamentos, fecharPeriodo, reabrirPeriodo } = useFechamentos()
   const { role } = useCurrentUser()
   const podeLancar = role === 'admin' || role === 'financeiro'
 
@@ -71,6 +74,8 @@ export default function FechamentoClient() {
   const [editandoAporteId, setEditandoAporteId] = useState<string | null>(null)
   const [editandoRetiradaId, setEditandoRetiradaId] = useState<string | null>(null)
   const [repasseAlvo, setRepasseAlvo] = useState<{ espaco: string; socio: string } | null>(null)
+  const [fecharPeriodoOpen, setFecharPeriodoOpen] = useState(false)
+  const [reabrirConfirmId, setReabrirConfirmId] = useState<string | null>(null)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   function showToast(msg: string) {
     setToastMsg(msg)
@@ -367,6 +372,73 @@ export default function FechamentoClient() {
     return rows
   }, [espacos, fechamento, contasPagar, repasses, fundos, movimentacoes])
 
+  // Fechamento formal do período — sempre do espaço ativo global (nunca um
+  // seletor próprio aqui, mesmo padrão já usado na integração do Google
+  // Calendar da Agenda), pro período "De"/"Até" atualmente no FilterBar.
+  const fechamentoExistente = useMemo(
+    () => espacoUnico ? fechamentos.find(f => f.espaco === espacoUnico && f.dataInicio === filters.dataInicio && f.dataFim === filters.dataFim) : undefined,
+    [fechamentos, espacoUnico, filters.dataInicio, filters.dataFim],
+  )
+  const repasseSociosDoEspacoAtivo = useMemo(
+    () => repasseSociosRows.filter(r => r.espaco === espacoUnico),
+    [repasseSociosRows, espacoUnico],
+  )
+  const historicoFechamentos = useMemo(
+    () => fechamentos.filter(f => espacos.some(e => e.nome === f.espaco)),
+    [fechamentos, espacos],
+  )
+
+  async function handleFecharPeriodo() {
+    if (!espacoUnico) return
+    await fecharPeriodo({
+      espaco: espacoUnico,
+      dataInicio: filters.dataInicio,
+      dataFim: filters.dataFim,
+      resultadoOperacional: fechamento.resultado,
+      resultadoAcumulado: fechamento.resultadoAcumulado,
+      fundoReservaDeduzido: fechamento.fundoReservaDeduzido,
+      retiradaDeduzida: fechamento.retiradaDeduzida,
+      disponivelDoEspaco: fechamento.disponivelDoEspaco,
+      disponivelParaDistribuicao: fechamento.disponivelParaDistribuicao,
+      repasseSocios: repasseSociosDoEspacoAtivo.map(r => ({
+        socio: r.socio, percentual: r.percentual, valorDevido: r.valorDevido, retirado: r.retirado, jaRepassado: r.jaRepassado, valorPendente: r.valorPendente,
+      })),
+    })
+    setFecharPeriodoOpen(false)
+    showToast('Período fechado.')
+  }
+
+  async function handleReabrirPeriodo(id: string) {
+    await reabrirPeriodo(id)
+    setReabrirConfirmId(null)
+    showToast('Fechamento reaberto.')
+  }
+
+  function handleBaixarExcelFechamento(f: Fechamento) {
+    downloadWorkbook(
+      [{
+        name: 'Fechamento',
+        rows: [
+          ['Espaço', f.espaco],
+          ['Período', `${f.dataInicio} a ${f.dataFim}`],
+          ['Fechado em', formatDate(f.fechadoEm.split('T')[0])],
+          ['Fechado por', f.fechadoPorNome ?? '—'],
+          [],
+          ['Resultado Operacional', f.resultadoOperacional],
+          ['Resultado Acumulado', f.resultadoAcumulado],
+          ['(−) Fundo de Caixa / Reservas', f.fundoReservaDeduzido],
+          ['(−) Já retirado pelos sócios', f.retiradaDeduzida],
+          ['= Disponível do Espaço', f.disponivelDoEspaco],
+          ['= Disponível para Distribuição', f.disponivelParaDistribuicao],
+          [],
+          ['Sócio', 'Percentual', 'Valor Devido', 'Retirado', 'Já Repassado', 'Pendente'],
+          ...f.repasseSocios.map(r => [r.socio, `${r.percentual}%`, r.valorDevido, r.retirado, r.jaRepassado, r.valorPendente]),
+        ],
+      }],
+      `fechamento-${f.espaco.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${f.dataInicio}-a-${f.dataFim}.xlsx`,
+    )
+  }
+
   // Exportação completa do Financeiro — respeita exatamente o filtro de
   // espaço/período ativo na tela. Cada planilha usa a mesma lista que
   // alimenta o "Visualizar" do card equivalente, pra nunca divergir do que
@@ -522,7 +594,7 @@ export default function FechamentoClient() {
             disponível no Financeiro respeitando o filtro de espaço/período
             ativo (PDF via impressão do relatório completo abaixo; Excel com
             uma planilha por seção). */}
-        <div className="flex items-center justify-end gap-2 print-hidden">
+        <div className="flex items-center justify-end gap-2 print-hidden flex-wrap">
           {podeLancar && (
             <Link
               href="/fechamento/conciliacao"
@@ -532,10 +604,80 @@ export default function FechamentoClient() {
               Conciliação Bancária
             </Link>
           )}
+          {podeLancar && (
+            espacoUnico ? (
+              fechamentoExistente ? (
+                <span className="flex items-center gap-1.5 rounded-lg border border-app-border2 bg-app-surface2/50 px-3 py-2 text-sm font-medium text-app-subtle">
+                  <Lock className="h-4 w-4" />
+                  Já fechado em {formatDate(fechamentoExistente.fechadoEm.split('T')[0])}
+                </span>
+              ) : (
+                <button
+                  onClick={() => setFecharPeriodoOpen(true)}
+                  className="flex items-center gap-1.5 rounded-lg border border-app-border2 bg-app-surface px-3 py-2 text-sm font-medium text-app-text hover:bg-app-surface2 transition-colors"
+                >
+                  <Lock className="h-4 w-4 text-[#25D366]" />
+                  Fechar Período
+                </button>
+              )
+            ) : (
+              <span className="text-xs text-app-subtle">{MSG_ESPACO_ESPECIFICO_NECESSARIO}</span>
+            )
+          )}
           <ExportarRelatorioButton onExcel={handleExportExcelCompleto} onPdf={() => window.print()} label="Exportar Relatório" />
         </div>
 
         <FilterBar filters={filters} onChange={handleFiltersChange} />
+
+        {historicoFechamentos.length > 0 && (
+          <div className="rounded-2xl border border-app-border bg-app-surface p-5 space-y-3 print:hidden">
+            <h3 className="text-sm font-semibold text-app-text">Histórico de Fechamentos</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-app-subtle">
+                    <th className="text-left py-1.5 pr-3 font-medium">Espaço</th>
+                    <th className="text-left py-1.5 pr-3 font-medium">Período</th>
+                    <th className="text-left py-1.5 pr-3 font-medium">Fechado em</th>
+                    <th className="text-left py-1.5 pr-3 font-medium">Por</th>
+                    <th className="text-right py-1.5 pr-3 font-medium">Disponível p/ Distribuição</th>
+                    <th className="text-right py-1.5 font-medium">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historicoFechamentos.map(f => (
+                    <tr key={f.id} className="border-t border-app-border2/50">
+                      <td className="py-1.5 pr-3 text-app-text2">{f.espaco}</td>
+                      <td className="py-1.5 pr-3 text-app-text2">{formatDate(f.dataInicio)} a {formatDate(f.dataFim)}</td>
+                      <td className="py-1.5 pr-3 text-app-subtle">{formatDate(f.fechadoEm.split('T')[0])}</td>
+                      <td className="py-1.5 pr-3 text-app-subtle">{f.fechadoPorNome ?? '—'}</td>
+                      <td className="py-1.5 pr-3 text-right text-app-text2">{formatCurrency(f.disponivelParaDistribuicao)}</td>
+                      <td className="py-1.5 text-right whitespace-nowrap">
+                        <button onClick={() => handleBaixarExcelFechamento(f)} className="text-app-subtle hover:text-app-text transition-colors mr-3">
+                          Baixar Excel
+                        </button>
+                        {podeLancar && (
+                          reabrirConfirmId === f.id ? (
+                            <span className="inline-flex items-center gap-2">
+                              <span className="text-app-subtle">Reabrir?</span>
+                              <button onClick={() => handleReabrirPeriodo(f.id)} className="text-red-500 hover:text-red-400 transition-colors font-medium">Sim</button>
+                              <button onClick={() => setReabrirConfirmId(null)} className="text-app-subtle hover:text-app-text transition-colors">Cancelar</button>
+                            </span>
+                          ) : (
+                            <button onClick={() => setReabrirConfirmId(f.id)} className="inline-flex items-center gap-1 text-app-subtle hover:text-red-500 transition-colors">
+                              <RotateCcw className="h-3 w-3" />
+                              Reabrir
+                            </button>
+                          )
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Resumo Financeiro — Obra em cima, Operacional embaixo, cada linha
             seguindo Entrada / Saída / Resultado. Caixa Disponível e Disponível
@@ -867,6 +1009,19 @@ export default function FechamentoClient() {
           onClose={() => setNovoFundoOpen(false)}
           onSave={addFundo}
           onSaved={() => showToast('Fundo criado.')}
+        />
+      )}
+
+      {fecharPeriodoOpen && espacoUnico && (
+        <FecharPeriodoModal
+          espaco={espacoUnico}
+          dataInicio={filters.dataInicio}
+          dataFim={filters.dataFim}
+          resultadoOperacional={fechamento.resultado}
+          disponivelParaDistribuicao={fechamento.disponivelParaDistribuicao}
+          repasseSocios={repasseSociosDoEspacoAtivo}
+          onClose={() => setFecharPeriodoOpen(false)}
+          onConfirm={handleFecharPeriodo}
         />
       )}
 

@@ -4,6 +4,8 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAtividades } from '@/contexts/AtividadesContext'
+import { useFechamentos } from '@/contexts/FechamentosContext'
+import { dataEfetivaConta, periodoFechado, mensagemPeriodoFechado } from '@/lib/fechamento-lock'
 import { getFiles, deleteFile } from '@/lib/file-storage'
 import type { ContaPagar, CategoriaContaPagar, StatusContaPagar } from '@/types'
 
@@ -96,6 +98,7 @@ const SELECT = '*, espaco:espacos(nome)'
 
 export function ContasPagarProvider({ children }: { children: ReactNode }) {
   const { logAtividade } = useAtividades()
+  const { fechamentos } = useFechamentos()
   const [contas, setContas] = useState<ContaPagar[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -109,6 +112,9 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
   useEffect(() => { load() }, [load])
 
   async function addConta(c: ContaPagar) {
+    const bloqueio = periodoFechado(fechamentos, c.espaco, dataEfetivaConta(c))
+    if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
+
     const supabase = createClient()
     let espacoId: string | null = null
     if (c.espaco && c.espaco !== 'Todos') {
@@ -154,6 +160,12 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
   }
 
   async function updateConta(c: ContaPagar) {
+    const existente = contas.find(x => x.id === c.id)
+    if (existente) {
+      const bloqueio = periodoFechado(fechamentos, existente.espaco, dataEfetivaConta(existente))
+      if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
+    }
+
     const supabase = createClient()
     let espacoId: string | null = null
     if (c.espaco && c.espaco !== 'Todos') {
@@ -198,6 +210,10 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
 
   async function deleteConta(id: string) {
     const alvo = contas.find(c => c.id === id)
+    if (alvo) {
+      const bloqueio = periodoFechado(fechamentos, alvo.espaco, dataEfetivaConta(alvo))
+      if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
+    }
     const supabase = createClient()
     const { error } = await supabase.from('contas_pagar').delete().eq('id', id)
     if (error) throw error
@@ -220,6 +236,12 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
   }
 
   async function darBaixa(id: string, dataPagamento: string, horaPagamento?: string, comprovanteInstituicao?: string, comprovanteIdentificador?: string) {
+    const existente = contas.find(c => c.id === id)
+    if (existente) {
+      const bloqueio = periodoFechado(fechamentos, existente.espaco, dataEfetivaConta(existente))
+      if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
+    }
+
     const supabase = createClient()
     const { data, error } = await supabase
       .from('contas_pagar')
@@ -246,6 +268,12 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
   }
 
   async function corrigirDataPagamento(id: string, dataPagamento?: string, horaPagamento?: string, comprovanteInstituicao?: string, comprovanteIdentificador?: string) {
+    const existente = contas.find(c => c.id === id)
+    if (existente) {
+      const bloqueio = periodoFechado(fechamentos, existente.espaco, dataEfetivaConta(existente))
+      if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
+    }
+
     const patch: Record<string, string> = {}
     if (dataPagamento !== undefined) patch.data_pagamento = dataPagamento
     if (horaPagamento !== undefined) patch.hora_pagamento = horaPagamento
