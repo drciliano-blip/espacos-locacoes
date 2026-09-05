@@ -42,9 +42,15 @@ interface EventListProps {
   onAbaChange: (aba: AbaAgenda) => void
   mesAnoLabel: string
   onEventoClick?: (evento: Evento) => void
+  // Esconde a aba "mês" quando quem usa este componente já mostra os
+  // eventos do mês diretamente em outro lugar (ex: calendário com chips na
+  // Agenda) — evita repetir a mesma lista duas vezes na tela. A aba
+  // continua existindo por baixo (nenhuma prop nem exportação removida),
+  // só o botão some.
+  mostrarAbaMes?: boolean
 }
 
-export default function EventList({ eventos, selectedDate, aba, onAbaChange, mesAnoLabel, onEventoClick }: EventListProps) {
+export default function EventList({ eventos, selectedDate, aba, onAbaChange, mesAnoLabel, onEventoClick, mostrarAbaMes = true }: EventListProps) {
   return (
     <div className="rounded-xl border border-app-border bg-app-surface p-5">
       {selectedDate ? (
@@ -54,7 +60,7 @@ export default function EventList({ eventos, selectedDate, aba, onAbaChange, mes
         </h3>
       ) : (
         <div className="flex items-center gap-1 mb-4 flex-wrap">
-          {(['proximos', 'passados', 'mes'] as const).map(tab => (
+          {(['proximos', 'passados', 'mes'] as const).filter(tab => tab !== 'mes' || mostrarAbaMes).map(tab => (
             <button
               key={tab}
               onClick={() => onAbaChange(tab)}

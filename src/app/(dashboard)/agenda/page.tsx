@@ -253,12 +253,14 @@ export default function AgendaPage() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4 items-start">
+        <div className="space-y-4">
           <CalendarView
             eventos={eventosFiltrados}
             selectedDate={selectedDate}
             onDaySelect={setSelectedDate}
             onMonthChange={setMesExibido}
+            mostrarEventos
+            onEventoClick={setSelectedEvento}
           />
           <EventList
             eventos={eventosExibidos}
@@ -267,6 +269,7 @@ export default function AgendaPage() {
             onAbaChange={setAba}
             mesAnoLabel={mesAnoLabel}
             onEventoClick={setSelectedEvento}
+            mostrarAbaMes={false}
           />
         </div>
 

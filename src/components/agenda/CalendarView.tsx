@@ -14,6 +14,19 @@ const espacoColors: Record<string, string> = {
   'Espaço Solon': 'bg-orange-500',
 }
 
+// Classes completas (não montadas em runtime) pra ficarem visíveis pro
+// scanner do Tailwind — um `${classe}/15` construído na hora não é
+// reconhecido pelo JIT.
+const espacoChipStyles: Record<string, string> = {
+  'Usine': 'bg-violet-500/15 text-violet-300',
+  'Fabrique': 'bg-indigo-500/15 text-indigo-300',
+  'House Pacaembu': 'bg-sky-500/15 text-sky-300',
+  'Complexo Jussara': 'bg-emerald-500/15 text-emerald-300',
+  'Espaço Solon': 'bg-orange-500/15 text-orange-300',
+}
+
+const MAX_CHIPS_POR_DIA = 3
+
 interface CalendarViewProps {
   eventos: Evento[]
   onDaySelect: (date: Date | null) => void
@@ -22,9 +35,17 @@ interface CalendarViewProps {
   // o mês por fora — quem não passar (ex: EspacoPage) continua funcionando
   // igual, sem nenhum efeito colateral.
   onMonthChange?: (month: Date) => void
+  // Modo "mês cheio": em vez de só uma bolinha por evento, mostra o nome do
+  // cliente e horário direto dentro do dia — usado na Agenda principal, que
+  // precisa funcionar como um calendário de verdade e não só um mini-seletor
+  // de data. Sem essa prop, o comportamento (compacto, só bolinhas) continua
+  // idêntico ao de sempre — usado por quem embute o calendário num espaço
+  // menor de tela (ex: EspacoPage).
+  mostrarEventos?: boolean
+  onEventoClick?: (evento: Evento) => void
 }
 
-export default function CalendarView({ eventos, onDaySelect, selectedDate, onMonthChange }: CalendarViewProps) {
+export default function CalendarView({ eventos, onDaySelect, selectedDate, onMonthChange, mostrarEventos, onEventoClick }: CalendarViewProps) {
   const [currentMonth, setCurrentMonth] = useState(() => {
     const hoje = new Date()
     return new Date(hoje.getFullYear(), hoje.getMonth(), 1)
@@ -89,17 +110,24 @@ export default function CalendarView({ eventos, onDaySelect, selectedDate, onMon
           const isToday = isSameDay(day, new Date())
 
           return (
-            <button
+            <div
               key={day.toISOString()}
+              role="button"
+              tabIndex={0}
               onClick={() => onDaySelect(isSelected ? null : day)}
-              className={`relative flex flex-col items-center rounded-lg p-1.5 min-h-[52px] transition-colors ${
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onDaySelect(isSelected ? null : day) }}
+              className={`relative rounded-lg p-1.5 transition-colors cursor-pointer ${
+                mostrarEventos ? 'flex flex-col items-stretch min-h-[92px] sm:min-h-[112px]' : 'flex flex-col items-center min-h-[52px]'
+              } ${
                 isSelected
                   ? 'bg-[#25D366]/15 border border-[#25D366]/35'
                   : 'hover:bg-app-surface2 border border-transparent'
               } ${!isCurrentMonth ? 'opacity-30' : ''}`}
             >
               <span
-                className={`text-xs font-medium mb-1 h-5 w-5 flex items-center justify-center rounded-full ${
+                className={`text-xs font-medium mb-1 h-5 w-5 flex items-center justify-center rounded-full shrink-0 ${
+                  mostrarEventos ? 'self-end' : ''
+                } ${
                   isToday
                     ? 'text-white'
                     : isSelected
@@ -110,24 +138,45 @@ export default function CalendarView({ eventos, onDaySelect, selectedDate, onMon
               >
                 {format(day, 'd')}
               </span>
-              <div className="flex flex-wrap gap-0.5 justify-center">
-                {dayEvents.slice(0, 3).map((e, i) => (
-                  e.status === 'cancelado' ? (
-                    <span
-                      key={i}
-                      className="h-1.5 w-1.5 rounded-full bg-red-400/60"
-                      title="Cancelado"
-                    />
-                  ) : (
-                    <span
-                      key={i}
-                      className={`h-1.5 w-1.5 rounded-full ${espacoColors[e.espaco] ?? 'bg-zinc-500'}`}
-                      title={e.espaco}
-                    />
-                  )
-                ))}
-              </div>
-            </button>
+
+              {mostrarEventos ? (
+                <div className="flex-1 min-w-0 flex flex-col gap-0.5 overflow-hidden">
+                  {dayEvents.slice(0, MAX_CHIPS_POR_DIA).map((e) => (
+                    <button
+                      key={e.id}
+                      onClick={(ev) => { ev.stopPropagation(); onEventoClick?.(e) }}
+                      title={`${e.cliente} · ${e.horaInicio}–${e.horaFim}`}
+                      className={`w-full truncate rounded px-1 py-0.5 text-left text-[10px] font-medium leading-tight transition-opacity hover:opacity-80 ${
+                        e.status === 'cancelado' ? 'bg-red-500/10 text-red-400 line-through' : espacoChipStyles[e.espaco] ?? 'bg-zinc-500/15 text-zinc-300'
+                      }`}
+                    >
+                      {e.horaInicio ? `${e.horaInicio} ` : ''}{e.cliente}
+                    </button>
+                  ))}
+                  {dayEvents.length > MAX_CHIPS_POR_DIA && (
+                    <span className="px-1 text-[10px] text-app-subtle">+{dayEvents.length - MAX_CHIPS_POR_DIA} mais</span>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-0.5 justify-center">
+                  {dayEvents.slice(0, 3).map((e, i) => (
+                    e.status === 'cancelado' ? (
+                      <span
+                        key={i}
+                        className="h-1.5 w-1.5 rounded-full bg-red-400/60"
+                        title="Cancelado"
+                      />
+                    ) : (
+                      <span
+                        key={i}
+                        className={`h-1.5 w-1.5 rounded-full ${espacoColors[e.espaco] ?? 'bg-zinc-500'}`}
+                        title={e.espaco}
+                      />
+                    )
+                  ))}
+                </div>
+              )}
+            </div>
           )
         })}
       </div>
