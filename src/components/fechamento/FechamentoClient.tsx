@@ -203,12 +203,19 @@ export default function FechamentoClient() {
   }, [drillDown, aportesSocioEscopo, retiradasSocioEscopo, nomesSociosDisponiveis])
 
   // Repasses individuais em escopo — cada linha é um "Registrar repasse"
-  // (data, valor, observações), nunca só o total (jaRepassado). Acumulado
-  // desde sempre, mesma regra dos demais dados de sócio: não trava no
-  // período do filtro.
+  // (data, valor, observações), nunca só o total (jaRepassado). Respeita o
+  // período filtrado (diferente do "jaRepassado" usado no cálculo de
+  // pendente, que é acumulado desde sempre de propósito): essa lista é a
+  // prestação de contas do período pros sócios investidores, então um
+  // repasse feito no mês anterior não pode aparecer no relatório do mês
+  // seguinte.
   const repassesEmEscopo = useMemo(
-    () => repasses.filter(r => espacos.some(e => e.nome === r.espaco)),
-    [repasses, espacos],
+    () => repasses.filter(r =>
+      espacos.some(e => e.nome === r.espaco) &&
+      (!filters.dataInicio || r.data >= filters.dataInicio) &&
+      (!filters.dataFim || r.data <= filters.dataFim),
+    ),
+    [repasses, espacos, filters.dataInicio, filters.dataFim],
   )
   const repasseDrillDownRows: LancamentoSocioRow[] = useMemo(() => {
     if (!repasseDrillDown) return []
