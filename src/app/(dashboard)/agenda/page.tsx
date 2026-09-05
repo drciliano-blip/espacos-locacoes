@@ -8,7 +8,7 @@ import CalendarView from '@/components/agenda/CalendarView'
 import ConsultarDisponibilidadeSection from '@/components/agenda/ConsultarDisponibilidadeSection'
 import EventList, { type AbaAgenda } from '@/components/agenda/EventList'
 import ExportarPdfAgendaModal, { type CamposPdfAgenda, CAMPOS_PDF_PADRAO } from '@/components/agenda/ExportarPdfAgendaModal'
-import GoogleCalendarView from '@/components/agenda/GoogleCalendarView'
+import EspacoGoogleCalendar from '@/components/espacos/EspacoGoogleCalendar'
 import EventoDrawer from '@/components/eventos/EventoDrawer'
 import NovoEventoModal from '@/components/eventos/NovoEventoModal'
 import ExportarRelatorioButton from '@/components/relatorios/ExportarRelatorioButton'
@@ -18,6 +18,7 @@ import { useEventos } from '@/contexts/EventosContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
 import { useCurrentUser } from '@/contexts/UserContext'
 import { useEspacoAtivo, MSG_ESPACO_ESPECIFICO_NECESSARIO } from '@/contexts/EspacoAtivoContext'
+import { useEspacos } from '@/contexts/EspacosContext'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { downloadWorkbook, type ExportSheet } from '@/lib/xlsx-export'
 import type { Evento, Espaco } from '@/types'
@@ -47,6 +48,8 @@ export default function AgendaPage() {
   const { receitas } = useReceitas()
   const { role } = useCurrentUser()
   const { espacosEmEscopo, espacoUnico, precisaEspacoEspecifico } = useEspacoAtivo()
+  const { espacosConfig } = useEspacos()
+  const espacoAtivoConfig = espacosConfig.find(e => e.nome === espacoUnico)
 
   const [abaPrincipal, setAbaPrincipal] = useState<'agenda' | 'disponibilidade'>('agenda')
   const [selectedDate, setSelectedDate]     = useState<Date | null>(null)
@@ -267,8 +270,16 @@ export default function AgendaPage() {
           />
         </div>
 
-        {/* Google Calendar */}
-        <GoogleCalendarView />
+        {/* Google Calendar — sempre o do espaço ativo no momento, mesma
+            conexão persistente por espaço usada em Espaços → [espaço]. Sem
+            espaço específico selecionado, não há conexão única possível. */}
+        {espacoUnico && espacoAtivoConfig?.id ? (
+          <EspacoGoogleCalendar key={espacoAtivoConfig.id} espacoId={espacoAtivoConfig.id} espacoNome={espacoAtivoConfig.nome} />
+        ) : (
+          <div className="rounded-xl border border-app-border bg-app-surface p-5 text-center">
+            <p className="text-sm text-app-subtle">{MSG_ESPACO_ESPECIFICO_NECESSARIO}</p>
+          </div>
+        )}
       </div>
 
       {/* Relação Agenda — escondida na tela, só aparece no PDF exportado.
