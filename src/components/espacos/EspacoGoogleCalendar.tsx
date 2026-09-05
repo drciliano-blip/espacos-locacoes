@@ -30,7 +30,6 @@ export default function EspacoGoogleCalendar({ espacoId, espacoNome }: Props) {
   const [email, setEmail] = useState<string | null>(null)
   const [events, setEvents] = useState<GCalEvent[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [debugInfo, setDebugInfo] = useState<string | null>(null)
   const [disconnecting, setDisconnecting] = useState(false)
   const [newEventOpen, setNewEventOpen] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -39,39 +38,21 @@ export default function EspacoGoogleCalendar({ espacoId, espacoNome }: Props) {
   const carregarStatus = useCallback(async (tentativa = 0) => {
     setLoading(true)
     setError(null)
-    // Diagnóstico temporário — grava um resumo de CADA tentativa (não só
-    // quando "não encontrou a conexão"), pra nunca ficar sem nenhuma pista
-    // de qual caminho o código realmente seguiu. Remover depois de achar a
-    // causa raiz do bug de conexão que some sozinha.
-    const passos: string[] = [`tentativa=${tentativa}`, `horario=${new Date().toISOString()}`]
     try {
       const res = await fetch(`/api/google-calendar/status?espacoId=${espacoId}`)
-      passos.push(`status_http=${res.status}`)
       // 401 aqui é quase sempre a sessão do Supabase ainda não pronta —
       // acontece com frequência quando o navegador suspende a aba em
       // segundo plano e recarrega a página ao voltar pra ela. Sem retry,
       // isso derrubava a tela pra "desconectado" mesmo com a conexão real
       // intacta no banco, obrigando a reconectar à toa.
       if (res.status === 401 && tentativa < 2) {
-        passos.push('401 -> tentando de novo em 800ms')
-        setDebugInfo(passos.join('\n'))
         await new Promise(r => setTimeout(r, 800))
         return carregarStatus(tentativa + 1)
       }
-      if (!res.ok) {
-        passos.push('resposta não-ok, indo pro catch')
-        throw new Error(`Erro ${res.status} ao verificar conexão.`)
-      }
+      if (!res.ok) throw new Error(`Erro ${res.status} ao verificar conexão.`)
       const data = await res.json()
-      passos.push(`connected=${data.connected}`, `email=${data.email ?? '—'}`)
       setConnected(!!data.connected)
       setEmail(data.email ?? null)
-      if (!data.connected) {
-        passos.push(`debug_backend=${JSON.stringify(data.debug ?? null)}`)
-        setDebugInfo(passos.join('\n'))
-      } else {
-        setDebugInfo(null)
-      }
       if (data.connected) {
         const evRes = await fetch(`/api/google-calendar/events?espacoId=${espacoId}`)
         const evData = await evRes.json()
@@ -81,9 +62,7 @@ export default function EspacoGoogleCalendar({ espacoId, espacoNome }: Props) {
           setEvents(evData.events ?? [])
         }
       }
-    } catch (err) {
-      passos.push(`exceção=${err instanceof Error ? err.message : String(err)}`)
-      setDebugInfo(passos.join('\n'))
+    } catch {
       setError('Não foi possível verificar a conexão com o Google Calendar. Atualize a página.')
     } finally {
       setLoading(false)
@@ -203,12 +182,6 @@ export default function EspacoGoogleCalendar({ espacoId, espacoNome }: Props) {
         {error && (
           <div className="w-full rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5 text-left">
             <p className="text-xs text-red-500">{error}</p>
-          </div>
-        )}
-        {debugInfo && (
-          <div className="w-full rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2.5 text-left">
-            <p className="text-xs font-semibold text-amber-600 mb-1">Diagnóstico temporário:</p>
-            <pre className="text-[10px] text-amber-700 whitespace-pre-wrap break-all">{debugInfo}</pre>
           </div>
         )}
       </div>
