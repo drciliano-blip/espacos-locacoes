@@ -8,8 +8,9 @@ import {
 import FilterBar, { type RelatorioFilters } from '@/components/relatorios/FilterBar'
 import { getPeriodRange } from '@/lib/relatorios-utils'
 import { calcularFechamento } from '@/lib/fechamento-calc'
-import { useReceitas, type Receita } from '@/contexts/ReceitasContext'
-import { useContasPagar } from '@/contexts/ContasPagarContext'
+import { dataEfetivaReceita, dataEfetivaConta } from '@/lib/fechamento-lock'
+import { useReceitas, isReceitaOperacional, type Receita } from '@/contexts/ReceitasContext'
+import { useContasPagar, isDespesaOperacional } from '@/contexts/ContasPagarContext'
 import type { ContaPagar } from '@/types'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useEspacoAtivo, MSG_ESPACO_ESPECIFICO_NECESSARIO } from '@/contexts/EspacoAtivoContext'
@@ -61,11 +62,12 @@ export default function FechamentoClient() {
   const { espacosEmEscopo: selectedSpaces, espacoUnico, precisaEspacoEspecifico } = useEspacoAtivo()
   const { fundos, movimentacoes, addFundo } = useFundos()
   const { repasses, addRepasse } = useRepasses()
-  const { fechamentos, fecharPeriodo, reabrirPeriodo } = useFechamentos()
+  const { fechamentos, loading: fechamentosLoading, fecharPeriodo, reabrirPeriodo } = useFechamentos()
   const { role } = useCurrentUser()
   const podeLancar = role === 'admin' || role === 'financeiro'
 
   const [filters, setFilters] = useState<RelatorioFilters>(getDefaultFilters)
+  const [filtroTocado, setFiltroTocado] = useState(false)
   const [novoFundoOpen, setNovoFundoOpen] = useState(false)
   const [novoAporteOpen, setNovoAporteOpen] = useState(false)
   const [novaRetiradaOpen, setNovaRetiradaOpen] = useState(false)
@@ -112,6 +114,7 @@ export default function FechamentoClient() {
   }
 
   function handleFiltersChange(f: RelatorioFilters) {
+    setFiltroTocado(true)
     if (f.periodo !== filters.periodo) {
       const { inicio, fim } = getPeriodRange(f.periodo)
       setFilters({ ...f, dataInicio: inicio, dataFim: fim })
@@ -119,6 +122,31 @@ export default function FechamentoClient() {
       setFilters(f)
     }
   }
+
+  // Período padrão = o período em aberto (dia seguinte ao fim do último
+  // fechamento do espaço ativo, até hoje) — só aplica automaticamente
+  // enquanto o usuário não tiver mexido no filtro manualmente, e só quando
+  // já existe pelo menos um fechamento pra esse espaço (sem fechamento
+  // nenhum, mantém o padrão de sempre). Espera os fechamentos carregarem
+  // pra não aplicar em cima de uma lista ainda vazia.
+  useEffect(() => {
+    if (filtroTocado || fechamentosLoading || !espacoUnico) return
+    const fechamentosDoEspaco = fechamentos.filter(f => f.espaco === espacoUnico)
+    if (fechamentosDoEspaco.length === 0) return
+    const ultimo = fechamentosDoEspaco.reduce((max, f) => f.dataFim > max.dataFim ? f : max)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const diaSeguinte = new Date(ultimo.dataFim)
+    diaSeguinte.setDate(diaSeguinte.getDate() + 1)
+    const inicioStr = `${diaSeguinte.getFullYear()}-${pad(diaSeguinte.getMonth() + 1)}-${pad(diaSeguinte.getDate())}`
+    const hoje = new Date()
+    const hojeStr = `${hoje.getFullYear()}-${pad(hoje.getMonth() + 1)}-${pad(hoje.getDate())}`
+    setFilters({ periodo: 'mensal', dataInicio: inicioStr, dataFim: inicioStr > hojeStr ? inicioStr : hojeStr })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fechamentos, fechamentosLoading, espacoUnico, filtroTocado])
+
+  // Trocar de espaço ativo reabre a chance de aplicar o período padrão —
+  // o filtro manual anterior era do espaço anterior, não deve "vazar".
+  useEffect(() => { setFiltroTocado(false) }, [espacoUnico])
 
   // selectedSpaces/espacoUnico vêm do contexto global (EspacoAtivoContext) —
   // Financeiro não tem mais filtro de espaço próprio.
@@ -337,13 +365,31 @@ export default function FechamentoClient() {
   // A retirada de um sócio nunca pode reduzir o direito de outro — por isso o
   // desconto de retirada é filtrado por sócio aqui, depois de aplicar o
   // percentual, e não dentro de disponivelPorEspaco (que é coletivo).
+  //
+  // Virada de período: uma vez que um espaço já teve algum "Fechar Período",
+  // pra ele o cálculo passa a ser sempre "desde o último fechamento" (não
+  // mais acumulado desde sempre) — Retirado e Já Repassado somam só
+  // lançamentos POSTERIORES ao fim do último fechamento, e o que ficou
+  // pendente naquele fechamento (a "foto" salva) entra como saldo inicial do
+  // novo período. Um espaço que nunca foi fechado continua com a conta
+  // acumulada de sempre, sem nenhuma mudança de comportamento.
   const repasseSociosRows = useMemo(() => {
     const rows: { espaco: string; socio: string; percentual: number; lucro: number; valorDevido: number; ajusteReservaObra: number; retirado: number; jaRepassado: number; valorPendente: number }[] = []
     for (const e of espacos) {
-      const lucro = fechamento.disponivelPorEspaco.find(d => d.nome === e.nome)?.disponivel ?? 0
+      const fechamentosDoEspaco = fechamentos.filter(f => f.espaco === e.nome)
+      const ultimoFechamento = fechamentosDoEspaco.length
+        ? fechamentosDoEspaco.reduce((max, f) => f.dataFim > max.dataFim ? f : max)
+        : undefined
+
+      const lucro = ultimoFechamento
+        ? receitas.filter(r => isReceitaOperacional(r) && r.espaco === e.nome && r.status === 'pago' && dataEfetivaReceita(r) > ultimoFechamento.dataFim).reduce((s, r) => s + r.valor, 0)
+          - contasPagar.filter(c => isDespesaOperacional(c) && c.espaco === e.nome && c.status === 'pago' && dataEfetivaConta(c) > ultimoFechamento.dataFim).reduce((s, c) => s + c.valor, 0)
+        : fechamento.disponivelPorEspaco.find(d => d.nome === e.nome)?.disponivel ?? 0
+
       const ajusteObra = AJUSTE_RESERVA_OBRA[e.nome]
       for (const s of DIVISAO_SOCIOS[e.nome] ?? []) {
-        const valorDevido = lucro * (s.percentual / 100)
+        const pendenteHerdado = ultimoFechamento?.repasseSocios.find(r => r.socio === s.nome)?.valorPendente ?? 0
+        const valorDevido = pendenteHerdado + lucro * (s.percentual / 100)
         // Trupe Labels tem 0% de participação na obra: a reserva "Obra
         // Jussara" já foi descontada do `lucro` acima (é genérica, por
         // espaço), então devolve aqui o percentual dela sobre o valor
@@ -360,9 +406,12 @@ export default function FechamentoClient() {
           }
         }
         const retirado = contasPagar
-          .filter(c => c.status === 'pago' && c.categoria === 'retirada_socio' && c.espaco === e.nome && c.fornecedor && nomeCanonicoSocio(c.fornecedor) === s.nome)
+          .filter(c => c.status === 'pago' && c.categoria === 'retirada_socio' && c.espaco === e.nome && c.fornecedor && nomeCanonicoSocio(c.fornecedor) === s.nome
+            && (!ultimoFechamento || dataEfetivaConta(c) > ultimoFechamento.dataFim))
           .reduce((sum, c) => sum + c.valor, 0)
-        const jaRepassado = repasses.filter(r => r.espaco === e.nome && r.socioNome === s.nome).reduce((sum, r) => sum + r.valor, 0)
+        const jaRepassado = repasses
+          .filter(r => r.espaco === e.nome && r.socioNome === s.nome && (!ultimoFechamento || r.data > ultimoFechamento.dataFim))
+          .reduce((sum, r) => sum + r.valor, 0)
         rows.push({
           espaco: e.nome, socio: s.nome, percentual: s.percentual, lucro, valorDevido, ajusteReservaObra, retirado, jaRepassado,
           valorPendente: valorDevido + ajusteReservaObra - retirado - jaRepassado,
@@ -370,7 +419,7 @@ export default function FechamentoClient() {
       }
     }
     return rows
-  }, [espacos, fechamento, contasPagar, repasses, fundos, movimentacoes])
+  }, [espacos, fechamento, contasPagar, repasses, fundos, movimentacoes, fechamentos, receitas])
 
   // Fechamento formal do período — sempre do espaço ativo global (nunca um
   // seletor próprio aqui, mesmo padrão já usado na integração do Google
@@ -953,6 +1002,9 @@ export default function FechamentoClient() {
             acumulado de cada espaço) menos o que já foi efetivamente
             repassado (RepassesContext) — mostra quanto ainda falta entregar
             a cada sócio, não só a participação bruta. */}
+        <p className="text-xs text-app-subtle">
+          Espaços que já tiveram algum &quot;Fechar Período&quot; em Financeiro: Retirado e Já Repassado somam só o que aconteceu depois do último fechamento — o Pendente daquele fechamento entra automaticamente como saldo do novo período.
+        </p>
         {repasseSociosRows.length > 0 && (
           <div className="overflow-x-auto rounded-lg border border-app-border2/60">
             <table className="w-full text-xs border-collapse">
