@@ -253,14 +253,12 @@ export default function AgendaPage() {
           )}
         </div>
 
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4 items-start">
           <CalendarView
             eventos={eventosFiltrados}
             selectedDate={selectedDate}
             onDaySelect={setSelectedDate}
             onMonthChange={setMesExibido}
-            mostrarEventos
-            onEventoClick={setSelectedEvento}
           />
           <EventList
             eventos={eventosExibidos}
@@ -269,7 +267,6 @@ export default function AgendaPage() {
             onAbaChange={setAba}
             mesAnoLabel={mesAnoLabel}
             onEventoClick={setSelectedEvento}
-            mostrarAbaMes={false}
           />
         </div>
 
@@ -277,7 +274,7 @@ export default function AgendaPage() {
             conexão persistente por espaço usada em Espaços → [espaço]. Sem
             espaço específico selecionado, não há conexão única possível. */}
         {espacoUnico && espacoAtivoConfig?.id ? (
-          <EspacoGoogleCalendar key={espacoAtivoConfig.id} espacoId={espacoAtivoConfig.id} espacoNome={espacoAtivoConfig.nome} />
+          <EspacoGoogleCalendar key={espacoAtivoConfig.id} espacoId={espacoAtivoConfig.id} espacoNome={espacoAtivoConfig.nome} variant="calendario" />
         ) : (
           <div className="rounded-xl border border-app-border bg-app-surface p-5 text-center">
             <p className="text-sm text-app-subtle">{MSG_ESPACO_ESPECIFICO_NECESSARIO}</p>

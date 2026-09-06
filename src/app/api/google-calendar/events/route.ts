@@ -11,13 +11,23 @@ export async function GET(request: Request) {
   const espacoId = url.searchParams.get('espacoId')
   if (!espacoId) return NextResponse.json({ error: 'espacoId é obrigatório.' }, { status: 400 })
 
+  // timeMin/timeMax opcionais — usados pela visão de calendário (mês
+  // navegável), que precisa dos eventos de um mês específico, não só "os
+  // próximos". Sem eles, mantém o comportamento padrão (próximos 30 dias),
+  // usado pela lista simples.
+  const timeMinParam = url.searchParams.get('timeMin')
+  const timeMaxParam = url.searchParams.get('timeMax')
+
   try {
     const accessToken = await getValidAccessToken(espacoId)
 
     const now = new Date()
     const future = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+    const timeMin = timeMinParam ?? now.toISOString()
+    const timeMax = timeMaxParam ?? future.toISOString()
+    const maxResults = timeMinParam || timeMaxParam ? 250 : 25
     const res = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${now.toISOString()}&timeMax=${future.toISOString()}&orderBy=startTime&singleEvents=true&maxResults=25`,
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${timeMin}&timeMax=${timeMax}&orderBy=startTime&singleEvents=true&maxResults=${maxResults}`,
       { headers: { Authorization: `Bearer ${accessToken}` } },
     )
     if (!res.ok) throw new Error('Erro HTTP ' + res.status)

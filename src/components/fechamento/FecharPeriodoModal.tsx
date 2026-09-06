@@ -28,7 +28,13 @@ export default function FecharPeriodoModal({
     try {
       await onConfirm()
     } catch (err) {
-      setErro(err instanceof Error ? err.message : 'Erro ao fechar o período.')
+      // Erros do Supabase (ex: falha de insert) não são instâncias de Error —
+      // são objetos simples com `.message` — sem isso a mensagem real do
+      // banco nunca chegava na tela, só o texto genérico de fallback.
+      const mensagem = err instanceof Error ? err.message
+        : (err && typeof err === 'object' && 'message' in err) ? String((err as { message: unknown }).message)
+        : 'Erro ao fechar o período.'
+      setErro(mensagem)
     } finally {
       setSaving(false)
     }
