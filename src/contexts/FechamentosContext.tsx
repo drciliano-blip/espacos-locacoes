@@ -15,6 +15,40 @@ export interface RepasseSocioSnapshot {
   valorPendente: number
 }
 
+export interface FechamentoLancamento {
+  data: string
+  pessoa: string
+  descricao: string
+  valor: number
+}
+
+export interface FechamentoSecaoDetalhe {
+  total: number
+  lista: FechamentoLancamento[]
+}
+
+// Detalhe linha-a-linha de cada seção do período fechado — junto com
+// repasseSocios, é o que permite "Visualizar" reconstruir o relatório
+// completo daquele fechamento sem precisar recalcular nada ao vivo.
+// Fechamentos feitos antes desta coluna existir vêm como '{}' do banco —
+// EMPTY_DETALHES cobre esse caso.
+export interface FechamentoDetalhes {
+  receitaOperacional: FechamentoSecaoDetalhe
+  despesaOperacional: FechamentoSecaoDetalhe
+  aportes: FechamentoSecaoDetalhe
+  despesasObra: FechamentoSecaoDetalhe
+  retiradas: FechamentoSecaoDetalhe
+}
+
+const SECAO_VAZIA: FechamentoSecaoDetalhe = { total: 0, lista: [] }
+export const EMPTY_DETALHES: FechamentoDetalhes = {
+  receitaOperacional: SECAO_VAZIA,
+  despesaOperacional: SECAO_VAZIA,
+  aportes: SECAO_VAZIA,
+  despesasObra: SECAO_VAZIA,
+  retiradas: SECAO_VAZIA,
+}
+
 export interface Fechamento {
   id: string
   espaco: string
@@ -27,6 +61,7 @@ export interface Fechamento {
   disponivelDoEspaco: number
   disponivelParaDistribuicao: number
   repasseSocios: RepasseSocioSnapshot[]
+  detalhes: FechamentoDetalhes
   fechadoPorNome?: string
   fechadoEm: string
 }
@@ -43,6 +78,7 @@ interface FechamentoRow {
   disponivel_do_espaco: number | string
   disponivel_para_distribuicao: number | string
   repasse_socios: RepasseSocioSnapshot[] | null
+  detalhes: Partial<FechamentoDetalhes> | null
   fechado_por_nome: string | null
   created_at: string
 }
@@ -60,6 +96,7 @@ function fromRow(row: FechamentoRow): Fechamento {
     disponivelDoEspaco: Number(row.disponivel_do_espaco),
     disponivelParaDistribuicao: Number(row.disponivel_para_distribuicao),
     repasseSocios: row.repasse_socios ?? [],
+    detalhes: { ...EMPTY_DETALHES, ...row.detalhes },
     fechadoPorNome: row.fechado_por_nome ?? undefined,
     fechadoEm: row.created_at,
   }
@@ -76,6 +113,7 @@ export interface NovoFechamentoInput {
   disponivelDoEspaco: number
   disponivelParaDistribuicao: number
   repasseSocios: RepasseSocioSnapshot[]
+  detalhes: FechamentoDetalhes
 }
 
 interface FechamentosContextValue {
@@ -127,6 +165,7 @@ export function FechamentosProvider({ children }: { children: ReactNode }) {
         disponivel_do_espaco: input.disponivelDoEspaco,
         disponivel_para_distribuicao: input.disponivelParaDistribuicao,
         repasse_socios: input.repasseSocios,
+        detalhes: input.detalhes,
         fechado_por: user?.id ?? null,
         fechado_por_nome: fechadoPorNome,
       })

@@ -32,6 +32,7 @@ import NovaRetiradaSocioModal from '@/components/relatorios/NovaRetiradaSocioMod
 import EditarRetiradaSocioModal from '@/components/relatorios/EditarRetiradaSocioModal'
 import LancamentoSocioListModal, { type LancamentoSocioRow, origemRetiradaLabel } from '@/components/relatorios/LancamentoSocioListModal'
 import FecharPeriodoModal from './FecharPeriodoModal'
+import FechamentoHistoricoModal from './FechamentoHistoricoModal'
 import Toast from '@/components/shared/Toast'
 
 function getDefaultFilters(): RelatorioFilters {
@@ -78,6 +79,7 @@ export default function FechamentoClient() {
   const [repasseAlvo, setRepasseAlvo] = useState<{ espaco: string; socio: string } | null>(null)
   const [fecharPeriodoOpen, setFecharPeriodoOpen] = useState(false)
   const [reabrirConfirmId, setReabrirConfirmId] = useState<string | null>(null)
+  const [visualizandoFechamento, setVisualizandoFechamento] = useState<Fechamento | null>(null)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   function showToast(msg: string) {
     setToastMsg(msg)
@@ -374,7 +376,7 @@ export default function FechamentoClient() {
   // novo período. Um espaço que nunca foi fechado continua com a conta
   // acumulada de sempre, sem nenhuma mudança de comportamento.
   const repasseSociosRows = useMemo(() => {
-    const rows: { espaco: string; socio: string; percentual: number; lucro: number; valorDevido: number; ajusteReservaObra: number; retirado: number; jaRepassado: number; valorPendente: number }[] = []
+    const rows: { espaco: string; socio: string; percentual: number; lucro: number; pendenteHerdado: number; valorDevido: number; ajusteReservaObra: number; retirado: number; jaRepassado: number; valorPendente: number }[] = []
     for (const e of espacos) {
       const fechamentosDoEspaco = fechamentos.filter(f => f.espaco === e.nome)
       const ultimoFechamento = fechamentosDoEspaco.length
@@ -413,7 +415,7 @@ export default function FechamentoClient() {
           .filter(r => r.espaco === e.nome && r.socioNome === s.nome && (!ultimoFechamento || r.data > ultimoFechamento.dataFim))
           .reduce((sum, r) => sum + r.valor, 0)
         rows.push({
-          espaco: e.nome, socio: s.nome, percentual: s.percentual, lucro, valorDevido, ajusteReservaObra, retirado, jaRepassado,
+          espaco: e.nome, socio: s.nome, percentual: s.percentual, lucro, pendenteHerdado, valorDevido, ajusteReservaObra, retirado, jaRepassado,
           valorPendente: valorDevido + ajusteReservaObra - retirado - jaRepassado,
         })
       }
@@ -439,6 +441,33 @@ export default function FechamentoClient() {
 
   async function handleFecharPeriodo() {
     if (!espacoUnico) return
+    // Detalhe linha-a-linha do período sendo fechado — `fechamento` já vem
+    // filtrado exatamente pro período/espaço do FilterBar (o mesmo que está
+    // sendo fechado agora), então é só colher daqui, sem nenhuma consulta
+    // nova. Isso é o que permite "Visualizar" reconstruir o relatório
+    // completo depois, sem recalcular nada ao vivo.
+    const detalhes = {
+      receitaOperacional: {
+        total: fechamento.totalEntradas,
+        lista: fechamento.entradasOperacionais.filter(r => r.status === 'pago').map(r => ({ data: r.data, pessoa: r.cliente ?? '—', descricao: r.descricao, valor: r.valor })),
+      },
+      despesaOperacional: {
+        total: fechamento.totalSaidas,
+        lista: fechamento.despesasOperacionais.filter(c => c.status === 'pago').map(c => ({ data: c.dataPagamento ?? c.dataVencimento, pessoa: c.fornecedor ?? '—', descricao: c.descricao, valor: c.valor })),
+      },
+      aportes: {
+        total: fechamento.totalAportes,
+        lista: fechamento.aportes.filter(r => r.status === 'pago').map(r => ({ data: r.data, pessoa: r.socioResponsavel ?? r.cliente ?? '—', descricao: r.descricao, valor: r.valor })),
+      },
+      despesasObra: {
+        total: fechamento.despesasObra.filter(c => c.status === 'pago').reduce((s, c) => s + c.valor, 0),
+        lista: fechamento.despesasObra.filter(c => c.status === 'pago').map(c => ({ data: c.dataPagamento ?? c.dataVencimento, pessoa: c.fornecedor ?? '—', descricao: c.descricao, valor: c.valor })),
+      },
+      retiradas: {
+        total: fechamento.totalRetiradasSocio,
+        lista: fechamento.retiradasSocio.filter(c => c.status === 'pago').map(c => ({ data: c.dataPagamento ?? c.dataVencimento, pessoa: c.fornecedor ?? '—', descricao: c.descricao, valor: c.valor })),
+      },
+    }
     await fecharPeriodo({
       espaco: espacoUnico,
       dataInicio: filters.dataInicio,
@@ -452,6 +481,7 @@ export default function FechamentoClient() {
       repasseSocios: repasseSociosDoEspacoAtivo.map(r => ({
         socio: r.socio, percentual: r.percentual, valorDevido: r.valorDevido, retirado: r.retirado, jaRepassado: r.jaRepassado, valorPendente: r.valorPendente,
       })),
+      detalhes,
     })
     setFecharPeriodoOpen(false)
     showToast('Período fechado.')
@@ -606,8 +636,8 @@ export default function FechamentoClient() {
     const repasseSheet: ExportSheet = {
       name: 'Disponível p Distribuição',
       rows: [
-        ['Espaço', 'Sócio', 'Percentual (%)', 'Disponível do Espaço', 'Valor Devido', 'Ajuste Reserva Obra', 'Retirado', 'Já Repassado', 'Valor Pendente'],
-        ...repasseSociosRows.map(r => [r.espaco, r.socio, r.percentual, r.lucro, r.valorDevido, r.ajusteReservaObra, r.retirado, r.jaRepassado, r.valorPendente]),
+        ['Espaço', 'Sócio', 'Percentual (%)', 'Disponível do Espaço', 'Pendente Anterior', 'Valor Devido', 'Retirado', 'Já Repassado', 'Valor Pendente'],
+        ...repasseSociosRows.map(r => [r.espaco, r.socio, r.percentual, r.lucro, r.pendenteHerdado, r.valorDevido, r.retirado, r.jaRepassado, r.valorPendente]),
       ],
     }
 
@@ -702,6 +732,9 @@ export default function FechamentoClient() {
                       <td className="py-1.5 pr-3 text-app-subtle">{f.fechadoPorNome ?? '—'}</td>
                       <td className="py-1.5 pr-3 text-right text-app-text2">{formatCurrency(f.disponivelParaDistribuicao)}</td>
                       <td className="py-1.5 text-right whitespace-nowrap">
+                        <button onClick={() => setVisualizandoFechamento(f)} className="text-app-subtle hover:text-app-text transition-colors mr-3">
+                          Visualizar
+                        </button>
                         <button onClick={() => handleBaixarExcelFechamento(f)} className="text-app-subtle hover:text-app-text transition-colors mr-3">
                           Baixar Excel
                         </button>
@@ -1010,7 +1043,7 @@ export default function FechamentoClient() {
             <table className="w-full text-xs border-collapse">
               <thead>
                 <tr className="border-b border-app-border bg-app-surface2">
-                  {['Espaço', 'Sócio', '%', 'Disponível do Espaço', 'Valor Devido', 'Ajuste Reserva Obra', 'Retirado', 'Já Repassado', 'Pendente', ...(podeLancar ? [''] : [])].map((h, i) => (
+                  {['Espaço', 'Sócio', '%', 'Disponível do Espaço', 'Pendente Anterior', 'Valor Devido', 'Retirado', 'Já Repassado', 'Pendente', ...(podeLancar ? [''] : [])].map((h, i) => (
                     <th key={h || `acao-${i}`} className="px-2 py-2 text-left font-medium text-app-subtle uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -1022,8 +1055,8 @@ export default function FechamentoClient() {
                     <td className="px-2 py-2 text-app-text2 whitespace-nowrap">{r.socio}</td>
                     <td className="px-2 py-2 text-app-text2 whitespace-nowrap">{r.percentual}%</td>
                     <td className="px-2 py-2 text-app-text2 whitespace-nowrap">{formatCurrency(r.lucro)}</td>
+                    <td className="px-2 py-2 text-app-text2 whitespace-nowrap">{formatCurrency(r.pendenteHerdado)}</td>
                     <td className="px-2 py-2 text-app-text2 whitespace-nowrap">{formatCurrency(r.valorDevido)}</td>
-                    <td className="px-2 py-2 text-emerald-600 whitespace-nowrap">{r.ajusteReservaObra > 0 ? `+${formatCurrency(r.ajusteReservaObra)}` : formatCurrency(0)}</td>
                     <td className="px-2 py-2 text-fuchsia-600 whitespace-nowrap">{formatCurrency(r.retirado)}</td>
                     <td className="px-2 py-2 whitespace-nowrap">
                       {r.jaRepassado > 0 ? (
@@ -1062,6 +1095,10 @@ export default function FechamentoClient() {
           onSave={addFundo}
           onSaved={() => showToast('Fundo criado.')}
         />
+      )}
+
+      {visualizandoFechamento && (
+        <FechamentoHistoricoModal fechamento={visualizandoFechamento} onClose={() => setVisualizandoFechamento(null)} />
       )}
 
       {fecharPeriodoOpen && espacoUnico && (
@@ -1264,8 +1301,8 @@ export default function FechamentoClient() {
             totalLabel="Total acumulado" totalValor={formatCurrency(fechamento.totalRetiradasSocioAcumulado)}
           />
           <FullTable
-            titulo="Disponível para Distribuição — por Sócio" headers={['Espaço', 'Sócio', '%', 'Disponível do Espaço', 'Valor Devido', 'Ajuste Reserva Obra', 'Retirado', 'Já Repassado', 'Pendente']}
-            rows={repasseSociosRows.map(r => [r.espaco, r.socio, `${r.percentual}%`, formatCurrency(r.lucro), formatCurrency(r.valorDevido), formatCurrency(r.ajusteReservaObra), formatCurrency(r.retirado), formatCurrency(r.jaRepassado), formatCurrency(r.valorPendente)])}
+            titulo="Disponível para Distribuição — por Sócio" headers={['Espaço', 'Sócio', '%', 'Disponível do Espaço', 'Pendente Anterior', 'Valor Devido', 'Retirado', 'Já Repassado', 'Pendente']}
+            rows={repasseSociosRows.map(r => [r.espaco, r.socio, `${r.percentual}%`, formatCurrency(r.lucro), formatCurrency(r.pendenteHerdado), formatCurrency(r.valorDevido), formatCurrency(r.retirado), formatCurrency(r.jaRepassado), formatCurrency(r.valorPendente)])}
             totalLabel="Disponível total" totalValor={formatCurrency(fechamento.disponivelParaDistribuicao)}
           />
           <FullTable
