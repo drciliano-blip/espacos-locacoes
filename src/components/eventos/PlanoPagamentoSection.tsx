@@ -295,6 +295,7 @@ export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEdita
   const [editando, setEditando] = useState(false)
   const [draft, setDraft] = useState<DraftParcela[]>(() => toDraft(parcelas))
   const [saving, setSaving] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
   const [parcelaEditando, setParcelaEditando] = useState<Receita | null>(null)
 
   const totalPlano = parcelas.reduce((s, p) => s + p.valor, 0)
@@ -303,6 +304,7 @@ export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEdita
 
   function abrirEdicao() {
     setDraft(toDraft(parcelas))
+    setErro(null)
     setEditando(true)
   }
 
@@ -320,14 +322,31 @@ export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEdita
   }
 
   async function salvarPlano() {
-    const parcelasValidas = draft.filter(p => p.label.trim() && p.data && p.valor && parseCurrencyBR(p.valor) > 0)
-    if (parcelasValidas.length === 0) return
+    setErro(null)
+    // Linha totalmente em branco é só um "Adicionar parcela" arrependido —
+    // some sem barulho. Já uma linha começada e incompleta precisa avisar:
+    // descartada em silêncio, o plano salvava "com sucesso" faltando parcela.
+    const preenchidas = draft.filter(p => p.label.trim() || p.data || p.valor.trim())
+    const incompletas = preenchidas.filter(p => !(p.label.trim() && p.data && parseCurrencyBR(p.valor) > 0))
+    if (incompletas.length > 0) {
+      setErro('Toda parcela precisa de identificação, vencimento e valor maior que zero.')
+      return
+    }
+    if (preenchidas.length === 0) {
+      setErro('Adicione pelo menos uma parcela ao plano.')
+      return
+    }
     setSaving(true)
     try {
-      const novoTotal = Math.round(parcelasValidas.reduce((s, p) => s + parseCurrencyBR(p.valor), 0) * 100) / 100
-      await onSync(parcelasValidas.map(p => ({ numero: p.numero, label: p.label.trim(), data: p.data, valor: parseCurrencyBR(p.valor) })))
+      const novoTotal = Math.round(preenchidas.reduce((s, p) => s + parseCurrencyBR(p.valor), 0) * 100) / 100
+      await onSync(preenchidas.map(p => ({ numero: p.numero, label: p.label.trim(), data: p.data, valor: parseCurrencyBR(p.valor) })))
       if (novoTotal !== valorEvento) await onValorEventoChange(novoTotal)
       setEditando(false)
+    } catch (err) {
+      // Sem esse catch o erro virava unhandled rejection: o formulário ficava
+      // aberto, o total não mudava e o usuário não tinha nenhuma pista do
+      // motivo (período fechado, permissão, rede…).
+      setErro(err instanceof Error ? err.message : 'Não foi possível salvar o plano. Tente novamente.')
     } finally {
       setSaving(false)
     }
@@ -425,6 +444,12 @@ export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEdita
               )}
             </div>
           ))}
+
+          {erro && (
+            <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5">
+              <p className="text-xs text-red-400">{erro}</p>
+            </div>
+          )}
 
           <div className="flex items-center gap-2">
             <button

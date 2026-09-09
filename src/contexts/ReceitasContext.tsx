@@ -138,6 +138,29 @@ interface SyncParcelasInput {
   parcelas: ParcelaPlano[]
 }
 
+// Linha de parcela já gravada, do jeito que o sync a lê pra decidir o que
+// mudou e o que continua igual.
+interface ParcelaExistente {
+  id: string
+  parcela_numero: number | null
+  status: string
+  data: string
+  data_recebimento: string | null
+  valor: number
+  parcela_label: string | null
+  descricao: string
+}
+
+// Compara só o que o Plano de Pagamento edita — vencimento, valor e
+// identificação (e a descrição, que carrega o nome do cliente). Valor vem do
+// banco como numeric(12,2): compara em centavos pra não tropeçar em float.
+function parcelaMudou(atual: ParcelaExistente, nova: ParcelaPlano, cliente: string): boolean {
+  return atual.data !== nova.data
+    || Math.round(atual.valor * 100) !== Math.round(nova.valor * 100)
+    || (atual.parcela_label ?? '') !== nova.label
+    || atual.descricao !== `${nova.label} — ${cliente}`
+}
+
 // Patch de uma parcela/receita já existente — usado tanto pra "dar baixa"
 // quanto pra corrigir qualquer campo depois, mesmo já paga (nenhum campo do
 // Plano de Pagamento fica travado só por já ter sido pago).
@@ -277,20 +300,34 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
 
     const { data: existingRows } = await supabase
       .from('receitas')
-      .select('id, parcela_numero, status, data, data_recebimento')
+      .select('id, parcela_numero, status, data, data_recebimento, valor, parcela_label, descricao')
       .eq('evento_id', input.eventoId)
       .eq('categoria_id', categoriaRow.id)
 
-    const existing = (existingRows ?? []) as { id: string; parcela_numero: number | null; status: string; data: string; data_recebimento: string | null }[]
+    const existing = (existingRows ?? []) as ParcelaExistente[]
     const numerosNoPlano = new Set(input.parcelas.map(p => p.numero))
 
     // Valida a trava de período fechado ANTES de mexer em qualquer linha —
     // tudo ou nada, pra nunca deixar o plano pela metade sincronizado.
+    //
+    // Só entra na validação a parcela que de fato muda: salvar o plano
+    // reescreve todas as linhas, mas reescrever uma parcela com exatamente o
+    // mesmo conteúdo não altera nada de um período já fechado. Sem isso,
+    // bastava fechar o mês pra que o evento nunca mais aceitasse uma parcela
+    // nova — nem uma com vencimento em período aberto —, porque a primeira
+    // parcela paga lá atrás já derrubava o salvamento inteiro.
     for (const parcela of input.parcelas) {
       const match = existing.find(e => e.parcela_numero === parcela.numero)
-      const dataChecagem = match ? dataEfetivaReceita({ status: match.status as Receita['status'], data: match.data, dataRecebimento: match.data_recebimento ?? undefined }) : parcela.data
-      const bloqueio = periodoFechado(fechamentos, input.espaco, dataChecagem)
-      if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
+      if (match && !parcelaMudou(match, parcela, input.cliente)) continue
+      // Numa parcela que mudou olha os dois lados: o período de onde ela sai
+      // (data efetiva atual) e o período pra onde vai (novo vencimento).
+      const datasChecagem = match
+        ? [dataEfetivaReceita({ status: match.status as Receita['status'], data: match.data, dataRecebimento: match.data_recebimento ?? undefined }), parcela.data]
+        : [parcela.data]
+      for (const dataChecagem of datasChecagem) {
+        const bloqueio = periodoFechado(fechamentos, input.espaco, dataChecagem)
+        if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
+      }
     }
     for (const row of existing) {
       if (row.parcela_numero !== null && !numerosNoPlano.has(row.parcela_numero) && row.status !== 'pago') {
@@ -314,17 +351,19 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
         tipo_entrada: 'evento',
         origem: 'agenda',
       }
-      if (match) {
-        await supabase.from('receitas').update(payload).eq('id', match.id)
-      } else {
-        await supabase.from('receitas').insert({ ...payload, status: 'pendente' })
-      }
+      // Erro de banco (RLS, constraint) precisa estourar: engolido, o plano
+      // voltava "salvo" com a parcela faltando e sem nenhuma pista do motivo.
+      const { error } = match
+        ? await supabase.from('receitas').update(payload).eq('id', match.id)
+        : await supabase.from('receitas').insert({ ...payload, status: 'pendente' })
+      if (error) throw new Error(`Não foi possível gravar a parcela "${parcela.label}": ${error.message}`)
     }
 
     // remove parcelas que saíram do plano — nunca uma que já foi paga (protege o histórico de baixa)
     for (const row of existing) {
       if (row.parcela_numero !== null && !numerosNoPlano.has(row.parcela_numero) && row.status !== 'pago') {
-        await supabase.from('receitas').delete().eq('id', row.id)
+        const { error } = await supabase.from('receitas').delete().eq('id', row.id)
+        if (error) throw new Error(`Não foi possível remover a parcela "${row.parcela_label ?? row.descricao}": ${error.message}`)
       }
     }
 
