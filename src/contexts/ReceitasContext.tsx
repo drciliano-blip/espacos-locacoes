@@ -310,31 +310,40 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
     // Valida a trava de período fechado ANTES de mexer em qualquer linha —
     // tudo ou nada, pra nunca deixar o plano pela metade sincronizado.
     //
-    // Só entra na validação a parcela que de fato muda: salvar o plano
-    // reescreve todas as linhas, mas reescrever uma parcela com exatamente o
-    // mesmo conteúdo não altera nada de um período já fechado. Sem isso,
-    // bastava fechar o mês pra que o evento nunca mais aceitasse uma parcela
-    // nova — nem uma com vencimento em período aberto —, porque a primeira
-    // parcela paga lá atrás já derrubava o salvamento inteiro.
+    // O que a trava protege é dinheiro já reconhecido num período fechado, e
+    // só parcela PAGA é dinheiro reconhecido: todo número do fechamento (ver
+    // fechamento-calc.ts) soma exclusivamente status 'pago', então parcela
+    // pendente vale R$ 0,00 em qualquer período — mover, renomear ou remover
+    // uma delas não muda nada do que já foi fechado e distribuído aos sócios.
+    // Travar a edição de uma pendente por causa da data era falso positivo:
+    // impedia acertar o plano do mês corrente por causa de uma linha em
+    // aberto que não pesava nada no mês anterior. A trava faz o trabalho de
+    // verdade na hora da baixa (updateReceita), que é quando o dinheiro passa
+    // a contar no período.
+    //
+    // Entre as pagas, só entra na validação a que de fato muda: salvar o
+    // plano reescreve todas as linhas, mas reescrever uma parcela com o mesmo
+    // conteúdo não altera nada de um período fechado.
     for (const parcela of input.parcelas) {
       const match = existing.find(e => e.parcela_numero === parcela.numero)
-      if (match && !parcelaMudou(match, parcela, input.cliente)) continue
-      // Numa parcela que mudou olha os dois lados: o período de onde ela sai
-      // (data efetiva atual) e o período pra onde vai (novo vencimento).
-      const datasChecagem = match
-        ? [dataEfetivaReceita({ status: match.status as Receita['status'], data: match.data, dataRecebimento: match.data_recebimento ?? undefined }), parcela.data]
-        : [parcela.data]
+      if (!match || match.status !== 'pago') continue
+      if (!parcelaMudou(match, parcela, input.cliente)) continue
+      // Parcela paga que muda: olha os dois lados — o período de onde o
+      // dinheiro sai (data efetiva atual) e o período pra onde vai (novo
+      // vencimento), senão dava pra empurrar valor pra dentro de um mês
+      // fechado sem o sistema perceber.
+      const datasChecagem = [
+        dataEfetivaReceita({ status: match.status as Receita['status'], data: match.data, dataRecebimento: match.data_recebimento ?? undefined }),
+        parcela.data,
+      ]
       for (const dataChecagem of datasChecagem) {
         const bloqueio = periodoFechado(fechamentos, input.espaco, dataChecagem)
         if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
       }
     }
-    for (const row of existing) {
-      if (row.parcela_numero !== null && !numerosNoPlano.has(row.parcela_numero) && row.status !== 'pago') {
-        const bloqueio = periodoFechado(fechamentos, input.espaco, dataEfetivaReceita({ status: row.status as Receita['status'], data: row.data, dataRecebimento: row.data_recebimento ?? undefined }))
-        if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
-      }
-    }
+    // Parcela que sai do plano não precisa de checagem própria: o laço de
+    // remoção lá embaixo nunca apaga uma paga (protege o histórico de baixa),
+    // e as demais são pendentes — R$ 0,00 em qualquer período fechado.
 
     for (const parcela of input.parcelas) {
       const match = existing.find(e => e.parcela_numero === parcela.numero)
