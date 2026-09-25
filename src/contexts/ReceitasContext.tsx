@@ -341,9 +341,22 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
         if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
       }
     }
-    // Parcela que sai do plano não precisa de checagem própria: o laço de
-    // remoção lá embaixo nunca apaga uma paga (protege o histórico de baixa),
-    // e as demais são pendentes — R$ 0,00 em qualquer período fechado.
+    // Parcela paga que SAI do plano precisa da mesma checagem: remover uma
+    // baixa é tirar dinheiro já reconhecido: se a data efetiva dela cai num
+    // período fechado, o resultado e o repasse aos sócios daquele mês mudariam
+    // depois de fechados. As pendentes que saem não precisam — valem R$ 0,00
+    // em qualquer período (ver fechamento-calc.ts).
+    for (const row of existing) {
+      if (row.parcela_numero === null || numerosNoPlano.has(row.parcela_numero)) continue
+      if (row.status !== 'pago') continue
+      const dataChecagem = dataEfetivaReceita({
+        status: row.status as Receita['status'],
+        data: row.data,
+        dataRecebimento: row.data_recebimento ?? undefined,
+      })
+      const bloqueio = periodoFechado(fechamentos, input.espaco, dataChecagem)
+      if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
+    }
 
     for (const parcela of input.parcelas) {
       const match = existing.find(e => e.parcela_numero === parcela.numero)
@@ -368,9 +381,13 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
       if (error) throw new Error(`Não foi possível gravar a parcela "${parcela.label}": ${error.message}`)
     }
 
-    // remove parcelas que saíram do plano — nunca uma que já foi paga (protege o histórico de baixa)
+    // Remove as parcelas que saíram do plano, pagas inclusive. Antes a paga era
+    // pulada em silêncio: a tela dizia "plano salvo" e a linha continuava lá,
+    // sem explicação. Quem lança uma baixa errada (cobrança em duplicidade, por
+    // exemplo) precisa conseguir desfazer; o que de fato protege o histórico é
+    // a trava de período fechado, validada acima.
     for (const row of existing) {
-      if (row.parcela_numero !== null && !numerosNoPlano.has(row.parcela_numero) && row.status !== 'pago') {
+      if (row.parcela_numero !== null && !numerosNoPlano.has(row.parcela_numero)) {
         const { error } = await supabase.from('receitas').delete().eq('id', row.id)
         if (error) throw new Error(`Não foi possível remover a parcela "${row.parcela_label ?? row.descricao}": ${error.message}`)
       }

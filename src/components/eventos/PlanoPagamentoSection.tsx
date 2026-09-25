@@ -97,6 +97,17 @@ function EditarParcelaModal({ parcela, onClose, onSalvar }: {
     setForm(f => ({ ...f, [k]: v }))
   }
 
+  // Sair de "pago" tem que levar junto data e hora do recebimento. Elas ficavam
+  // no formulário e eram salvas mesmo com o status já em pendente, produzindo
+  // parcela meio-paga: o resumo contava como recebida, a etiqueta dizia o
+  // contrário. Voltar para "pago" o usuário preenche de novo — é o campo
+  // obrigatório logo abaixo, então não há como esquecer.
+  function trocarStatus(novo: Receita['status']) {
+    setForm(f => novo === 'pago'
+      ? { ...f, status: novo }
+      : { ...f, status: novo, dataRecebimento: '', horaRecebimento: '' })
+  }
+
   const sociosDoEspaco = DIVISAO_SOCIOS[parcela.espaco ?? ''] ?? []
 
   const errors = {
@@ -176,7 +187,7 @@ function EditarParcelaModal({ parcela, onClose, onSalvar }: {
             <label className="text-xs text-app-subtle mb-0.5 block">Status</label>
             <select
               value={form.status}
-              onChange={e => set('status', e.target.value as Receita['status'])}
+              onChange={e => trocarStatus(e.target.value as Receita['status'])}
               className="w-full cursor-pointer rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
             >
               <option value="pendente">Pendente</option>
@@ -302,6 +313,12 @@ export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEdita
   const totalPago = parcelas.filter(p => p.status === 'pago').reduce((s, p) => s + p.valor, 0)
   const totalAberto = totalPlano - totalPago
 
+  // Tirar uma parcela paga do plano apaga uma baixa — some do "Recebido" e do
+  // resultado do período. Remover é permitido (baixa lançada errada precisa ter
+  // volta), mas não pode passar despercebido no meio de uma edição de rotina.
+  const numerosNoDraft = new Set(draft.map(d => d.numero))
+  const pagasRemovidas = parcelas.filter(p => p.status === 'pago' && !numerosNoDraft.has(p.parcelaNumero ?? 0))
+
   function abrirEdicao() {
     setDraft(toDraft(parcelas))
     setErro(null)
@@ -312,8 +329,14 @@ export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEdita
     setDraft(d => d.map(p => (p.numero === numero ? { ...p, [campo]: valor } : p)))
   }
 
+  // O número é a chave que casa a linha da tela com a receita já gravada, então
+  // não pode reaproveitar o de uma parcela removida nesta mesma edição: o
+  // número voltaria a bater com a linha antiga no banco, que seria atualizada
+  // em vez de apagada — uma parcela paga removida reapareceria como a nova,
+  // ainda marcada como paga e com a data de recebimento velha.
   function adicionarParcela() {
-    const proximoNumero = draft.length > 0 ? Math.max(...draft.map(p => p.numero)) + 1 : 1
+    const usados = [...draft.map(p => p.numero), ...parcelas.map(p => p.parcelaNumero ?? 0)]
+    const proximoNumero = usados.length > 0 ? Math.max(...usados) + 1 : 1
     setDraft(d => [...d, { numero: proximoNumero, label: `Parcela ${proximoNumero}`, data: '', valor: '', status: 'pendente' }])
   }
 
@@ -437,13 +460,25 @@ export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEdita
               <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium ${statusStyles[p.status]}`}>
                 {statusLabels[p.status]}
               </span>
-              {p.status !== 'pago' && (
-                <button onClick={() => removerParcela(p.numero)} className="ml-auto shrink-0 text-red-400 hover:text-red-500 transition-colors">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              )}
+              <button
+                onClick={() => removerParcela(p.numero)}
+                title={p.status === 'pago' ? 'Remover parcela já paga' : 'Remover parcela'}
+                className="ml-auto shrink-0 text-red-400 hover:text-red-500 transition-colors"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
             </div>
           ))}
+
+          {pagasRemovidas.length > 0 && (
+            <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2.5">
+              <p className="text-xs text-amber-500">
+                {pagasRemovidas.length === 1
+                  ? `A parcela "${pagasRemovidas[0].parcelaLabel ?? pagasRemovidas[0].descricao}" já estava paga (${formatCurrency(pagasRemovidas[0].valor)}). Ao salvar, essa baixa será apagada e o valor sai do total recebido.`
+                  : `${pagasRemovidas.length} parcelas já pagas (${formatCurrency(pagasRemovidas.reduce((s, p) => s + p.valor, 0))}) serão apagadas ao salvar, e os valores saem do total recebido.`}
+              </p>
+            </div>
+          )}
 
           {erro && (
             <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5">
