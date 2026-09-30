@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Pencil, Plus, Save, Trash2, X } from 'lucide-react'
-import { formatCurrency, formatDate, parseCurrencyBR } from '@/lib/utils'
+import { formatCurrency, formatDate, hojeISO, isDataFutura, parseCurrencyBR } from '@/lib/utils'
 import FileAttachButton from '@/components/shared/FileAttachButton'
 import FileList from '@/components/shared/FileList'
 import { DIVISAO_SOCIOS } from '@/lib/socios-config'
@@ -114,6 +114,7 @@ function EditarParcelaModal({ parcela, onClose, onSalvar }: {
     valor: !form.valor || parseCurrencyBR(form.valor) <= 0,
     data: !form.data,
     dataRecebimento: form.status === 'pago' && !form.dataRecebimento,
+    dataRecebimentoFutura: isDataFutura(form.dataRecebimento),
     socioRepasse: form.metodoPagamento === 'Repasse Sócio' && !form.socioRepasse,
   }
   const hasErrors = Object.values(errors).some(Boolean)
@@ -205,7 +206,8 @@ function EditarParcelaModal({ parcela, onClose, onSalvar }: {
                 type="date"
                 value={form.dataRecebimento}
                 onChange={e => set('dataRecebimento', e.target.value)}
-                className={`w-full rounded-lg border ${submitted && errors.dataRecebimento ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
+                max={hojeISO()}
+                className={`w-full rounded-lg border ${submitted && (errors.dataRecebimento || errors.dataRecebimentoFutura) ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
               />
             </div>
             <div>
@@ -278,7 +280,12 @@ function EditarParcelaModal({ parcela, onClose, onSalvar }: {
 
           {submitted && hasErrors && (
             <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5">
-              <p className="text-xs text-red-400">Preencha os campos obrigatórios (valor, vencimento{form.status === 'pago' ? ', data de pagamento' : ''}{form.metodoPagamento === 'Repasse Sócio' ? ', sócio' : ''}).</p>
+              {/* Data futura é erro de digitação, não campo em branco — pedir
+                  "preencha os obrigatórios" com o campo preenchido não diria
+                  nada a quem errou só o ano. */}
+              {errors.dataRecebimentoFutura
+                ? <p className="text-xs text-red-400">A data de pagamento não pode ser futura — confira o ano digitado.</p>
+                : <p className="text-xs text-red-400">Preencha os campos obrigatórios (valor, vencimento{form.status === 'pago' ? ', data de pagamento' : ''}{form.metodoPagamento === 'Repasse Sócio' ? ', sócio' : ''}).</p>}
             </div>
           )}
         </div>

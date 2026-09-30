@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { X, Save, Pencil, Paperclip, Camera, Trash2, Handshake } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
-import { parseCurrencyBR, formatCurrency } from '@/lib/utils'
+import { parseCurrencyBR, formatCurrency, hojeISO, isDataFutura } from '@/lib/utils'
 import { saveFile } from '@/lib/file-storage'
 import { DIVISAO_SOCIOS, SOCIOS_OBRA } from '@/lib/socios-config'
 import type { CategoriaReceita, EditarReceitaInput, Receita, TipoEntrada } from '@/contexts/ReceitasContext'
@@ -68,6 +68,9 @@ export default function EditarEntradaModal({ receita, categorias, onClose, onSav
     valor: !valor || parseCurrencyBR(valor) <= 0,
     socioResponsavel: isAporte && !socioResponsavel,
     categoriaId: !isAporte && !categoriaId,
+    // Recebimento no futuro é sempre digitação errada — entra como dinheiro
+    // já realizado numa data que ainda não chegou.
+    dataRecebimentoFutura: isDataFutura(dataRecebimento),
   }
   const hasErrors = Object.values(errors).some(Boolean)
 
@@ -265,8 +268,12 @@ export default function EditarEntradaModal({ receita, categorias, onClose, onSav
                     type="date"
                     value={dataRecebimento}
                     onChange={e => setDataRecebimento(e.target.value)}
-                    className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
+                    max={hojeISO()}
+                    className={`w-full rounded-lg border ${submitted && errors.dataRecebimentoFutura ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
                   />
+                  {submitted && errors.dataRecebimentoFutura && (
+                    <p className="text-xs text-red-400 mt-0.5">Não pode ser futura — confira o ano.</p>
+                  )}
                 </div>
               </div>
               <div>

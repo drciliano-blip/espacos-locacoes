@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { X, Save, DollarSign, Paperclip, Camera, Handshake } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
-import { parseCurrencyBR } from '@/lib/utils'
+import { parseCurrencyBR, hojeISO, isDataFutura } from '@/lib/utils'
 import { saveFile } from '@/lib/file-storage'
 import { DIVISAO_SOCIOS, SOCIOS_OBRA } from '@/lib/socios-config'
 import type { CategoriaReceita, NovaReceitaInput, TipoEntrada } from '@/contexts/ReceitasContext'
@@ -123,6 +123,9 @@ export default function NovaReceitaModal({
         descricao: !draft.descricao.trim(),
         data: !draft.data,
         valor: !draft.valor || parseCurrencyBR(draft.valor) <= 0,
+        // Recebimento no futuro é sempre digitação errada — entra como
+        // dinheiro já realizado numa data que ainda não chegou.
+        dataRecebimentoFutura: isDataFutura(draft.dataRecebimento),
       }
   const hasErrors = Object.values(errors).some(Boolean)
 
@@ -472,8 +475,12 @@ export default function NovaReceitaModal({
                     type="date"
                     value={draft.dataRecebimento}
                     onChange={e => set('dataRecebimento', e.target.value)}
-                    className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
+                    max={hojeISO()}
+                    className={`w-full rounded-lg border ${submitted && 'dataRecebimentoFutura' in errors && errors.dataRecebimentoFutura ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
                   />
+                  {submitted && 'dataRecebimentoFutura' in errors && errors.dataRecebimentoFutura && (
+                    <p className="text-xs text-red-400 mt-0.5">Não pode ser futura — confira o ano.</p>
+                  )}
                 </div>
               </div>
 

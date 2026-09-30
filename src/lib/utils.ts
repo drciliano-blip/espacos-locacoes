@@ -84,3 +84,19 @@ export function maskCEP(value: string): string {
     .slice(0, 8)
     .replace(/(\d{5})(\d{1,3})$/, '$1-$2')
 }
+
+// Data de hoje em ISO (YYYY-MM-DD), no mesmo formato em que datas são
+// gravadas e comparadas no sistema inteiro.
+export function hojeISO(): string {
+  return new Date().toISOString().split('T')[0]
+}
+
+// Uma baixa não pode ter acontecido no futuro: data de recebimento/pagamento
+// posterior a hoje é sempre erro de digitação. Passou batido, o lançamento
+// entra como dinheiro já realizado numa data que ainda não chegou e
+// desencontra os totais do Financeiro — foi assim que três recebimentos de
+// setembro/2026 foram gravados em 2029 (mesmo dia e mês, só o ano trocado) e
+// inflaram o Disponível para Distribuição sem aparecer no Resultado do mês.
+export function isDataFutura(data?: string | null): boolean {
+  return !!data && data > hojeISO()
+}
