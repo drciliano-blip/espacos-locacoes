@@ -931,10 +931,18 @@ export default function FechamentoClient() {
           agora (= Disponível do Espaço, um subtotal, não uma dedução) menos
           o que os sócios já retiraram. */}
       <section className="rounded-2xl border border-app-border bg-app-surface p-5 space-y-3">
-        <h4 className="text-xs font-semibold text-app-muted uppercase tracking-wide">Disponível para Distribuição</h4>
+        {/* O título diz a janela porque a confusão é recorrente: esta seção
+            soma desde o início e o card "Resultado Operacional" do topo soma
+            só o período filtrado. Vendo "resultado 38 mil" em cima e
+            "disponível 103 mil" aqui, a leitura natural é de erro — são as
+            receitas anteriores ao período, que continuam distribuíveis
+            porque nunca foram fechadas nem retiradas. */}
+        <h4 className="text-xs font-semibold text-app-muted uppercase tracking-wide">
+          Disponível para Distribuição <span className="normal-case font-normal text-app-subtle">— acumulado desde o início, não o resultado do período filtrado</span>
+        </h4>
         <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 text-xs">
           <div className="rounded-lg border border-app-border2/60 bg-app-bg p-3">
-            <p className="text-app-subtle">Resultado Operacional (acumulado)</p>
+            <p className="text-app-subtle">Resultado Operacional (acumulado desde o início)</p>
             <p className="font-semibold text-app-text">{formatCurrency(fechamento.resultadoAcumulado)}</p>
           </div>
           <div className="rounded-lg border border-app-border2/60 bg-app-bg p-3">
@@ -955,7 +963,7 @@ export default function FechamentoClient() {
           </div>
         </div>
         <p className="text-xs text-app-subtle">
-          Valores acumulados desde o início, não travados ao período do filtro acima — é uma posição atual, não um resultado de mês. Reservas e retiradas nunca são despesa (não reduzem o Resultado Operacional), só reduzem o quanto ainda pode sair da empresa pros sócios.
+          Valores acumulados desde o início, não travados ao período do filtro acima — é uma posição atual, não um resultado de mês, então é normal e esperado que não batam com o card &quot;Resultado Operacional&quot; do Resumo Financeiro, que soma só o período filtrado. A diferença entre os dois é o que entrou antes do período e ainda não foi fechado nem retirado. Reservas e retiradas nunca são despesa (não reduzem o Resultado Operacional), só reduzem o quanto ainda pode sair da empresa pros sócios.
         </p>
       </section>
 
