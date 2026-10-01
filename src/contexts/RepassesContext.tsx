@@ -86,9 +86,18 @@ export function RepassesProvider({ children }: { children: ReactNode }) {
     if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
 
     const supabase = createClient()
-    const { data: espacoRow } = await supabase.from('espacos').select('id').eq('nome', input.espaco).single()
+    // O erro da busca precisa aparecer: descartado, qualquer falha aqui (RLS,
+    // sessão expirada, rede) virava "Espaço não encontrado" — mensagem que
+    // manda procurar no lugar errado e esconde a causa real.
+    const { data: espacoRow, error: espacoErro } = await supabase.from('espacos').select('id').eq('nome', input.espaco).single()
+    if (espacoErro) throw new Error(`Não foi possível identificar o espaço "${input.espaco}": ${espacoErro.message}`)
     if (!espacoRow) throw new Error(`Espaço "${input.espaco}" não encontrado.`)
-    const { data: { user } } = await supabase.auth.getUser()
+
+    const { data: { user }, error: authErro } = await supabase.auth.getUser()
+    // Sessão caída devolve user nulo sem estourar. O insert seguinte morreria
+    // no RLS com "violates row-level security policy", que não diz a quem
+    // está na tela que o caso é simplesmente entrar de novo.
+    if (authErro || !user) throw new Error('Sua sessão expirou. Entre novamente e repita o registro do repasse.')
 
     const { data, error } = await supabase
       .from('repasses_socios')
