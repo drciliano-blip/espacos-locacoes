@@ -4,6 +4,8 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAtividades } from '@/contexts/AtividadesContext'
+import { useFechamentos } from '@/contexts/FechamentosContext'
+import { periodoFechado, mensagemPeriodoFechado } from '@/lib/fechamento-lock'
 
 export interface RepasseSocio {
   id: string
@@ -60,6 +62,7 @@ const SELECT = '*, espaco:espacos(nome)'
 
 export function RepassesProvider({ children }: { children: ReactNode }) {
   const { logAtividade } = useAtividades()
+  const { fechamentos } = useFechamentos()
   const [repasses, setRepasses] = useState<RepasseSocio[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -73,6 +76,15 @@ export function RepassesProvider({ children }: { children: ReactNode }) {
   useEffect(() => { load() }, [load])
 
   async function addRepasse(input: NovoRepasseInput) {
+    // Mesma trava que receita e conta a pagar já têm — repasse era o único
+    // movimento de dinheiro sem ela, e a falta abria um buraco silencioso:
+    // o repasse datado dentro de um período já fechado não entra no snapshot
+    // (que foi calculado antes dele existir) e é excluído do período novo
+    // pelo filtro "data > fim do fechamento". Ficava invisível para sempre —
+    // o sócio aparecia como não repassado mesmo tendo recebido.
+    const bloqueio = periodoFechado(fechamentos, input.espaco, input.data)
+    if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
+
     const supabase = createClient()
     const { data: espacoRow } = await supabase.from('espacos').select('id').eq('nome', input.espaco).single()
     if (!espacoRow) throw new Error(`Espaço "${input.espaco}" não encontrado.`)

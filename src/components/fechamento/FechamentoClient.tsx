@@ -1422,13 +1422,20 @@ function RegistrarRepasseModal({ espaco, socioNome, onClose, onConfirm }: {
   const [observacoes, setObservacoes] = useState('')
   const [saving, setSaving] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
 
   async function handleConfirm() {
     setSubmitted(true)
+    setErro(null)
     if (!valor || parseCurrencyBR(valor) <= 0 || !data) return
     setSaving(true)
     try {
       await onConfirm(parseCurrencyBR(valor), data, observacoes.trim() || undefined)
+    } catch (err) {
+      // Sem este catch o erro virava unhandled rejection: o modal continuava
+      // aberto, nada era gravado e o usuário não via pista nenhuma — o repasse
+      // simplesmente não existia depois, e a linha do sócio seguia pendente.
+      setErro(err instanceof Error ? err.message : 'Não foi possível registrar o repasse. Tente novamente.')
     } finally {
       setSaving(false)
     }
@@ -1458,6 +1465,11 @@ function RegistrarRepasseModal({ espaco, socioNome, onClose, onConfirm }: {
             <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} rows={2}
               className="w-full resize-none rounded-lg border border-app-border2 bg-app-surface2 px-3 py-1.5 text-sm text-app-text focus:outline-none" />
           </div>
+          {erro && (
+            <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5">
+              <p className="text-xs text-red-400">{erro}</p>
+            </div>
+          )}
         </div>
         <div className="flex justify-end gap-2 px-5 py-4 border-t border-app-border">
           <button onClick={onClose} className="rounded-lg border border-app-border2 px-4 py-2 text-sm text-app-muted hover:bg-app-surface2 transition-colors">Cancelar</button>
