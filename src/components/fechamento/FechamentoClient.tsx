@@ -76,7 +76,7 @@ export default function FechamentoClient() {
   const [repasseDrillDown, setRepasseDrillDown] = useState<{ espaco: string; socio: string } | null>(null)
   const [editandoAporteId, setEditandoAporteId] = useState<string | null>(null)
   const [editandoRetiradaId, setEditandoRetiradaId] = useState<string | null>(null)
-  const [repasseAlvo, setRepasseAlvo] = useState<{ espaco: string; socio: string } | null>(null)
+  const [repasseAlvo, setRepasseAlvo] = useState<{ espaco: string; socio: string; pendente: number } | null>(null)
   const [fecharPeriodoOpen, setFecharPeriodoOpen] = useState(false)
   const [reabrirConfirmId, setReabrirConfirmId] = useState<string | null>(null)
   const [visualizandoFechamento, setVisualizandoFechamento] = useState<Fechamento | null>(null)
@@ -370,11 +370,12 @@ export default function FechamentoClient() {
   //
   // Virada de período: uma vez que um espaço já teve algum "Fechar Período",
   // pra ele o cálculo passa a ser sempre "desde o último fechamento" (não
-  // mais acumulado desde sempre) — Retirado e Já Repassado somam só
-  // lançamentos POSTERIORES ao fim do último fechamento, e o que ficou
-  // pendente naquele fechamento (a "foto" salva) entra como saldo inicial do
-  // novo período. Um espaço que nunca foi fechado continua com a conta
-  // acumulada de sempre, sem nenhuma mudança de comportamento.
+  // mais acumulado desde sempre) — lucro, Retirado e Já Repassado somam só
+  // lançamentos POSTERIORES ao fim do último fechamento e ATÉ o fim do
+  // período filtrado, e o que ficou pendente naquele fechamento (a "foto"
+  // salva) entra como saldo inicial do novo período. Um espaço que nunca foi
+  // fechado continua com a conta acumulada de sempre, sem nenhuma mudança de
+  // comportamento.
   const repasseSociosRows = useMemo(() => {
     const rows: { espaco: string; socio: string; percentual: number; lucro: number; pendenteHerdado: number; valorDevido: number; ajusteReservaObra: number; retirado: number; jaRepassado: number; valorPendente: number }[] = []
     for (const e of espacos) {
@@ -383,9 +384,21 @@ export default function FechamentoClient() {
         ? fechamentosDoEspaco.reduce((max, f) => f.dataFim > max.dataFim ? f : max)
         : undefined
 
+      // Janela do que ainda não foi distribuído: do dia seguinte ao último
+      // fechamento até o fim do período em tela. O limite superior faltava, e
+      // sem ele o Valor Devido somava tudo o que entrasse depois do período —
+      // quem gerasse o relatório de setembro no dia 5 de outubro já pagaria
+      // setembro mais o que outubro tivesse acumulado, sem ver a mistura. É a
+      // mesma janela do card "Resultado Operacional", então os dois passam a
+      // concordar; antes divergiam sempre que houvesse lançamento posterior.
+      // O fechamento também grava este número, então o snapshot passa a
+      // refletir o período fechado, e não a posição do dia em que se fechou.
+      const dentroDaJanela = (data: string) =>
+        data > ultimoFechamento!.dataFim && (!filters.dataFim || data <= filters.dataFim)
+
       const lucro = ultimoFechamento
-        ? receitas.filter(r => isReceitaOperacional(r) && r.espaco === e.nome && r.status === 'pago' && dataEfetivaReceita(r) > ultimoFechamento.dataFim).reduce((s, r) => s + r.valor, 0)
-          - contasPagar.filter(c => isDespesaOperacional(c) && c.espaco === e.nome && c.status === 'pago' && dataEfetivaConta(c) > ultimoFechamento.dataFim).reduce((s, c) => s + c.valor, 0)
+        ? receitas.filter(r => isReceitaOperacional(r) && r.espaco === e.nome && r.status === 'pago' && dentroDaJanela(dataEfetivaReceita(r))).reduce((s, r) => s + r.valor, 0)
+          - contasPagar.filter(c => isDespesaOperacional(c) && c.espaco === e.nome && c.status === 'pago' && dentroDaJanela(dataEfetivaConta(c))).reduce((s, c) => s + c.valor, 0)
         : fechamento.disponivelPorEspaco.find(d => d.nome === e.nome)?.disponivel ?? 0
 
       const ajusteObra = AJUSTE_RESERVA_OBRA[e.nome]
@@ -409,10 +422,10 @@ export default function FechamentoClient() {
         }
         const retirado = contasPagar
           .filter(c => c.status === 'pago' && c.categoria === 'retirada_socio' && c.espaco === e.nome && c.fornecedor && nomeCanonicoSocio(c.fornecedor) === s.nome
-            && (!ultimoFechamento || dataEfetivaConta(c) > ultimoFechamento.dataFim))
+            && (!ultimoFechamento || dentroDaJanela(dataEfetivaConta(c))))
           .reduce((sum, c) => sum + c.valor, 0)
         const jaRepassado = repasses
-          .filter(r => r.espaco === e.nome && r.socioNome === s.nome && (!ultimoFechamento || r.data > ultimoFechamento.dataFim))
+          .filter(r => r.espaco === e.nome && r.socioNome === s.nome && (!ultimoFechamento || dentroDaJanela(r.data)))
           .reduce((sum, r) => sum + r.valor, 0)
         rows.push({
           espaco: e.nome, socio: s.nome, percentual: s.percentual, lucro, pendenteHerdado, valorDevido, ajusteReservaObra, retirado, jaRepassado,
@@ -421,7 +434,7 @@ export default function FechamentoClient() {
       }
     }
     return rows
-  }, [espacos, fechamento, contasPagar, repasses, fundos, movimentacoes, fechamentos, receitas])
+  }, [espacos, fechamento, contasPagar, repasses, fundos, movimentacoes, fechamentos, receitas, filters.dataFim])
 
   // Fechamento formal do período — sempre do espaço ativo global (nunca um
   // seletor próprio aqui, mesmo padrão já usado na integração do Google
@@ -1036,7 +1049,7 @@ export default function FechamentoClient() {
             repassado (RepassesContext) — mostra quanto ainda falta entregar
             a cada sócio, não só a participação bruta. */}
         <p className="text-xs text-app-subtle">
-          Espaços que já tiveram algum &quot;Fechar Período&quot; em Financeiro: Retirado e Já Repassado somam só o que aconteceu depois do último fechamento — o Pendente daquele fechamento entra automaticamente como saldo do novo período.
+          Espaços que já tiveram algum &quot;Fechar Período&quot; em Financeiro: Valor Devido, Retirado e Já Repassado somam só o que aconteceu entre o último fechamento e o fim do período filtrado acima — o Pendente daquele fechamento entra automaticamente como saldo do novo período.
         </p>
         {repasseSociosRows.length > 0 && (
           <div className="overflow-x-auto rounded-lg border border-app-border2/60">
@@ -1074,7 +1087,7 @@ export default function FechamentoClient() {
                     {podeLancar && (
                       <td className="px-2 py-2 print-hidden whitespace-nowrap">
                         <button
-                          onClick={() => setRepasseAlvo({ espaco: r.espaco, socio: r.socio })}
+                          onClick={() => setRepasseAlvo({ espaco: r.espaco, socio: r.socio, pendente: r.valorPendente })}
                           className="rounded-md border border-app-border2 px-2 py-1 text-[11px] font-medium text-app-muted hover:border-[#25D366] hover:text-[#128C7E] transition-colors"
                         >
                           Registrar repasse
@@ -1199,6 +1212,7 @@ export default function FechamentoClient() {
         <RegistrarRepasseModal
           espaco={repasseAlvo.espaco}
           socioNome={repasseAlvo.socio}
+          pendente={repasseAlvo.pendente}
           onClose={() => setRepasseAlvo(null)}
           onConfirm={async (valor, data, observacoes) => {
             await addRepasse({ espaco: repasseAlvo.espaco, socioNome: repasseAlvo.socio, valor, data, observacoes })
@@ -1411,9 +1425,10 @@ function SocioResumoCard({ nome, totalAportes, totalRetiradas, onVerAportes, onV
   )
 }
 
-function RegistrarRepasseModal({ espaco, socioNome, onClose, onConfirm }: {
+function RegistrarRepasseModal({ espaco, socioNome, pendente, onClose, onConfirm }: {
   espaco: string
   socioNome: string
+  pendente: number
   onClose: () => void
   onConfirm: (valor: number, data: string, observacoes?: string) => Promise<void>
 }) {
@@ -1454,6 +1469,19 @@ function RegistrarRepasseModal({ espaco, socioNome, onClose, onConfirm }: {
             <label className="block text-xs text-app-muted mb-1">Valor (R$) *</label>
             <input type="text" inputMode="decimal" value={valor} onChange={e => setValor(e.target.value)} placeholder="0,00"
               className={`w-full rounded-lg border ${submitted && (!valor || parseCurrencyBR(valor) <= 0) ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-3 py-1.5 text-sm text-app-text focus:outline-none`} />
+            {/* Atalho pro caso comum — repassar tudo de uma vez. Só preenche o
+                campo: digitar continua valendo, que é como se registra um
+                repasse pago em parcelas. Não aparece com pendente zerado ou
+                negativo, onde não haveria o que preencher. */}
+            {pendente > 0.01 && (
+              <button
+                type="button"
+                onClick={() => setValor(pendente.toFixed(2).replace('.', ','))}
+                className="mt-1.5 w-full rounded-lg border border-[#25D366]/40 bg-[#25D366]/5 px-3 py-1.5 text-xs font-medium text-[#128C7E] hover:bg-[#25D366]/10 transition-colors"
+              >
+                Repassar o total pendente — {formatCurrency(pendente)}
+              </button>
+            )}
           </div>
           <div>
             <label className="block text-xs text-app-muted mb-1">Data do repasse *</label>
