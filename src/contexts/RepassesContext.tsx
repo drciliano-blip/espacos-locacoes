@@ -113,7 +113,9 @@ export function RepassesProvider({ children }: { children: ReactNode }) {
       .select(SELECT)
       .single()
 
-    if (error) throw error
+    // Erro do Supabase é objeto simples, não Error: relançado cru, perdia a
+    // mensagem em qualquer catch que testasse `instanceof Error`.
+    if (error) throw new Error(`Não foi possível gravar o repasse: ${error.message}${error.code ? ` (${error.code})` : ''}`)
     const novo = fromRow(data as unknown as RepasseRow)
     setRepasses(prev => [novo, ...prev])
     try {

@@ -100,3 +100,23 @@ export function hojeISO(): string {
 export function isDataFutura(data?: string | null): boolean {
   return !!data && data > hojeISO()
 }
+
+// Extrai texto legível de um erro desconhecido. Existe porque `instanceof
+// Error` não cobre o que mais aparece aqui: o erro do Supabase é um objeto
+// simples ({ message, details, hint, code }), então um catch que só testa
+// `instanceof Error` cai no texto genérico e descarta justamente a
+// informação que diz o que aconteceu. O código do Postgres vai junto — é ele
+// que distingue, por exemplo, violação de RLS (42501) de coluna inexistente.
+export function mensagemDeErro(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message) return err.message
+  if (typeof err === 'string' && err.trim()) return err
+  if (err && typeof err === 'object') {
+    const e = err as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown }
+    const partes = [e.message, e.details, e.hint].filter((x): x is string => typeof x === 'string' && !!x.trim())
+    if (partes.length) {
+      const codigo = typeof e.code === 'string' && e.code ? ` (${e.code})` : ''
+      return partes.join(' — ') + codigo
+    }
+  }
+  return fallback
+}

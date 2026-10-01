@@ -19,7 +19,7 @@ import { useRepasses } from '@/contexts/RepassesContext'
 import { useFechamentos, type Fechamento } from '@/contexts/FechamentosContext'
 import { useCurrentUser } from '@/contexts/UserContext'
 import { DIVISAO_SOCIOS, nomeCanonicoSocio, AJUSTE_RESERVA_OBRA } from '@/lib/socios-config'
-import { formatCurrency, formatDate, parseCurrencyBR } from '@/lib/utils'
+import { formatCurrency, formatDate, mensagemDeErro, parseCurrencyBR } from '@/lib/utils'
 import { downloadWorkbook, type ExportSheet } from '@/lib/xlsx-export'
 import { CATEGORIA_CONTA_LABEL, SUBCATEGORIA_LABEL } from '@/components/relatorios/LancamentosTables'
 import ExportarRelatorioButton from '@/components/relatorios/ExportarRelatorioButton'
@@ -1435,7 +1435,7 @@ function RegistrarRepasseModal({ espaco, socioNome, onClose, onConfirm }: {
       // Sem este catch o erro virava unhandled rejection: o modal continuava
       // aberto, nada era gravado e o usuário não via pista nenhuma — o repasse
       // simplesmente não existia depois, e a linha do sócio seguia pendente.
-      setErro(err instanceof Error ? err.message : 'Não foi possível registrar o repasse. Tente novamente.')
+      setErro(mensagemDeErro(err, 'Não foi possível registrar o repasse. Tente novamente.'))
     } finally {
       setSaving(false)
     }
