@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
   ArrowUpCircle, ArrowDownCircle, Wallet, HardHat, Vault, Plus, X, Eye, Landmark, Lock, RotateCcw,
@@ -21,6 +21,7 @@ import { useCurrentUser } from '@/contexts/UserContext'
 import { DIVISAO_SOCIOS, nomeCanonicoSocio, AJUSTE_RESERVA_OBRA } from '@/lib/socios-config'
 import { formatCurrency, formatDate, mensagemDeErro, parseCurrencyBR } from '@/lib/utils'
 import { downloadWorkbook, type ExportSheet } from '@/lib/xlsx-export'
+import { useEventos } from '@/contexts/EventosContext'
 import { CATEGORIA_CONTA_LABEL, SUBCATEGORIA_LABEL } from '@/components/relatorios/LancamentosTables'
 import ExportarRelatorioButton from '@/components/relatorios/ExportarRelatorioButton'
 import FullTable from '@/components/shared/FullTable'
@@ -44,8 +45,8 @@ const PERIODO_LABELS: Record<string, string> = {
   semanal: 'Semanal', mensal: 'Mensal', trimestral: 'Trimestral', semestral: 'Semestral', anual: 'Anual',
 }
 
-function rowFromReceita(r: Receita): LancamentoSocioRow {
-  return { id: r.id, data: r.data, socio: r.socioResponsavel ?? r.cliente ?? '—', espaco: r.espaco ?? '—', valor: r.valor, descricao: r.descricao, observacoes: r.observacoes }
+function rowFromReceita(r: Receita, dataEvento?: string): LancamentoSocioRow {
+  return { id: r.id, data: r.data, socio: r.socioResponsavel ?? r.cliente ?? '—', espaco: r.espaco ?? '—', valor: r.valor, descricao: r.descricao, observacoes: r.observacoes, dataEvento }
 }
 function rowFromConta(c: ContaPagar): LancamentoSocioRow {
   return { id: c.id, data: c.dataPagamento ?? c.dataVencimento, socio: c.fornecedor ?? '—', espaco: c.espaco, valor: c.valor, descricao: c.descricao, observacoes: c.observacoes }
@@ -58,6 +59,7 @@ function rowFromConta(c: ContaPagar): LancamentoSocioRow {
 // Societário e Reservas. Toda a aritmética vem de fechamento-calc.ts.
 export default function FechamentoClient() {
   const { receitas, addReceita, editarReceita, deleteReceita, categorias } = useReceitas()
+  const { eventos } = useEventos()
   const { contas: contasPagar, addConta, updateConta, deleteConta } = useContasPagar()
   const { espacosConfig } = useEspacos()
   const { espacosEmEscopo: selectedSpaces, espacoUnico, precisaEspacoEspecifico } = useEspacoAtivo()
@@ -106,10 +108,15 @@ export default function FechamentoClient() {
     downloadWorkbook(
       [{
         name: titulo.slice(0, 31),
-        rows: [
-          ['Data', colunaPessoa, 'Espaço', 'Valor', 'Descrição', 'Observações'],
-          ...rows.map(r => [r.data, r.socio, r.espaco, r.valor, r.descricao, r.observacoes ?? '']),
-        ],
+        rows: (() => {
+          // Mesma regra da tela: a coluna só entra quando a lista tem evento
+          // vinculado, pra não exportar coluna vazia em retirada/aporte.
+          const comEvento = rows.some(r => r.dataEvento)
+          return [
+            ['Data', ...(comEvento ? ['Data do Evento'] : []), colunaPessoa, 'Espaço', 'Valor', 'Descrição', 'Observações'],
+            ...rows.map(r => [r.data, ...(comEvento ? [r.dataEvento ?? ''] : []), r.socio, r.espaco, r.valor, r.descricao, r.observacoes ?? '']),
+          ]
+        })(),
       }],
       `${titulo.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.xlsx`,
     )
@@ -328,17 +335,29 @@ export default function FechamentoClient() {
       .map(c => ({ id: c.id, data: c.dataPagamento ?? c.dataVencimento, socio: c.fornecedor ?? '—', espaco: c.espaco, valor: c.valor, descricao: c.descricao, observacoes: c.observacoes }))
   }, [obraDrillDown, aportesObraEscopo, despesasObraEscopo])
 
+  // Receita -> data do evento que a originou. O vínculo é evento_id; receita
+  // sem evento (bar avulso, aporte) simplesmente não tem data aqui.
+  const dataEventoPorId = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const e of eventos) m.set(e.id, e.data)
+    return m
+  }, [eventos])
+  const dataEventoDaReceita = useCallback(
+    (r: Receita) => (r.eventoId ? dataEventoPorId.get(r.eventoId) : undefined),
+    [dataEventoPorId],
+  )
+
   const resultadoDrillDownRows: LancamentoSocioRow[] = useMemo(() => {
     if (resultadoDrillDown === 'receitas') {
       return fechamento.entradasOperacionais.filter(r => r.status === 'pago')
-        .map(r => ({ id: r.id, data: r.data, socio: r.cliente ?? '—', espaco: r.espaco ?? '—', valor: r.valor, descricao: r.descricao, observacoes: r.observacoes }))
+        .map(r => ({ id: r.id, data: r.data, socio: r.cliente ?? '—', espaco: r.espaco ?? '—', valor: r.valor, descricao: r.descricao, observacoes: r.observacoes, dataEvento: dataEventoDaReceita(r) }))
     }
     if (resultadoDrillDown === 'despesas') {
       return fechamento.despesasOperacionais.filter(c => c.status === 'pago')
         .map(c => ({ id: c.id, data: c.dataPagamento ?? c.dataVencimento, socio: c.fornecedor ?? '—', espaco: c.espaco, valor: c.valor, descricao: c.descricao, observacoes: c.observacoes }))
     }
     return []
-  }, [resultadoDrillDown, fechamento])
+  }, [resultadoDrillDown, fechamento, dataEventoDaReceita])
 
   // Versão consolidada (todos os espaços com obra) de obraDrillDownRows —
   // alimenta os cards "Aporte Societário"/"Despesas de Obra" do Resumo
@@ -787,8 +806,8 @@ export default function FechamentoClient() {
               <ResumoStatAcionavel
                 label="Aporte Societário" valor={totalAportesObra} cor="text-violet-600"
                 onVisualizar={() => setResumoObraDrillDown('aportes')}
-                onExportExcel={() => handleExportListaExcel('Aporte Societário — Obra', aportesObraEscopo.map(rowFromReceita))}
-                onExportPdf={() => handlePrintList('Aporte Societário — Obra', aportesObraEscopo.map(rowFromReceita))}
+                onExportExcel={() => handleExportListaExcel('Aporte Societário — Obra', aportesObraEscopo.map(r => rowFromReceita(r)))}
+                onExportPdf={() => handlePrintList('Aporte Societário — Obra', aportesObraEscopo.map(r => rowFromReceita(r)))}
               />
               <ResumoStatAcionavel
                 label="Despesas de Obra" valor={totalDespesasObra} cor="text-orange-500"
@@ -805,8 +824,8 @@ export default function FechamentoClient() {
               <ResumoStatAcionavel
                 label="Receitas Operacionais" valor={fechamento.totalEntradas} cor="text-emerald-600"
                 onVisualizar={() => setResultadoDrillDown('receitas')}
-                onExportExcel={() => handleExportListaExcel('Receitas Operacionais', fechamento.entradasOperacionais.filter(r => r.status === 'pago').map(rowFromReceita), 'Cliente')}
-                onExportPdf={() => handlePrintList('Receitas Operacionais', fechamento.entradasOperacionais.filter(r => r.status === 'pago').map(rowFromReceita), 'Cliente')}
+                onExportExcel={() => handleExportListaExcel('Receitas Operacionais', fechamento.entradasOperacionais.filter(r => r.status === 'pago').map(r => rowFromReceita(r, dataEventoDaReceita(r))), 'Cliente')}
+                onExportPdf={() => handlePrintList('Receitas Operacionais', fechamento.entradasOperacionais.filter(r => r.status === 'pago').map(r => rowFromReceita(r, dataEventoDaReceita(r))), 'Cliente')}
               />
               <ResumoStatAcionavel
                 label="Despesas Operacionais" valor={fechamento.totalSaidas} cor="text-red-500"
@@ -1276,8 +1295,11 @@ export default function FechamentoClient() {
       {!printScope && (
         <div className="hidden print:block space-y-4">
           <FullTable
-            titulo="Receitas Operacionais" headers={['Data', 'Descrição', 'Categoria', 'Espaço', 'Cliente', 'Valor', 'Status', 'Observações']}
-            rows={fechamento.entradasOperacionais.map(r => [r.data.split('-').reverse().join('/'), r.descricao, r.categoriaNome, r.espaco ?? '—', r.cliente ?? '—', formatCurrency(r.valor), r.status, r.observacoes ?? '—'])}
+            titulo="Receitas Operacionais" headers={['Data', 'Data do Evento', 'Descrição', 'Categoria', 'Espaço', 'Cliente', 'Valor', 'Status', 'Observações']}
+            rows={fechamento.entradasOperacionais.map(r => {
+              const de = dataEventoDaReceita(r)
+              return [r.data.split('-').reverse().join('/'), de ? de.split('-').reverse().join('/') : '—', r.descricao, r.categoriaNome, r.espaco ?? '—', r.cliente ?? '—', formatCurrency(r.valor), r.status, r.observacoes ?? '—']
+            })}
             totalLabel="Total" totalValor={formatCurrency(fechamento.totalEntradas)}
           />
           <FullTable
@@ -1346,8 +1368,8 @@ export default function FechamentoClient() {
           </div>
           <FullTable
             titulo={printScope.titulo}
-            headers={['Data', printScope.colunaPessoa, 'Espaço', 'Valor', 'Descrição', 'Observações']}
-            rows={printScope.rows.map(r => [r.data.split('-').reverse().join('/'), r.socio, r.espaco, formatCurrency(r.valor), r.descricao, r.observacoes ?? '—'])}
+            headers={['Data', ...(printScope.rows.some(r => r.dataEvento) ? ['Data do Evento'] : []), printScope.colunaPessoa, 'Espaço', 'Valor', 'Descrição', 'Observações']}
+            rows={printScope.rows.map(r => [r.data.split('-').reverse().join('/'), ...(printScope.rows.some(x => x.dataEvento) ? [r.dataEvento ? r.dataEvento.split('-').reverse().join('/') : '—'] : []), r.socio, r.espaco, formatCurrency(r.valor), r.descricao, r.observacoes ?? '—'])}
             totalLabel="Total" totalValor={formatCurrency(printScope.rows.reduce((s, r) => s + r.valor, 0))}
           />
         </div>

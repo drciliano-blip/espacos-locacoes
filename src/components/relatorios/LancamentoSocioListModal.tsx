@@ -14,6 +14,13 @@ export interface LancamentoSocioRow {
   valor: number
   descricao: string
   observacoes?: string
+  // Data do evento que originou a receita. A data da coluna "Data" é a do
+  // dinheiro (vencimento/pagamento), e só com ela a conferência contra nota
+  // fiscal depende de reconhecer o cliente pelo nome — inviável com a
+  // quantidade de clientes. Com a data do evento junto, o lançamento é
+  // identificável sem depender do nome. Ausente em lançamento sem evento
+  // vinculado (retirada, aporte, despesa), e aí a coluna nem aparece.
+  dataEvento?: string
   // Só preenchido pra retiradas — mostra se veio do "+ Retirada" (Financeiro
   // → Sócios) ou de uma conta lançada/paga em Contas a Pagar. Ajuda a
   // conferir de onde veio um valor quando o total do sócio parecer estranho.
@@ -67,6 +74,9 @@ export default function LancamentoSocioListModal({ titulo, rows, fileModule, onC
 
   const total = rows.reduce((s, r) => s + r.valor, 0)
   const mostrarOrigem = rows.some(r => r.origem)
+  // Só aparece onde faz sentido: lista de receita de evento. Em retirada,
+  // aporte ou despesa a coluna ficaria inteira em branco.
+  const mostrarDataEvento = rows.some(r => r.dataEvento)
 
   function handleExportarExcel() {
     downloadWorkbook(
@@ -118,7 +128,7 @@ export default function LancamentoSocioListModal({ titulo, rows, fileModule, onC
               <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-app-border bg-app-surface2">
-                    {['Data', colunaPessoa, 'Espaço', 'Valor', 'Descrição', ...(mostrarOrigem ? ['Origem'] : []), 'Comprovante', ...(onEdit ? [''] : [])].map((h, i) => (
+                    {['Data', ...(mostrarDataEvento ? ['Data do Evento'] : []), colunaPessoa, 'Espaço', 'Valor', 'Descrição', ...(mostrarOrigem ? ['Origem'] : []), 'Comprovante', ...(onEdit ? [''] : [])].map((h, i) => (
                       <th key={h || `acao-${i}`} className={`px-3 py-2.5 text-left font-medium text-app-subtle uppercase tracking-wide whitespace-nowrap ${h === 'Valor' ? 'text-right' : ''}`}>{h}</th>
                     ))}
                   </tr>
@@ -129,6 +139,9 @@ export default function LancamentoSocioListModal({ titulo, rows, fileModule, onC
                     return (
                       <tr key={r.id} className={i % 2 === 1 ? 'bg-app-surface2/30' : undefined}>
                         <td className="px-3 py-2.5 text-app-text2 whitespace-nowrap">{r.data.split('-').reverse().join('/')}</td>
+                        {mostrarDataEvento && (
+                          <td className="px-3 py-2.5 text-app-text2 whitespace-nowrap">{r.dataEvento ? r.dataEvento.split('-').reverse().join('/') : '—'}</td>
+                        )}
                         <td className="px-3 py-2.5 text-app-text font-medium whitespace-nowrap">{r.socio}</td>
                         <td className="px-3 py-2.5 text-app-text2 whitespace-nowrap">{r.espaco || '—'}</td>
                         <td className="px-3 py-2.5 font-semibold text-app-text whitespace-nowrap text-right">{formatCurrency(r.valor)}</td>
@@ -174,7 +187,7 @@ export default function LancamentoSocioListModal({ titulo, rows, fileModule, onC
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-app-border bg-app-surface2/60">
-                    <td className="px-3 py-2.5 font-semibold text-app-text whitespace-nowrap" colSpan={3}>Total ({rows.length} lançamento{rows.length === 1 ? '' : 's'})</td>
+                    <td className="px-3 py-2.5 font-semibold text-app-text whitespace-nowrap" colSpan={3 + (mostrarDataEvento ? 1 : 0)}>Total ({rows.length} lançamento{rows.length === 1 ? '' : 's'})</td>
                     <td className="px-3 py-2.5 font-bold text-app-text whitespace-nowrap text-right">{formatCurrency(total)}</td>
                     <td colSpan={2 + (mostrarOrigem ? 1 : 0) + (onEdit ? 1 : 0)} />
                   </tr>
