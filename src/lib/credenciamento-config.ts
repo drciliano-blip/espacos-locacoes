@@ -1,8 +1,10 @@
-// Funções oferecidas no cadastro — as mesmas da Calculadora de Staff. Função
+// Funções oferecidas no cadastro — as da Calculadora de Staff mais as que só
+// existem no credenciamento (Chefe de Segurança, Produtor Responsável). Função
 // fora da lista pode ser digitada à mão no formulário.
 export const FUNCOES_CREDENCIAMENTO = [
-  'Barman', 'Chefe de Bar', 'Atendente de Bar', 'Segurança', 'Bombeiro', 'Policial',
+  'Barman', 'Chefe de Bar', 'Atendente de Bar', 'Segurança', 'Chefe de Segurança', 'Bombeiro', 'Policial',
   'Técnico de Som', 'Técnico de Luz', 'Hostess', 'Recepção', 'Caixa', 'Limpeza', 'Chapelaria',
+  'Produtor Responsável',
 ]
 
 export interface DocumentoExigido {
@@ -21,6 +23,9 @@ export const DOCUMENTOS_BASE: DocumentoExigido[] = [
 // dos documentos base.
 export const DOCUMENTOS_POR_FUNCAO: Record<string, DocumentoExigido[]> = {
   'Segurança': [
+    { tipo: 'CNV — Carteira Nacional de Vigilante (Polícia Federal)', temValidade: true },
+  ],
+  'Chefe de Segurança': [
     { tipo: 'CNV — Carteira Nacional de Vigilante (Polícia Federal)', temValidade: true },
   ],
   'Bombeiro': [
