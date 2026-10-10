@@ -251,8 +251,10 @@ export interface FichaCliente {
 }
 
 // Credenciamento de terceirizados
-// 'direto' = pessoa física, contratada direto; 'empresa' = pessoa jurídica.
-export type TipoContratacao = 'direto' | 'empresa'
+// 'direto' = pessoa física; 'mei' = pessoa jurídica própria (o profissional
+// tem o CNPJ dele, tipicamente MEI); 'empresa' = cedido por uma empresa
+// terceirizada cadastrada.
+export type TipoContratacao = 'direto' | 'mei' | 'empresa'
 export type StatusCredenciamento = 'ativo' | 'inativo' | 'vetado'
 export type Avaliacao = 'otimo' | 'bom' | 'regular'
 
@@ -297,6 +299,8 @@ export interface Terceirizado {
   email: string
   funcao: string
   tipoContratacao: TipoContratacao
+  cnpj: string
+  razaoSocial: string
   empresaId?: string
   empresaNome: string
   status: StatusCredenciamento

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { BadgeCheck, X, Save } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { maskCPF, maskPhone, mensagemDeErro } from '@/lib/utils'
+import { maskCNPJ, maskCPF, maskPhone, mensagemDeErro } from '@/lib/utils'
 import { FUNCOES_CREDENCIAMENTO } from '@/lib/credenciamento-config'
 import type { Avaliacao, EmpresaTerceirizada, StatusCredenciamento, Terceirizado, TipoContratacao } from '@/types'
 import CamposSituacao from './CamposSituacao'
@@ -33,6 +33,8 @@ export default function TerceirizadoModal({ pessoa, empresas, onClose, onSaved }
   const [funcaoSelecionada, setFuncaoSelecionada] = useState(funcaoForaDaLista ? OUTRA_FUNCAO : (pessoa?.funcao ?? ''))
   const [funcaoLivre, setFuncaoLivre] = useState(funcaoForaDaLista ? pessoa!.funcao : '')
   const [tipoContratacao, setTipoContratacao] = useState<TipoContratacao>(pessoa?.tipoContratacao ?? 'direto')
+  const [cnpj, setCnpj] = useState(pessoa?.cnpj ?? '')
+  const [razaoSocial, setRazaoSocial] = useState(pessoa?.razaoSocial ?? '')
   const [empresaId, setEmpresaId] = useState(pessoa?.empresaId ?? '')
   const [status, setStatus] = useState<StatusCredenciamento>(pessoa?.status ?? 'ativo')
   const [motivoVeto, setMotivoVeto] = useState(pessoa?.motivoVeto ?? '')
@@ -47,6 +49,7 @@ export default function TerceirizadoModal({ pessoa, empresas, onClose, onSaved }
     nomeCompleto: !nomeCompleto.trim(),
     funcao: !funcao,
     empresa: tipoContratacao === 'empresa' && !empresaId,
+    cnpj: tipoContratacao === 'mei' && !cnpj.trim(),
     motivoVeto: status === 'vetado' && !motivoVeto.trim(),
   }
   const hasErrors = Object.values(errors).some(Boolean)
@@ -67,6 +70,8 @@ export default function TerceirizadoModal({ pessoa, empresas, onClose, onSaved }
       email: email.trim() || null,
       funcao,
       tipo_contratacao: tipoContratacao,
+      cnpj: tipoContratacao === 'mei' ? cnpj.trim() : null,
+      razao_social: tipoContratacao === 'mei' ? razaoSocial.trim() || null : null,
       empresa_id: tipoContratacao === 'empresa' ? empresaId : null,
       status,
       motivo_veto: status === 'vetado' ? motivoVeto.trim() : null,
@@ -163,10 +168,24 @@ export default function TerceirizadoModal({ pessoa, empresas, onClose, onSaved }
             <div>
               <label className="block text-xs text-app-muted mb-1">Contratação</label>
               <select value={tipoContratacao} onChange={e => setTipoContratacao(e.target.value as TipoContratacao)} className={`${INPUT_CLASS} cursor-pointer`}>
-                <option value="direto">{CONTRATACAO_LABEL.direto} (contratado direto)</option>
-                <option value="empresa">{CONTRATACAO_LABEL.empresa} (por empresa)</option>
+                <option value="direto">{CONTRATACAO_LABEL.direto}</option>
+                <option value="mei">{CONTRATACAO_LABEL.mei}</option>
+                <option value="empresa">{CONTRATACAO_LABEL.empresa}</option>
               </select>
             </div>
+            {tipoContratacao === 'mei' && (
+              <>
+                <div>
+                  <label className="block text-xs text-app-muted mb-1">CNPJ *</label>
+                  <input value={cnpj} onChange={e => setCnpj(maskCNPJ(e.target.value))} placeholder="00.000.000/0000-00" className={erroClass(errors.cnpj)} />
+                  {submitted && errors.cnpj && <p className="text-xs text-red-400 mt-0.5">Informe o CNPJ</p>}
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs text-app-muted mb-1">Razão social / nome fantasia</label>
+                  <input value={razaoSocial} onChange={e => setRazaoSocial(e.target.value)} className={INPUT_CLASS} />
+                </div>
+              </>
+            )}
             {tipoContratacao === 'empresa' && (
               <div>
                 <label className="block text-xs text-app-muted mb-1">Empresa *</label>

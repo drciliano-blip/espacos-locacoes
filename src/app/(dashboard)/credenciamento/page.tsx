@@ -14,7 +14,7 @@ import AnotacoesCredenciamento from '@/components/credenciamento/AnotacoesCreden
 import EmpresasSection from '@/components/credenciamento/EmpresasSection'
 import EscalaSection from '@/components/credenciamento/EscalaSection'
 import {
-  AVALIACAO_LABEL, CONTRATACAO_LABEL, DARK_GREEN, empresaFromRow, GREEN, SELECT_EMPRESA, SELECT_TERCEIRIZADO,
+  AVALIACAO_LABEL, CONTRATACAO_LABEL, DARK_GREEN, descricaoContratacao, empresaFromRow, GREEN, SELECT_EMPRESA, SELECT_TERCEIRIZADO,
   SITUACAO_LABEL as SITUACAO, terceirizadoFromRow, VETADO_CLASS,
   type EmpresaRow, type TerceirizadoRow,
 } from '@/components/credenciamento/dados'
@@ -63,7 +63,8 @@ export default function CredenciamentoPage() {
 
   const filtradas = comSituacao.filter(({ pessoa, situacao }) => {
     const termo = busca.trim().toLowerCase()
-    if (termo && !pessoa.nomeCompleto.toLowerCase().includes(termo) && !pessoa.cpf.includes(termo)) return false
+    if (termo && ![pessoa.nomeCompleto, pessoa.razaoSocial].some(t => t.toLowerCase().includes(termo))
+      && !pessoa.cpf.includes(termo) && !pessoa.cnpj.includes(termo)) return false
     if (filtroFuncao && pessoa.funcao !== filtroFuncao) return false
     // Vetado é uma situação à parte: quem está vetado não entra em
     // apto/vence em breve/pendente, que falam só da documentação.
@@ -71,8 +72,10 @@ export default function CredenciamentoPage() {
     if (filtroSituacao && filtroSituacao !== 'vetado' && (pessoa.status === 'vetado' || situacao !== filtroSituacao)) return false
     if (filtroAvaliacao === 'sem' && pessoa.avaliacao) return false
     if (filtroAvaliacao && filtroAvaliacao !== 'sem' && pessoa.avaliacao !== filtroAvaliacao) return false
-    if ((filtroContratacao === 'direto' || filtroContratacao === 'empresa') && pessoa.tipoContratacao !== filtroContratacao) return false
-    if (filtroContratacao && filtroContratacao !== 'direto' && filtroContratacao !== 'empresa' && pessoa.empresaId !== filtroContratacao) return false
+    // O filtro vale um tipo de contratação ou uma empresa específica (id).
+    const filtraPorTipo = filtroContratacao === 'direto' || filtroContratacao === 'mei' || filtroContratacao === 'empresa'
+    if (filtraPorTipo && pessoa.tipoContratacao !== filtroContratacao) return false
+    if (filtroContratacao && !filtraPorTipo && pessoa.empresaId !== filtroContratacao) return false
     return true
   })
 
@@ -165,7 +168,7 @@ export default function CredenciamentoPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <div className="relative flex-1 min-w-[180px]">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-app-subtle" />
-              <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por nome ou CPF"
+              <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por nome, CPF ou CNPJ"
                 className="w-full rounded-lg border border-app-border2 bg-app-surface pl-8 pr-3 py-1.5 text-xs text-app-text focus:outline-none focus:border-[#25D366]" />
             </div>
             <select value={filtroFuncao} onChange={e => setFiltroFuncao(e.target.value)} className={FILTRO_CLASS}>
@@ -175,7 +178,8 @@ export default function CredenciamentoPage() {
             <select value={filtroContratacao} onChange={e => setFiltroContratacao(e.target.value)} className={FILTRO_CLASS}>
               <option value="">Toda contratação</option>
               <option value="direto">{CONTRATACAO_LABEL.direto}</option>
-              <option value="empresa">{CONTRATACAO_LABEL.empresa} (todas as empresas)</option>
+              <option value="mei">{CONTRATACAO_LABEL.mei}</option>
+              <option value="empresa">{CONTRATACAO_LABEL.empresa} (todas)</option>
               {empresas.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
             </select>
             <select value={filtroSituacao} onChange={e => setFiltroSituacao(e.target.value)} className={FILTRO_CLASS}>
@@ -228,7 +232,7 @@ export default function CredenciamentoPage() {
                       <span className="flex items-center gap-1"><Briefcase className="h-3 w-3" />{p.funcao}</span>
                       <span className="flex items-center gap-1">
                         <Building2 className="h-3 w-3" />
-                        {CONTRATACAO_LABEL[p.tipoContratacao]}{p.tipoContratacao === 'empresa' && ` — ${p.empresaNome || 'empresa não informada'}`}
+                        {descricaoContratacao(p)}
                       </span>
                       {p.telefone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{p.telefone}</span>}
                       {p.cpf && <span>CPF {p.cpf}</span>}

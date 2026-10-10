@@ -7,7 +7,7 @@ import { formatDate, hojeISO, mensagemDeErro } from '@/lib/utils'
 import { useEventos } from '@/contexts/EventosContext'
 import { situacaoCredenciamento } from '@/lib/credenciamento-config'
 import type { EscalaEvento, Terceirizado } from '@/types'
-import { CONTRATACAO_LABEL, escalaFromRow, GREEN, INPUT_CLASS, SITUACAO_LABEL, VETADO_CLASS, type EscalaRow } from './dados'
+import { descricaoContratacao, escalaFromRow, GREEN, INPUT_CLASS, SITUACAO_LABEL, VETADO_CLASS, type EscalaRow } from './dados'
 
 const FILTRO_CLASS = 'cursor-pointer rounded-lg border border-app-border2 bg-app-surface px-2.5 py-1.5 text-xs text-app-text focus:outline-none'
 
@@ -192,7 +192,7 @@ export default function EscalaSection({ pessoas }: Props) {
                                 <span className="flex items-center gap-1"><Briefcase className="h-3 w-3" />{escala.funcao}</span>
                                 <span className="flex items-center gap-1">
                                   <Building2 className="h-3 w-3" />
-                                  {CONTRATACAO_LABEL[pessoa.tipoContratacao]}{pessoa.tipoContratacao === 'empresa' && ` — ${pessoa.empresaNome || 'empresa não informada'}`}
+                                  {descricaoContratacao(pessoa)}
                                 </span>
                                 {pessoa.cpf && <span>CPF {pessoa.cpf}</span>}
                               </div>

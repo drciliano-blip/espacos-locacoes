@@ -53,6 +53,8 @@ export interface TerceirizadoRow {
   email: string | null
   funcao: string
   tipo_contratacao: TipoContratacao
+  cnpj: string | null
+  razao_social: string | null
   empresa_id: string | null
   empresa: { nome: string; status: StatusCredenciamento } | null
   status: StatusCredenciamento
@@ -109,6 +111,8 @@ export function terceirizadoFromRow(row: TerceirizadoRow): Terceirizado {
     email: row.email ?? '',
     funcao: row.funcao,
     tipoContratacao: row.tipo_contratacao,
+    cnpj: row.cnpj ?? '',
+    razaoSocial: row.razao_social ?? '',
     empresaId: row.empresa_id ?? undefined,
     empresaNome: row.empresa?.nome ?? '',
     status: row.status,
@@ -147,7 +151,15 @@ export const AVALIACAO_LABEL: Record<Avaliacao, { label: string; className: stri
 
 export const CONTRATACAO_LABEL: Record<TipoContratacao, string> = {
   direto: 'Pessoa física',
-  empresa: 'Pessoa jurídica',
+  mei: 'Pessoa jurídica — MEI / CNPJ próprio',
+  empresa: 'Pessoa jurídica — empresa terceirizada',
+}
+
+// Como a contratação aparece nas listas: o tipo e, quando é PJ, de quem é o CNPJ.
+export function descricaoContratacao(p: Terceirizado): string {
+  if (p.tipoContratacao === 'mei') return `PJ própria (MEI)${p.cnpj ? ` — CNPJ ${p.cnpj}` : ''}`
+  if (p.tipoContratacao === 'empresa') return `PJ — ${p.empresaNome || 'empresa não informada'}`
+  return CONTRATACAO_LABEL.direto
 }
 
 // Vetar ou retirar o veto entra sozinho no histórico de anotações — o motivo
