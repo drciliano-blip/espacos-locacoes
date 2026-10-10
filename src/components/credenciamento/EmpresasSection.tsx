@@ -6,9 +6,14 @@ import { createClient } from '@/lib/supabase/client'
 import { deleteFile } from '@/lib/file-storage'
 import { hojeISO, maskCNPJ, maskPhone, mensagemDeErro } from '@/lib/utils'
 import { situacaoEmpresa } from '@/lib/credenciamento-config'
-import type { EmpresaTerceirizada, Terceirizado } from '@/types'
+import type { Avaliacao, EmpresaTerceirizada, StatusCredenciamento, Terceirizado } from '@/types'
 import DocumentosCredenciamento from './DocumentosCredenciamento'
-import { DARK_GREEN, empresaFromRow, GREEN, INPUT_CLASS, SELECT_EMPRESA, SITUACAO_LABEL, type EmpresaRow } from './dados'
+import AnotacoesCredenciamento from './AnotacoesCredenciamento'
+import CamposSituacao from './CamposSituacao'
+import {
+  AVALIACAO_LABEL, DARK_GREEN, empresaFromRow, GREEN, INPUT_CLASS, registrarMudancaDeVeto, SELECT_EMPRESA,
+  SITUACAO_LABEL, VETADO_CLASS, type EmpresaRow,
+} from './dados'
 
 interface Props {
   empresas: EmpresaTerceirizada[]
@@ -16,7 +21,7 @@ interface Props {
   onChange: (empresas: EmpresaTerceirizada[]) => void
 }
 
-const EMPTY = { nome: '', cnpj: '', contatoNome: '', telefone: '', email: '', observacoes: '' }
+const EMPTY = { nome: '', cnpj: '', contatoNome: '', telefone: '', email: '', observacoes: '', motivoVeto: '' }
 
 export default function EmpresasSection({ empresas, pessoas, onChange }: Props) {
   const [modalOpen, setModalOpen] = useState(false)
@@ -27,12 +32,17 @@ export default function EmpresasSection({ empresas, pessoas, onChange }: Props) 
   const [erro, setErro] = useState<string | null>(null)
   const [erroLista, setErroLista] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [subAba, setSubAba] = useState<'documentos' | 'anotacoes'>('documentos')
+  const [status, setStatus] = useState<StatusCredenciamento>('ativo')
+  const [avaliacao, setAvaliacao] = useState<Avaliacao | ''>('')
 
   function abrir(empresa: EmpresaTerceirizada | null) {
     setEditando(empresa)
     setDraft(empresa
-      ? { nome: empresa.nome, cnpj: empresa.cnpj, contatoNome: empresa.contatoNome, telefone: empresa.telefone, email: empresa.email, observacoes: empresa.observacoes }
+      ? { nome: empresa.nome, cnpj: empresa.cnpj, contatoNome: empresa.contatoNome, telefone: empresa.telefone, email: empresa.email, observacoes: empresa.observacoes, motivoVeto: empresa.motivoVeto }
       : EMPTY)
+    setStatus(empresa?.status ?? 'ativo')
+    setAvaliacao(empresa?.avaliacao ?? '')
     setSubmitted(false)
     setErro(null)
     setModalOpen(true)
@@ -42,10 +52,12 @@ export default function EmpresasSection({ empresas, pessoas, onChange }: Props) 
     setDraft(d => ({ ...d, [k]: v }))
   }
 
+  const motivoEmBranco = status === 'vetado' && !draft.motivoVeto.trim()
+
   async function handleSave() {
     setSubmitted(true)
     setErro(null)
-    if (!draft.nome.trim()) return
+    if (!draft.nome.trim() || motivoEmBranco) return
 
     setBusy(true)
     const supabase = createClient()
@@ -56,16 +68,24 @@ export default function EmpresasSection({ empresas, pessoas, onChange }: Props) 
       telefone: draft.telefone.trim() || null,
       email: draft.email.trim() || null,
       observacoes: draft.observacoes.trim() || null,
+      status,
+      motivo_veto: status === 'vetado' ? draft.motivoVeto.trim() : null,
+      avaliacao: avaliacao || null,
     }
     const consulta = editando
       ? supabase.from('empresas_terceirizadas').update(valores).eq('id', editando.id)
       : supabase.from('empresas_terceirizadas').insert(valores)
     const { data, error } = await consulta.select(SELECT_EMPRESA).single()
 
-    setBusy(false)
-    if (error) return setErro(mensagemDeErro(error, 'Não foi possível salvar a empresa. Tente novamente.'))
+    if (error) {
+      setBusy(false)
+      return setErro(mensagemDeErro(error, 'Não foi possível salvar a empresa. Tente novamente.'))
+    }
 
-    const salva = empresaFromRow(data as unknown as EmpresaRow)
+    const gravada = empresaFromRow(data as unknown as EmpresaRow)
+    const novas = await registrarMudancaDeVeto({ coluna: 'empresa_id', id: gravada.id }, editando, gravada)
+    setBusy(false)
+    const salva = { ...gravada, anotacoes: [...novas, ...gravada.anotacoes] }
     onChange(editando ? empresas.map(e => e.id === salva.id ? salva : e) : [...empresas, salva].sort((a, b) => a.nome.localeCompare(b.nome)))
     setModalOpen(false)
   }
@@ -76,7 +96,7 @@ export default function EmpresasSection({ empresas, pessoas, onChange }: Props) 
     if (vinculados > 0) {
       return setErroLista(`${empresa.nome} tem ${vinculados} pessoa${vinculados === 1 ? '' : 's'} vinculada${vinculados === 1 ? '' : 's'}. Altere a ficha dessas pessoas antes de remover a empresa.`)
     }
-    if (!window.confirm(`Remover a empresa "${empresa.nome}"? Os documentos anexados também serão apagados.`)) return
+    if (!window.confirm(`Remover a empresa "${empresa.nome}"? Os documentos e as anotações também serão apagados.`)) return
     const supabase = createClient()
     const { error } = await supabase.from('empresas_terceirizadas').delete().eq('id', empresa.id)
     if (error) return setErroLista(mensagemDeErro(error, 'Não foi possível remover a empresa.'))
@@ -117,6 +137,9 @@ export default function EmpresasSection({ empresas, pessoas, onChange }: Props) 
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-sm font-medium text-app-text truncate">{e.nome}</p>
+                  {e.status === 'vetado' && <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${VETADO_CLASS}`}>Vetada</span>}
+                  {e.status === 'inativo' && <span className="rounded-full border border-app-border2 px-2 py-0.5 text-[11px] text-app-subtle">Inativa</span>}
+                  {e.avaliacao && <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${AVALIACAO_LABEL[e.avaliacao].className}`}>{AVALIACAO_LABEL[e.avaliacao].label}</span>}
                   {situacao !== 'apto' && (
                     <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${SITUACAO_LABEL[situacao].className}`}>
                       {situacao === 'pendente' ? 'Documento vencido' : SITUACAO_LABEL[situacao].label}
@@ -129,7 +152,9 @@ export default function EmpresasSection({ empresas, pessoas, onChange }: Props) 
                   {e.telefone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{e.telefone}</span>}
                   <span>· {vinculados} pessoa{vinculados === 1 ? '' : 's'}</span>
                   <span>· {e.documentos.length} documento{e.documentos.length === 1 ? '' : 's'}</span>
+                  <span>· {e.anotacoes.length} anotaç{e.anotacoes.length === 1 ? 'ão' : 'ões'}</span>
                 </div>
+                {e.status === 'vetado' && e.motivoVeto && <p className="text-xs text-red-400 mt-1">Motivo do veto: {e.motivoVeto}</p>}
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <button onClick={() => abrir(e)} title="Editar"
@@ -140,7 +165,7 @@ export default function EmpresasSection({ empresas, pessoas, onChange }: Props) 
                   className="flex h-7 w-7 items-center justify-center rounded-md text-app-subtle hover:bg-red-500/10 hover:text-red-400 transition-colors">
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
-                <button onClick={() => setExpandedId(id => id === e.id ? null : e.id)} title="Documentos"
+                <button onClick={() => setExpandedId(id => id === e.id ? null : e.id)} title="Documentos e anotações"
                   className="flex h-7 w-7 items-center justify-center rounded-md text-app-subtle hover:bg-app-surface2 transition-colors">
                   {expandedId === e.id ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                 </button>
@@ -148,14 +173,30 @@ export default function EmpresasSection({ empresas, pessoas, onChange }: Props) 
             </div>
 
             {expandedId === e.id && (
-              <div className="px-4 pb-4 pt-3 border-t border-app-border/50">
-                <DocumentosCredenciamento
-                  dono={{ tabela: 'empresa_documentos', coluna: 'empresa_id', id: e.id, nome: e.nome }}
-                  documentos={e.documentos}
-                  exigidos={[]}
-                  placeholderOutro="Ex: Autorização de funcionamento (Polícia Federal)"
-                  onChange={documentos => onChange(empresas.map(x => x.id === e.id ? { ...x, documentos } : x))}
-                />
+              <div className="px-4 pb-4 pt-3 border-t border-app-border/50 space-y-3">
+                <div className="flex gap-1">
+                  {([['documentos', `Documentos (${e.documentos.length})`], ['anotacoes', `Anotações (${e.anotacoes.length})`]] as const).map(([id, label]) => (
+                    <button key={id} onClick={() => setSubAba(id)}
+                      className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${subAba === id ? 'bg-[#25D366]/15 text-[#25D366]' : 'text-app-muted hover:text-app-text'}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {subAba === 'documentos' ? (
+                  <DocumentosCredenciamento
+                    dono={{ tabela: 'empresa_documentos', coluna: 'empresa_id', id: e.id, nome: e.nome }}
+                    documentos={e.documentos}
+                    exigidos={[]}
+                    placeholderOutro="Ex: Autorização de funcionamento (Polícia Federal)"
+                    onChange={documentos => onChange(empresas.map(x => x.id === e.id ? { ...x, documentos } : x))}
+                  />
+                ) : (
+                  <AnotacoesCredenciamento
+                    dono={{ coluna: 'empresa_id', id: e.id }}
+                    anotacoes={e.anotacoes}
+                    onChange={anotacoes => onChange(empresas.map(x => x.id === e.id ? { ...x, anotacoes } : x))}
+                  />
+                )}
               </div>
             )}
             </div>
@@ -165,7 +206,7 @@ export default function EmpresasSection({ empresas, pessoas, onChange }: Props) 
 
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setModalOpen(false)}>
-          <div className="w-full max-w-md bg-app-surface rounded-2xl border border-app-border shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-app-surface rounded-2xl border border-app-border shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-app-border">
               <h2 className="text-sm font-semibold text-app-text flex items-center gap-2">
                 <Building2 className="h-4 w-4 text-[#25D366]" />
@@ -201,8 +242,15 @@ export default function EmpresasSection({ empresas, pessoas, onChange }: Props) 
                   <input type="email" value={draft.email} onChange={e => set('email', e.target.value)} className={INPUT_CLASS} />
                 </div>
               </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <CamposSituacao
+                  status={status} motivoVeto={draft.motivoVeto} avaliacao={avaliacao}
+                  erroMotivo={submitted && motivoEmBranco}
+                  onStatus={setStatus} onMotivoVeto={v => set('motivoVeto', v)} onAvaliacao={setAvaliacao}
+                />
+              </div>
               <div>
-                <label className="block text-xs text-app-muted mb-1">Observações</label>
+                <label className="block text-xs text-app-muted mb-1">Observações do cadastro</label>
                 <textarea value={draft.observacoes} onChange={e => set('observacoes', e.target.value)} rows={2} className={INPUT_CLASS} />
               </div>
               {erro && <p className="text-xs text-red-400">{erro}</p>}

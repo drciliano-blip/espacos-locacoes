@@ -10,10 +10,12 @@ import { documentosExigidos, situacaoCredenciamento } from '@/lib/credenciamento
 import type { EmpresaTerceirizada, Terceirizado } from '@/types'
 import TerceirizadoModal from '@/components/credenciamento/TerceirizadoModal'
 import DocumentosCredenciamento from '@/components/credenciamento/DocumentosCredenciamento'
+import AnotacoesCredenciamento from '@/components/credenciamento/AnotacoesCredenciamento'
 import EmpresasSection from '@/components/credenciamento/EmpresasSection'
 import EscalaSection from '@/components/credenciamento/EscalaSection'
 import {
-  DARK_GREEN, empresaFromRow, GREEN, SELECT_EMPRESA, SELECT_TERCEIRIZADO, SITUACAO_LABEL as SITUACAO, terceirizadoFromRow,
+  AVALIACAO_LABEL, CONTRATACAO_LABEL, DARK_GREEN, empresaFromRow, GREEN, SELECT_EMPRESA, SELECT_TERCEIRIZADO,
+  SITUACAO_LABEL as SITUACAO, terceirizadoFromRow, VETADO_CLASS,
   type EmpresaRow, type TerceirizadoRow,
 } from '@/components/credenciamento/dados'
 
@@ -31,10 +33,12 @@ export default function CredenciamentoPage() {
   const [filtroFuncao, setFiltroFuncao] = useState('')
   const [filtroContratacao, setFiltroContratacao] = useState('')
   const [filtroSituacao, setFiltroSituacao] = useState('')
+  const [filtroAvaliacao, setFiltroAvaliacao] = useState('')
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editando, setEditando] = useState<Terceirizado | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [subAba, setSubAba] = useState<'documentos' | 'anotacoes'>('documentos')
 
   useEffect(() => {
     const supabase = createClient()
@@ -61,17 +65,25 @@ export default function CredenciamentoPage() {
     const termo = busca.trim().toLowerCase()
     if (termo && !pessoa.nomeCompleto.toLowerCase().includes(termo) && !pessoa.cpf.includes(termo)) return false
     if (filtroFuncao && pessoa.funcao !== filtroFuncao) return false
-    if (filtroSituacao && situacao !== filtroSituacao) return false
-    if (filtroContratacao === 'direto' && pessoa.tipoContratacao !== 'direto') return false
-    if (filtroContratacao && filtroContratacao !== 'direto' && pessoa.empresaId !== filtroContratacao) return false
+    // Vetado é uma situação à parte: quem está vetado não entra em
+    // apto/vence em breve/pendente, que falam só da documentação.
+    if (filtroSituacao === 'vetado' && pessoa.status !== 'vetado') return false
+    if (filtroSituacao && filtroSituacao !== 'vetado' && (pessoa.status === 'vetado' || situacao !== filtroSituacao)) return false
+    if (filtroAvaliacao === 'sem' && pessoa.avaliacao) return false
+    if (filtroAvaliacao && filtroAvaliacao !== 'sem' && pessoa.avaliacao !== filtroAvaliacao) return false
+    if ((filtroContratacao === 'direto' || filtroContratacao === 'empresa') && pessoa.tipoContratacao !== filtroContratacao) return false
+    if (filtroContratacao && filtroContratacao !== 'direto' && filtroContratacao !== 'empresa' && pessoa.empresaId !== filtroContratacao) return false
     return true
   })
 
+  const naoVetados = comSituacao.filter(c => c.pessoa.status !== 'vetado')
   const totais = {
-    apto: comSituacao.filter(c => c.situacao === 'apto').length,
-    atencao: comSituacao.filter(c => c.situacao === 'atencao').length,
-    pendente: comSituacao.filter(c => c.situacao === 'pendente').length,
+    apto: naoVetados.filter(c => c.situacao === 'apto').length,
+    atencao: naoVetados.filter(c => c.situacao === 'atencao').length,
+    pendente: naoVetados.filter(c => c.situacao === 'pendente').length,
+    vetado: comSituacao.length - naoVetados.length,
   }
+  const empresasVetadas = new Set(empresas.filter(e => e.status === 'vetado').map(e => e.id))
 
   function abrirModal(pessoa: Terceirizado | null) {
     setEditando(pessoa)
@@ -140,11 +152,11 @@ export default function CredenciamentoPage() {
         <EscalaSection pessoas={pessoas} />
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {(['apto', 'atencao', 'pendente'] as const).map(s => (
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+            {(['apto', 'atencao', 'pendente', 'vetado'] as const).map(s => (
               <button key={s} onClick={() => setFiltroSituacao(f => f === s ? '' : s)}
                 className={`rounded-xl border bg-app-surface p-4 text-left transition-colors ${filtroSituacao === s ? 'border-[#25D366]/50' : 'border-app-border hover:border-app-border2'}`}>
-                <p className="text-xs text-app-muted">{SITUACAO[s].label}</p>
+                <p className="text-xs text-app-muted">{s === 'vetado' ? 'Vetados' : SITUACAO[s].label}</p>
                 <p className="text-2xl font-semibold text-app-text mt-1">{totais[s]}</p>
               </button>
             ))}
@@ -162,7 +174,8 @@ export default function CredenciamentoPage() {
             </select>
             <select value={filtroContratacao} onChange={e => setFiltroContratacao(e.target.value)} className={FILTRO_CLASS}>
               <option value="">Toda contratação</option>
-              <option value="direto">Contratado direto</option>
+              <option value="direto">{CONTRATACAO_LABEL.direto}</option>
+              <option value="empresa">{CONTRATACAO_LABEL.empresa} (todas as empresas)</option>
               {empresas.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
             </select>
             <select value={filtroSituacao} onChange={e => setFiltroSituacao(e.target.value)} className={FILTRO_CLASS}>
@@ -170,6 +183,14 @@ export default function CredenciamentoPage() {
               <option value="apto">Apto</option>
               <option value="atencao">Vence em breve</option>
               <option value="pendente">Pendente</option>
+              <option value="vetado">Vetado</option>
+            </select>
+            <select value={filtroAvaliacao} onChange={e => setFiltroAvaliacao(e.target.value)} className={FILTRO_CLASS}>
+              <option value="">Toda avaliação</option>
+              <option value="otimo">Ótimo</option>
+              <option value="bom">Bom</option>
+              <option value="regular">Regular</option>
+              <option value="sem">Sem avaliação</option>
             </select>
             <button
               onClick={() => abrirModal(null)}
@@ -196,18 +217,23 @@ export default function CredenciamentoPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-medium text-app-text truncate">{p.nomeCompleto}</p>
-                      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${SITUACAO[situacao].className}`}>{SITUACAO[situacao].label}</span>
+                      {p.status === 'vetado'
+                        ? <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${VETADO_CLASS}`}>Vetado</span>
+                        : <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${SITUACAO[situacao].className}`}>{SITUACAO[situacao].label}</span>}
                       {p.status === 'inativo' && <span className="rounded-full border border-app-border2 px-2 py-0.5 text-[11px] text-app-subtle">Inativo</span>}
+                      {p.avaliacao && <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${AVALIACAO_LABEL[p.avaliacao].className}`}>{AVALIACAO_LABEL[p.avaliacao].label}</span>}
+                      {p.empresaId && empresasVetadas.has(p.empresaId) && <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${VETADO_CLASS}`}>Empresa vetada</span>}
                     </div>
                     <div className="flex items-center gap-3 mt-0.5 flex-wrap text-xs text-app-subtle">
                       <span className="flex items-center gap-1"><Briefcase className="h-3 w-3" />{p.funcao}</span>
                       <span className="flex items-center gap-1">
                         <Building2 className="h-3 w-3" />
-                        {p.tipoContratacao === 'empresa' ? (p.empresaNome || 'Empresa não informada') : 'Contratado direto'}
+                        {CONTRATACAO_LABEL[p.tipoContratacao]}{p.tipoContratacao === 'empresa' && ` — ${p.empresaNome || 'empresa não informada'}`}
                       </span>
                       {p.telefone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{p.telefone}</span>}
                       {p.cpf && <span>CPF {p.cpf}</span>}
                     </div>
+                    {p.status === 'vetado' && p.motivoVeto && <p className="text-xs text-red-400 mt-1">Motivo do veto: {p.motivoVeto}</p>}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button onClick={() => abrirModal(p)} title="Editar ficha"
@@ -218,7 +244,7 @@ export default function CredenciamentoPage() {
                       className="flex h-7 w-7 items-center justify-center rounded-md text-app-subtle hover:bg-red-500/10 hover:text-red-400 transition-colors">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
-                    <button onClick={() => setExpandedId(id => id === p.id ? null : p.id)} title="Documentos"
+                    <button onClick={() => setExpandedId(id => id === p.id ? null : p.id)} title="Documentos e anotações"
                       className="flex h-7 w-7 items-center justify-center rounded-md text-app-subtle hover:bg-app-surface2 transition-colors">
                       {expandedId === p.id ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                     </button>
@@ -226,7 +252,22 @@ export default function CredenciamentoPage() {
                 </div>
 
                 {expandedId === p.id && (
-                  <div className="px-4 pb-4 pt-3 border-t border-app-border/50">
+                  <div className="px-4 pb-4 pt-3 border-t border-app-border/50 space-y-3">
+                    <div className="flex gap-1">
+                      {([['documentos', `Documentos (${p.documentos.length})`], ['anotacoes', `Anotações (${p.anotacoes.length})`]] as const).map(([id, label]) => (
+                        <button key={id} onClick={() => setSubAba(id)}
+                          className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${subAba === id ? 'bg-[#25D366]/15 text-[#25D366]' : 'text-app-muted hover:text-app-text'}`}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {subAba === 'anotacoes' ? (
+                      <AnotacoesCredenciamento
+                        dono={{ coluna: 'terceirizado_id', id: p.id }}
+                        anotacoes={p.anotacoes}
+                        onChange={anotacoes => setPessoas(prev => prev.map(x => x.id === p.id ? { ...x, anotacoes } : x))}
+                      />
+                    ) : (
                     <DocumentosCredenciamento
                       key={`${p.id}-${p.funcao}`}
                       dono={{ tabela: 'terceirizado_documentos', coluna: 'terceirizado_id', id: p.id, nome: p.nomeCompleto }}
@@ -235,6 +276,7 @@ export default function CredenciamentoPage() {
                       tituloExigidos={`Exigidos para ${p.funcao}`}
                       onChange={documentos => setPessoas(prev => prev.map(x => x.id === p.id ? { ...x, documentos } : x))}
                     />
+                    )}
                   </div>
                 )}
               </div>

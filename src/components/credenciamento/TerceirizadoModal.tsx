@@ -5,8 +5,12 @@ import { BadgeCheck, X, Save } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { maskCPF, maskPhone, mensagemDeErro } from '@/lib/utils'
 import { FUNCOES_CREDENCIAMENTO } from '@/lib/credenciamento-config'
-import type { EmpresaTerceirizada, Terceirizado, TipoContratacao } from '@/types'
-import { GREEN, INPUT_CLASS, SELECT_TERCEIRIZADO, terceirizadoFromRow, type TerceirizadoRow } from './dados'
+import type { Avaliacao, EmpresaTerceirizada, StatusCredenciamento, Terceirizado, TipoContratacao } from '@/types'
+import CamposSituacao from './CamposSituacao'
+import {
+  CONTRATACAO_LABEL, GREEN, INPUT_CLASS, registrarMudancaDeVeto, SELECT_TERCEIRIZADO, terceirizadoFromRow,
+  type TerceirizadoRow,
+} from './dados'
 
 const OUTRA_FUNCAO = '__outra__'
 
@@ -30,7 +34,9 @@ export default function TerceirizadoModal({ pessoa, empresas, onClose, onSaved }
   const [funcaoLivre, setFuncaoLivre] = useState(funcaoForaDaLista ? pessoa!.funcao : '')
   const [tipoContratacao, setTipoContratacao] = useState<TipoContratacao>(pessoa?.tipoContratacao ?? 'direto')
   const [empresaId, setEmpresaId] = useState(pessoa?.empresaId ?? '')
-  const [status, setStatus] = useState<'ativo' | 'inativo'>(pessoa?.status ?? 'ativo')
+  const [status, setStatus] = useState<StatusCredenciamento>(pessoa?.status ?? 'ativo')
+  const [motivoVeto, setMotivoVeto] = useState(pessoa?.motivoVeto ?? '')
+  const [avaliacao, setAvaliacao] = useState<Avaliacao | ''>(pessoa?.avaliacao ?? '')
   const [observacoes, setObservacoes] = useState(pessoa?.observacoes ?? '')
   const [submitted, setSubmitted] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -41,6 +47,7 @@ export default function TerceirizadoModal({ pessoa, empresas, onClose, onSaved }
     nomeCompleto: !nomeCompleto.trim(),
     funcao: !funcao,
     empresa: tipoContratacao === 'empresa' && !empresaId,
+    motivoVeto: status === 'vetado' && !motivoVeto.trim(),
   }
   const hasErrors = Object.values(errors).some(Boolean)
 
@@ -62,6 +69,8 @@ export default function TerceirizadoModal({ pessoa, empresas, onClose, onSaved }
       tipo_contratacao: tipoContratacao,
       empresa_id: tipoContratacao === 'empresa' ? empresaId : null,
       status,
+      motivo_veto: status === 'vetado' ? motivoVeto.trim() : null,
+      avaliacao: avaliacao || null,
       observacoes: observacoes.trim() || null,
     }
 
@@ -70,9 +79,14 @@ export default function TerceirizadoModal({ pessoa, empresas, onClose, onSaved }
       : supabase.from('terceirizados').insert(valores)
     const { data, error } = await consulta.select(SELECT_TERCEIRIZADO).single()
 
+    if (error) {
+      setBusy(false)
+      return setErro(mensagemDeErro(error, 'Não foi possível salvar a ficha. Tente novamente.'))
+    }
+    const salva = terceirizadoFromRow(data as unknown as TerceirizadoRow)
+    const novas = await registrarMudancaDeVeto({ coluna: 'terceirizado_id', id: salva.id }, pessoa, salva)
     setBusy(false)
-    if (error) return setErro(mensagemDeErro(error, 'Não foi possível salvar a ficha. Tente novamente.'))
-    onSaved(terceirizadoFromRow(data as unknown as TerceirizadoRow), !pessoa)
+    onSaved({ ...salva, anotacoes: [...novas, ...salva.anotacoes] }, !pessoa)
   }
 
   const erroClass = (comErro: boolean) => submitted && comErro ? `${INPUT_CLASS} border-red-500/50` : INPUT_CLASS
@@ -135,21 +149,22 @@ export default function TerceirizadoModal({ pessoa, empresas, onClose, onSaved }
                 <input value={funcaoLivre} onChange={e => setFuncaoLivre(e.target.value)} className={erroClass(errors.funcao)} />
               </div>
             )}
-            <div>
-              <label className="block text-xs text-app-muted mb-1">Situação</label>
-              <select value={status} onChange={e => setStatus(e.target.value as 'ativo' | 'inativo')} className={`${INPUT_CLASS} cursor-pointer`}>
-                <option value="ativo">Ativo</option>
-                <option value="inativo">Inativo</option>
-              </select>
-            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 pt-2 border-t border-app-border/50">
+            <CamposSituacao
+              status={status} motivoVeto={motivoVeto} avaliacao={avaliacao}
+              erroMotivo={submitted && errors.motivoVeto}
+              onStatus={setStatus} onMotivoVeto={setMotivoVeto} onAvaliacao={setAvaliacao}
+            />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 pt-2 border-t border-app-border/50">
             <div>
               <label className="block text-xs text-app-muted mb-1">Contratação</label>
               <select value={tipoContratacao} onChange={e => setTipoContratacao(e.target.value as TipoContratacao)} className={`${INPUT_CLASS} cursor-pointer`}>
-                <option value="direto">Contratado direto</option>
-                <option value="empresa">Por empresa terceirizada</option>
+                <option value="direto">{CONTRATACAO_LABEL.direto} (contratado direto)</option>
+                <option value="empresa">{CONTRATACAO_LABEL.empresa} (por empresa)</option>
               </select>
             </div>
             {tipoContratacao === 'empresa' && (
@@ -169,12 +184,12 @@ export default function TerceirizadoModal({ pessoa, empresas, onClose, onSaved }
           </div>
 
           <div>
-            <label className="block text-xs text-app-muted mb-1">Observações</label>
+            <label className="block text-xs text-app-muted mb-1">Observações do cadastro</label>
             <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} rows={2} className={INPUT_CLASS} />
           </div>
 
           {!pessoa && (
-            <p className="text-xs text-app-subtle italic">Os documentos e autorizações são anexados depois de salvar, abrindo a ficha na lista.</p>
+            <p className="text-xs text-app-subtle italic">Os documentos e as anotações do histórico são adicionados depois de salvar, abrindo a ficha na lista.</p>
           )}
           {erro && <p className="text-xs text-red-400">{erro}</p>}
         </div>

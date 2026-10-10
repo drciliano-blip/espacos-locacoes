@@ -1,12 +1,16 @@
-import type { DocumentoCredenciamento, EmpresaTerceirizada, EscalaEvento, Terceirizado, TipoContratacao } from '@/types'
+import type {
+  AnotacaoCredenciamento, Avaliacao, DocumentoCredenciamento, EmpresaTerceirizada, EscalaEvento,
+  StatusCredenciamento, Terceirizado, TipoContratacao,
+} from '@/types'
+import { createClient } from '@/lib/supabase/client'
 
 export const GREEN = '#25D366'
 export const DARK_GREEN = '#128C7E'
 
 export const INPUT_CLASS = 'w-full rounded-lg border border-app-border2 bg-app-surface2 px-3 py-1.5 text-sm text-app-text focus:outline-none focus:border-[#25D366]'
 
-export const SELECT_EMPRESA = '*, documentos:empresa_documentos(*)'
-export const SELECT_TERCEIRIZADO = '*, empresa:empresas_terceirizadas(nome), documentos:terceirizado_documentos(*)'
+export const SELECT_EMPRESA = '*, documentos:empresa_documentos(*), anotacoes:credenciamento_anotacoes(*)'
+export const SELECT_TERCEIRIZADO = '*, empresa:empresas_terceirizadas(nome, status), documentos:terceirizado_documentos(*), anotacoes:credenciamento_anotacoes(*)'
 
 export interface EmpresaRow {
   id: string
@@ -16,7 +20,18 @@ export interface EmpresaRow {
   telefone: string | null
   email: string | null
   observacoes: string | null
+  status: StatusCredenciamento
+  motivo_veto: string | null
+  avaliacao: Avaliacao | null
   documentos: DocumentoRow[] | null
+  anotacoes: AnotacaoRow[] | null
+}
+
+export interface AnotacaoRow {
+  id: string
+  texto: string
+  autor_nome: string | null
+  created_at: string
 }
 
 export interface DocumentoRow {
@@ -39,10 +54,20 @@ export interface TerceirizadoRow {
   funcao: string
   tipo_contratacao: TipoContratacao
   empresa_id: string | null
-  empresa: { nome: string } | null
-  status: 'ativo' | 'inativo'
+  empresa: { nome: string; status: StatusCredenciamento } | null
+  status: StatusCredenciamento
+  motivo_veto: string | null
+  avaliacao: Avaliacao | null
   observacoes: string | null
   documentos: DocumentoRow[] | null
+  anotacoes: AnotacaoRow[] | null
+}
+
+// Mais recente primeiro — é um histórico.
+export function anotacoesFromRows(rows: AnotacaoRow[] | null): AnotacaoCredenciamento[] {
+  return (rows ?? [])
+    .map(r => ({ id: r.id, texto: r.texto, autorNome: r.autor_nome ?? '', criadoEm: r.created_at }))
+    .sort((a, b) => b.criadoEm.localeCompare(a.criadoEm))
 }
 
 export function empresaFromRow(row: EmpresaRow): EmpresaTerceirizada {
@@ -54,7 +79,11 @@ export function empresaFromRow(row: EmpresaRow): EmpresaTerceirizada {
     telefone: row.telefone ?? '',
     email: row.email ?? '',
     observacoes: row.observacoes ?? '',
+    status: row.status,
+    motivoVeto: row.motivo_veto ?? '',
+    avaliacao: row.avaliacao ?? undefined,
     documentos: (row.documentos ?? []).map(documentoFromRow),
+    anotacoes: anotacoesFromRows(row.anotacoes),
   }
 }
 
@@ -83,8 +112,11 @@ export function terceirizadoFromRow(row: TerceirizadoRow): Terceirizado {
     empresaId: row.empresa_id ?? undefined,
     empresaNome: row.empresa?.nome ?? '',
     status: row.status,
+    motivoVeto: row.motivo_veto ?? '',
+    avaliacao: row.avaliacao ?? undefined,
     observacoes: row.observacoes ?? '',
     documentos: (row.documentos ?? []).map(documentoFromRow),
+    anotacoes: anotacoesFromRows(row.anotacoes),
   }
 }
 
@@ -104,3 +136,41 @@ export const SITUACAO_LABEL = {
   atencao:  { label: 'Vence em breve', className: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
   pendente: { label: 'Pendente',       className: 'bg-red-500/10 text-red-400 border-red-500/20' },
 } as const
+
+export const VETADO_CLASS = 'bg-red-500/15 text-red-400 border-red-500/40'
+
+export const AVALIACAO_LABEL: Record<Avaliacao, { label: string; className: string }> = {
+  otimo:   { label: 'Ótimo',   className: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
+  bom:     { label: 'Bom',     className: 'bg-sky-500/10 text-sky-400 border-sky-500/20' },
+  regular: { label: 'Regular', className: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+}
+
+export const CONTRATACAO_LABEL: Record<TipoContratacao, string> = {
+  direto: 'Pessoa física',
+  empresa: 'Pessoa jurídica',
+}
+
+// Vetar ou retirar o veto entra sozinho no histórico de anotações — o motivo
+// do veto fica num campo só, que a próxima edição sobrescreve. Devolve as
+// anotações novas (vazio se a situação não mudou ou se a gravação falhar: o
+// histórico é secundário, não deve desfazer o que já foi salvo).
+export async function registrarMudancaDeVeto(
+  dono: { coluna: 'terceirizado_id' | 'empresa_id'; id: string },
+  antes: { status: StatusCredenciamento; motivoVeto: string } | null,
+  depois: { status: StatusCredenciamento; motivoVeto: string },
+): Promise<AnotacaoCredenciamento[]> {
+  const eraVetado = antes?.status === 'vetado'
+  const ficouVetado = depois.status === 'vetado'
+  let texto = ''
+  if (ficouVetado && (!eraVetado || antes?.motivoVeto !== depois.motivoVeto)) texto = `Vetado — ${depois.motivoVeto}`
+  if (eraVetado && !ficouVetado) texto = 'Veto retirado.'
+  if (!texto) return []
+
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('credenciamento_anotacoes')
+    .insert({ [dono.coluna]: dono.id, texto })
+    .select()
+    .single()
+  return error ? [] : anotacoesFromRows([data as AnotacaoRow])
+}

@@ -7,7 +7,7 @@ import { formatDate, hojeISO, mensagemDeErro } from '@/lib/utils'
 import { useEventos } from '@/contexts/EventosContext'
 import { situacaoCredenciamento } from '@/lib/credenciamento-config'
 import type { EscalaEvento, Terceirizado } from '@/types'
-import { escalaFromRow, GREEN, INPUT_CLASS, SITUACAO_LABEL, type EscalaRow } from './dados'
+import { CONTRATACAO_LABEL, escalaFromRow, GREEN, INPUT_CLASS, SITUACAO_LABEL, VETADO_CLASS, type EscalaRow } from './dados'
 
 const FILTRO_CLASS = 'cursor-pointer rounded-lg border border-app-border2 bg-app-surface px-2.5 py-1.5 text-xs text-app-text focus:outline-none'
 
@@ -139,7 +139,7 @@ export default function EscalaSection({ pessoas }: Props) {
             .sort((a, b) => a.escala.funcao.localeCompare(b.escala.funcao) || a.pessoa.nomeCompleto.localeCompare(b.pessoa.nomeCompleto))
           // A documentação é conferida na data do evento, não na de hoje: um
           // certificado que vence antes do evento já conta como pendência.
-          const comPendencia = escalados.filter(x => situacaoCredenciamento(x.escala.funcao, x.pessoa.documentos, ev.data) === 'pendente').length
+          const comPendencia = escalados.filter(x => x.pessoa.status === 'vetado' || situacaoCredenciamento(x.escala.funcao, x.pessoa.documentos, ev.data) === 'pendente').length
           const idsEscalados = new Set(escalados.map(x => x.pessoa.id))
           const disponiveis = pessoas.filter(p => p.status === 'ativo' && !idsEscalados.has(p.id))
           const aberto = expandedId === ev.id
@@ -180,15 +180,19 @@ export default function EscalaSection({ pessoas }: Props) {
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <p className="text-xs font-medium text-app-text truncate">{pessoa.nomeCompleto}</p>
-                                <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${SITUACAO_LABEL[situacao].className}`}>
-                                  {situacao === 'pendente' ? 'Pendente na data do evento' : situacao === 'atencao' ? 'Vence perto do evento' : 'Apto'}
-                                </span>
+                                {pessoa.status === 'vetado' ? (
+                                  <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${VETADO_CLASS}`}>Vetado</span>
+                                ) : (
+                                  <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${SITUACAO_LABEL[situacao].className}`}>
+                                    {situacao === 'pendente' ? 'Pendente na data do evento' : situacao === 'atencao' ? 'Vence perto do evento' : 'Apto'}
+                                  </span>
+                                )}
                               </div>
                               <div className="flex items-center gap-3 mt-0.5 flex-wrap text-xs text-app-subtle">
                                 <span className="flex items-center gap-1"><Briefcase className="h-3 w-3" />{escala.funcao}</span>
                                 <span className="flex items-center gap-1">
                                   <Building2 className="h-3 w-3" />
-                                  {pessoa.tipoContratacao === 'empresa' ? (pessoa.empresaNome || 'Empresa não informada') : 'Contratado direto'}
+                                  {CONTRATACAO_LABEL[pessoa.tipoContratacao]}{pessoa.tipoContratacao === 'empresa' && ` — ${pessoa.empresaNome || 'empresa não informada'}`}
                                 </span>
                                 {pessoa.cpf && <span>CPF {pessoa.cpf}</span>}
                               </div>

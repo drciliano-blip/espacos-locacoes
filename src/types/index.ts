@@ -251,7 +251,17 @@ export interface FichaCliente {
 }
 
 // Credenciamento de terceirizados
+// 'direto' = pessoa física, contratada direto; 'empresa' = pessoa jurídica.
 export type TipoContratacao = 'direto' | 'empresa'
+export type StatusCredenciamento = 'ativo' | 'inativo' | 'vetado'
+export type Avaliacao = 'otimo' | 'bom' | 'regular'
+
+export interface AnotacaoCredenciamento {
+  id: string
+  texto: string
+  autorNome: string
+  criadoEm: string
+}
 
 export interface EmpresaTerceirizada {
   id: string
@@ -261,7 +271,11 @@ export interface EmpresaTerceirizada {
   telefone: string
   email: string
   observacoes: string
+  status: StatusCredenciamento
+  motivoVeto: string
+  avaliacao?: Avaliacao
   documentos: DocumentoCredenciamento[]
+  anotacoes: AnotacaoCredenciamento[]
 }
 
 export interface DocumentoCredenciamento {
@@ -285,9 +299,12 @@ export interface Terceirizado {
   tipoContratacao: TipoContratacao
   empresaId?: string
   empresaNome: string
-  status: 'ativo' | 'inativo'
+  status: StatusCredenciamento
+  motivoVeto: string
+  avaliacao?: Avaliacao
   observacoes: string
   documentos: DocumentoCredenciamento[]
+  anotacoes: AnotacaoCredenciamento[]
 }
 
 export interface EscalaEvento {
