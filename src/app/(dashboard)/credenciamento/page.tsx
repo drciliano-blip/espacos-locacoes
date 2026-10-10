@@ -55,7 +55,7 @@ export default function CredenciamentoPage() {
 
   const hoje = hojeISO()
   const comSituacao = useMemo(
-    () => pessoas.map(p => ({ pessoa: p, situacao: situacaoCredenciamento(p.funcao, p.documentos, hoje) })),
+    () => pessoas.map(p => ({ pessoa: p, situacao: situacaoCredenciamento(p.funcao, p.tipoContratacao, p.documentos, hoje) })),
     [pessoas, hoje],
   )
 
@@ -273,11 +273,11 @@ export default function CredenciamentoPage() {
                       />
                     ) : (
                     <DocumentosCredenciamento
-                      key={`${p.id}-${p.funcao}`}
+                      key={`${p.id}-${p.funcao}-${p.tipoContratacao}`}
                       dono={{ tabela: 'terceirizado_documentos', coluna: 'terceirizado_id', id: p.id, nome: p.nomeCompleto }}
                       documentos={p.documentos}
-                      exigidos={documentosExigidos(p.funcao)}
-                      tituloExigidos={`Exigidos para ${p.funcao}`}
+                      exigidos={documentosExigidos(p.funcao, p.tipoContratacao)}
+                      tituloExigidos={`Exigidos para ${p.funcao}${p.tipoContratacao === 'mei' ? ' (MEI)' : ''}`}
                       onChange={documentos => setPessoas(prev => prev.map(x => x.id === p.id ? { ...x, documentos } : x))}
                     />
                     )}

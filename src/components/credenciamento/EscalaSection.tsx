@@ -139,7 +139,7 @@ export default function EscalaSection({ pessoas }: Props) {
             .sort((a, b) => a.escala.funcao.localeCompare(b.escala.funcao) || a.pessoa.nomeCompleto.localeCompare(b.pessoa.nomeCompleto))
           // A documentação é conferida na data do evento, não na de hoje: um
           // certificado que vence antes do evento já conta como pendência.
-          const comPendencia = escalados.filter(x => x.pessoa.status === 'vetado' || situacaoCredenciamento(x.escala.funcao, x.pessoa.documentos, ev.data) === 'pendente').length
+          const comPendencia = escalados.filter(x => x.pessoa.status === 'vetado' || situacaoCredenciamento(x.escala.funcao, x.pessoa.tipoContratacao, x.pessoa.documentos, ev.data) === 'pendente').length
           const idsEscalados = new Set(escalados.map(x => x.pessoa.id))
           const disponiveis = pessoas.filter(p => p.status === 'ativo' && !idsEscalados.has(p.id))
           const aberto = expandedId === ev.id
@@ -174,7 +174,7 @@ export default function EscalaSection({ pessoas }: Props) {
                   ) : (
                     <div className="space-y-1.5">
                       {escalados.map(({ escala, pessoa }) => {
-                        const situacao = situacaoCredenciamento(escala.funcao, pessoa.documentos, ev.data)
+                        const situacao = situacaoCredenciamento(escala.funcao, pessoa.tipoContratacao, pessoa.documentos, ev.data)
                         return (
                           <div key={escala.id} className="flex items-center justify-between gap-3 rounded-lg border border-app-border2/50 bg-app-surface px-3 py-2">
                             <div className="min-w-0">

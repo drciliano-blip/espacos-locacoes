@@ -1,3 +1,5 @@
+import type { TipoContratacao } from '@/types'
+
 // Funções oferecidas no cadastro — as da Calculadora de Staff mais as que só
 // existem no credenciamento (Chefe de Segurança, Produtor Responsável). Função
 // fora da lista pode ser digitada à mão no formulário.
@@ -33,8 +35,18 @@ export const DOCUMENTOS_POR_FUNCAO: Record<string, DocumentoExigido[]> = {
   ],
 }
 
-export function documentosExigidos(funcao: string): DocumentoExigido[] {
-  return [...DOCUMENTOS_BASE, ...(DOCUMENTOS_POR_FUNCAO[funcao] ?? [])]
+// Exigido de quem é contratado como pessoa jurídica própria (MEI): a prova
+// de que o CNPJ informado na ficha existe e é dele.
+export const DOCUMENTOS_PJ_PROPRIA: DocumentoExigido[] = [
+  { tipo: 'Certificado MEI (CCMEI) ou Cartão CNPJ', temValidade: false },
+]
+
+export function documentosExigidos(funcao: string, tipoContratacao: TipoContratacao): DocumentoExigido[] {
+  return [
+    ...DOCUMENTOS_BASE,
+    ...(tipoContratacao === 'mei' ? DOCUMENTOS_PJ_PROPRIA : []),
+    ...(DOCUMENTOS_POR_FUNCAO[funcao] ?? []),
+  ]
 }
 
 // Antecedência do aviso de "vence em breve".
@@ -77,10 +89,11 @@ export type SituacaoCredenciamento = 'apto' | 'atencao' | 'pendente'
 // algo vence em breve. Pendente: falta documento, falta a validade ou venceu.
 export function situacaoCredenciamento(
   funcao: string,
+  tipoContratacao: TipoContratacao,
   anexados: DocumentoParaSituacao[],
   hojeISO: string,
 ): SituacaoCredenciamento {
-  const situacoes = documentosExigidos(funcao).map(e => situacaoDoExigido(e, anexados, hojeISO).situacao)
+  const situacoes = documentosExigidos(funcao, tipoContratacao).map(e => situacaoDoExigido(e, anexados, hojeISO).situacao)
   if (situacoes.some(s => s === 'falta' || s === 'vencido' || s === 'sem_validade')) return 'pendente'
   if (situacoes.some(s => s === 'vence_em_breve')) return 'atencao'
   return 'apto'
