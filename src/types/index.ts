@@ -249,3 +249,50 @@ export interface FichaCliente {
   dataVencimentoSaldo?: string
   documentoFileId?: string
 }
+
+// Credenciamento de terceirizados
+export type TipoContratacao = 'direto' | 'empresa'
+
+export interface EmpresaTerceirizada {
+  id: string
+  nome: string
+  cnpj: string
+  contatoNome: string
+  telefone: string
+  email: string
+  observacoes: string
+  documentos: DocumentoCredenciamento[]
+}
+
+export interface DocumentoCredenciamento {
+  id: string
+  tipo: string
+  numero: string
+  validade?: string
+  fileId?: string
+  criadoEm: string
+}
+
+export interface Terceirizado {
+  id: string
+  nomeCompleto: string
+  cpf: string
+  rg: string
+  dataNascimento?: string
+  telefone: string
+  email: string
+  funcao: string
+  tipoContratacao: TipoContratacao
+  empresaId?: string
+  empresaNome: string
+  status: 'ativo' | 'inativo'
+  observacoes: string
+  documentos: DocumentoCredenciamento[]
+}
+
+export interface EscalaEvento {
+  id: string
+  eventoId: string
+  terceirizadoId: string
+  funcao: string
+}

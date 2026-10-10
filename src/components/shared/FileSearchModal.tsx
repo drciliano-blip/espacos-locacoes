@@ -15,6 +15,7 @@ const MODULE_LABELS: Record<StoredFile['module'], string> = {
   fichas:       'Fichas de Cliente',
   receitas:     'Receitas',
   extratos:     'Extratos Bancários',
+  credenciamento: 'Credenciamento',
 }
 
 function iconFor(mime: string) {

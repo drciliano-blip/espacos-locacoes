@@ -15,6 +15,7 @@ import {
   Receipt,
   Users,
   Calculator,
+  BadgeCheck,
   X,
 } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
@@ -30,6 +31,7 @@ const navItemsBefore = [
   { href: '/fechamento',     label: 'Financeiro',    icon: Landmark,        page: 'fechamento' },
   { href: '/agenda',         label: 'Agenda',        icon: CalendarDays,    page: 'agenda' },
   { href: '/calculadora-staff', label: 'Calculadora de Staff', icon: Calculator, page: 'calculadora-staff' },
+  { href: '/credenciamento', label: 'Credenciamento', icon: BadgeCheck, page: 'credenciamento' },
   { href: '/contas-a-pagar', label: 'Contas a Pagar / Pagas',icon: Receipt,         page: 'contas-a-pagar' },
 ]
 

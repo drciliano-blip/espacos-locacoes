@@ -17,6 +17,7 @@ const titles: Record<string, string> = {
   '/contas-a-pagar': 'Contas a Pagar',
   '/usuarios': 'Gestão de Usuários',
   '/calculadora-staff': 'Calculadora de Staff',
+  '/credenciamento': 'Credenciamento de Terceirizados',
 }
 
 interface HeaderProps {
