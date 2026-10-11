@@ -15,7 +15,7 @@ export type StatusVistoria = 'pendente' | 'aprovada' | 'aprovada com ressalvas' 
 export type TipoEvento = 'Festivo' | 'Corporativo' | 'Audiovisual' | 'Locação Portaria'
 
 // Feature 2: Níveis de acesso
-export type NivelAcesso = 'admin' | 'financeiro' | 'operacional' | 'visualizador' | 'socio'
+export type NivelAcesso = 'admin' | 'financeiro' | 'operacional' | 'visualizador' | 'socio' | 'credenciamento'
 
 // Feature 1: Contas a Pagar
 export type CategoriaContaPagar = 'operacional' | 'obra' | 'financeiro' | 'retirada_socio' | 'fundo_caixa' | 'reembolso_evento'
@@ -291,6 +291,8 @@ export interface DocumentoCredenciamento {
 
 export interface Terceirizado {
   id: string
+  // Sequencial dado pelo banco — é como o produtor localiza o staff na escala.
+  numero: number
   nomeCompleto: string
   cpf: string
   rg: string

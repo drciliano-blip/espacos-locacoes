@@ -45,6 +45,7 @@ export default function Header({ userName, userRole }: HeaderProps) {
     operacional: 'Operacional',
     visualizador: 'Visualizador',
     socio: 'Sócio',
+    credenciamento: 'Credenciamento',
   }
 
   return (

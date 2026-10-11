@@ -8,7 +8,7 @@ import { FUNCOES_CREDENCIAMENTO } from '@/lib/credenciamento-config'
 import type { Avaliacao, EmpresaTerceirizada, StatusCredenciamento, Terceirizado, TipoContratacao } from '@/types'
 import CamposSituacao from './CamposSituacao'
 import {
-  CONTRATACAO_LABEL, GREEN, INPUT_CLASS, registrarMudancaDeVeto, SELECT_TERCEIRIZADO, terceirizadoFromRow,
+  CONTRATACAO_LABEL, GREEN, INPUT_CLASS, numeroStaff, registrarMudancaDeVeto, SELECT_TERCEIRIZADO, terceirizadoFromRow,
   type TerceirizadoRow,
 } from './dados'
 
@@ -17,11 +17,14 @@ const OUTRA_FUNCAO = '__outra__'
 interface Props {
   pessoa: Terceirizado | null
   empresas: EmpresaTerceirizada[]
+  // Login de cadastro: não define situação, veto nem avaliação (o banco
+  // também ignora, ver migration 0042).
+  somenteCadastro: boolean
   onClose: () => void
   onSaved: (pessoa: Terceirizado, criada: boolean) => void
 }
 
-export default function TerceirizadoModal({ pessoa, empresas, onClose, onSaved }: Props) {
+export default function TerceirizadoModal({ pessoa, empresas, somenteCadastro, onClose, onSaved }: Props) {
   const funcaoForaDaLista = !!pessoa && !FUNCOES_CREDENCIAMENTO.includes(pessoa.funcao)
 
   const [nomeCompleto, setNomeCompleto] = useState(pessoa?.nomeCompleto ?? '')
@@ -89,7 +92,7 @@ export default function TerceirizadoModal({ pessoa, empresas, onClose, onSaved }
       return setErro(mensagemDeErro(error, 'Não foi possível salvar a ficha. Tente novamente.'))
     }
     const salva = terceirizadoFromRow(data as unknown as TerceirizadoRow)
-    const novas = await registrarMudancaDeVeto({ coluna: 'terceirizado_id', id: salva.id }, pessoa, salva)
+    const novas = somenteCadastro ? [] : await registrarMudancaDeVeto({ coluna: 'terceirizado_id', id: salva.id }, pessoa, salva)
     setBusy(false)
     onSaved({ ...salva, anotacoes: [...novas, ...salva.anotacoes] }, !pessoa)
   }
@@ -102,7 +105,7 @@ export default function TerceirizadoModal({ pessoa, empresas, onClose, onSaved }
         <div className="flex items-center justify-between px-5 py-4 border-b border-app-border">
           <h2 className="text-sm font-semibold text-app-text flex items-center gap-2">
             <BadgeCheck className="h-4 w-4 text-[#25D366]" />
-            {pessoa ? 'Editar ficha' : 'Nova ficha cadastral'}
+            {pessoa ? `Editar ficha — ${numeroStaff(pessoa.numero)}` : 'Nova ficha cadastral'}
           </h2>
           <button onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-lg text-app-subtle hover:bg-app-surface2 transition-colors">
             <X className="h-4 w-4" />
@@ -156,13 +159,15 @@ export default function TerceirizadoModal({ pessoa, empresas, onClose, onSaved }
             )}
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 pt-2 border-t border-app-border/50">
-            <CamposSituacao
-              status={status} motivoVeto={motivoVeto} avaliacao={avaliacao}
-              erroMotivo={submitted && errors.motivoVeto}
-              onStatus={setStatus} onMotivoVeto={setMotivoVeto} onAvaliacao={setAvaliacao}
-            />
-          </div>
+          {!somenteCadastro && (
+            <div className="grid gap-4 sm:grid-cols-2 pt-2 border-t border-app-border/50">
+              <CamposSituacao
+                status={status} motivoVeto={motivoVeto} avaliacao={avaliacao}
+                erroMotivo={submitted && errors.motivoVeto}
+                onStatus={setStatus} onMotivoVeto={setMotivoVeto} onAvaliacao={setAvaliacao}
+              />
+            </div>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2 pt-2 border-t border-app-border/50">
             <div>
@@ -208,7 +213,7 @@ export default function TerceirizadoModal({ pessoa, empresas, onClose, onSaved }
           </div>
 
           {!pessoa && (
-            <p className="text-xs text-app-subtle italic">Os documentos e as anotações do histórico são adicionados depois de salvar, abrindo a ficha na lista.</p>
+            <p className="text-xs text-app-subtle italic">O número do staff é gerado ao salvar. Os documentos são anexados em seguida, abrindo a ficha na lista.</p>
           )}
           {erro && <p className="text-xs text-red-400">{erro}</p>}
         </div>

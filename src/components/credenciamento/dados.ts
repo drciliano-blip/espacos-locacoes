@@ -45,6 +45,7 @@ export interface DocumentoRow {
 
 export interface TerceirizadoRow {
   id: string
+  numero: number
   nome_completo: string
   cpf: string | null
   rg: string | null
@@ -103,6 +104,7 @@ export function documentoFromRow(row: DocumentoRow): DocumentoCredenciamento {
 export function terceirizadoFromRow(row: TerceirizadoRow): Terceirizado {
   return {
     id: row.id,
+    numero: row.numero,
     nomeCompleto: row.nome_completo,
     cpf: row.cpf ?? '',
     rg: row.rg ?? '',
@@ -185,4 +187,9 @@ export async function registrarMudancaDeVeto(
     .select()
     .single()
   return error ? [] : anotacoesFromRows([data as AnotacaoRow])
+}
+
+// "Nº 0042" — quatro dígitos só pra alinhar; passa disso sem cortar.
+export function numeroStaff(numero: number): string {
+  return `Nº ${String(numero).padStart(4, '0')}`
 }

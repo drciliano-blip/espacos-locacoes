@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Users, Plus, Edit2, ShieldCheck, Eye, Briefcase, DollarSign, CheckCircle2, XCircle, X, Save, Info, RefreshCw, Handshake } from 'lucide-react'
+import { Users, Plus, Edit2, ShieldCheck, Eye, Briefcase, DollarSign, CheckCircle2, XCircle, X, Save, Info, RefreshCw, Handshake, BadgeCheck } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useEspacos } from '@/contexts/EspacosContext'
 import type { NivelAcesso } from '@/types'
@@ -37,17 +37,22 @@ const roleConfig: Record<NivelAcesso, { label: string; color: string; icon: Reac
     label: 'Sócio', color: 'bg-violet-500/15 text-violet-400 border-violet-500/20',
     icon: Handshake, desc: 'Dashboard, Agenda, Eventos, Financeiro, Espaços — somente leitura, restrito aos espaços vinculados',
   },
+  credenciamento: {
+    label: 'Credenciamento', color: 'bg-amber-500/15 text-amber-400 border-amber-500/20',
+    icon: BadgeCheck, desc: 'Somente o cadastro de terceirizados — não vê mais nada do sistema, nem monta escala',
+  },
 }
 
 const permissionsMatrix: Record<NivelAcesso, string[]> = {
-  admin: ['Dashboard', 'Agenda', 'Pagamentos', 'Eventos', 'Financeiro', 'Contas a Pagar', 'Usuários', 'Espaços', 'Calculadora de Staff'],
+  admin: ['Dashboard', 'Agenda', 'Pagamentos', 'Eventos', 'Financeiro', 'Contas a Pagar', 'Usuários', 'Espaços', 'Calculadora de Staff', 'Credenciamento'],
   financeiro: ['Dashboard', 'Pagamentos', 'Eventos', 'Financeiro', 'Contas a Pagar'],
-  operacional: ['Dashboard', 'Agenda', 'Eventos', 'Espaços', 'Calculadora de Staff'],
+  operacional: ['Dashboard', 'Agenda', 'Eventos', 'Espaços', 'Calculadora de Staff', 'Credenciamento'],
   visualizador: ['Dashboard'],
   socio: ['Dashboard', 'Agenda', 'Eventos', 'Financeiro', 'Espaços'],
+  credenciamento: ['Credenciamento'],
 }
 
-const allPages = ['Dashboard', 'Agenda', 'Pagamentos', 'Eventos', 'Financeiro', 'Contas a Pagar', 'Usuários', 'Espaços', 'Calculadora de Staff']
+const allPages = ['Dashboard', 'Agenda', 'Pagamentos', 'Eventos', 'Financeiro', 'Contas a Pagar', 'Usuários', 'Espaços', 'Calculadora de Staff', 'Credenciamento']
 
 export default function UsuariosPage() {
   const { espacosConfig } = useEspacos()

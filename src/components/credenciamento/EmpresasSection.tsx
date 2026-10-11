@@ -18,12 +18,14 @@ import {
 interface Props {
   empresas: EmpresaTerceirizada[]
   pessoas: Terceirizado[]
+  // Login de cadastro: sem excluir, sem situação/avaliação e sem anotações.
+  somenteCadastro: boolean
   onChange: (empresas: EmpresaTerceirizada[]) => void
 }
 
 const EMPTY = { nome: '', cnpj: '', contatoNome: '', telefone: '', email: '', observacoes: '', motivoVeto: '' }
 
-export default function EmpresasSection({ empresas, pessoas, onChange }: Props) {
+export default function EmpresasSection({ empresas, pessoas, somenteCadastro, onChange }: Props) {
   const [modalOpen, setModalOpen] = useState(false)
   const [editando, setEditando] = useState<EmpresaTerceirizada | null>(null)
   const [draft, setDraft] = useState(EMPTY)
@@ -83,7 +85,7 @@ export default function EmpresasSection({ empresas, pessoas, onChange }: Props) 
     }
 
     const gravada = empresaFromRow(data as unknown as EmpresaRow)
-    const novas = await registrarMudancaDeVeto({ coluna: 'empresa_id', id: gravada.id }, editando, gravada)
+    const novas = somenteCadastro ? [] : await registrarMudancaDeVeto({ coluna: 'empresa_id', id: gravada.id }, editando, gravada)
     setBusy(false)
     const salva = { ...gravada, anotacoes: [...novas, ...gravada.anotacoes] }
     onChange(editando ? empresas.map(e => e.id === salva.id ? salva : e) : [...empresas, salva].sort((a, b) => a.nome.localeCompare(b.nome)))
@@ -139,7 +141,7 @@ export default function EmpresasSection({ empresas, pessoas, onChange }: Props) 
                   <p className="text-sm font-medium text-app-text truncate">{e.nome}</p>
                   {e.status === 'vetado' && <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${VETADO_CLASS}`}>Vetada</span>}
                   {e.status === 'inativo' && <span className="rounded-full border border-app-border2 px-2 py-0.5 text-[11px] text-app-subtle">Inativa</span>}
-                  {e.avaliacao && <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${AVALIACAO_LABEL[e.avaliacao].className}`}>{AVALIACAO_LABEL[e.avaliacao].label}</span>}
+                  {!somenteCadastro && e.avaliacao && <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${AVALIACAO_LABEL[e.avaliacao].className}`}>{AVALIACAO_LABEL[e.avaliacao].label}</span>}
                   {situacao !== 'apto' && (
                     <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${SITUACAO_LABEL[situacao].className}`}>
                       {situacao === 'pendente' ? 'Documento vencido' : SITUACAO_LABEL[situacao].label}
@@ -152,20 +154,22 @@ export default function EmpresasSection({ empresas, pessoas, onChange }: Props) 
                   {e.telefone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{e.telefone}</span>}
                   <span>· {vinculados} pessoa{vinculados === 1 ? '' : 's'}</span>
                   <span>· {e.documentos.length} documento{e.documentos.length === 1 ? '' : 's'}</span>
-                  <span>· {e.anotacoes.length} anotaç{e.anotacoes.length === 1 ? 'ão' : 'ões'}</span>
+                  {!somenteCadastro && <span>· {e.anotacoes.length} anotaç{e.anotacoes.length === 1 ? 'ão' : 'ões'}</span>}
                 </div>
-                {e.status === 'vetado' && e.motivoVeto && <p className="text-xs text-red-400 mt-1">Motivo do veto: {e.motivoVeto}</p>}
+                {!somenteCadastro && e.status === 'vetado' && e.motivoVeto && <p className="text-xs text-red-400 mt-1">Motivo do veto: {e.motivoVeto}</p>}
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <button onClick={() => abrir(e)} title="Editar"
                   className="flex h-7 w-7 items-center justify-center rounded-md text-app-subtle hover:bg-app-surface2 transition-colors">
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
-                <button onClick={() => handleRemove(e)} title="Remover"
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-app-subtle hover:bg-red-500/10 hover:text-red-400 transition-colors">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-                <button onClick={() => setExpandedId(id => id === e.id ? null : e.id)} title="Documentos e anotações"
+                {!somenteCadastro && (
+                  <button onClick={() => handleRemove(e)} title="Remover"
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-app-subtle hover:bg-red-500/10 hover:text-red-400 transition-colors">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                <button onClick={() => setExpandedId(id => id === e.id ? null : e.id)} title={somenteCadastro ? 'Documentos' : 'Documentos e anotações'}
                   className="flex h-7 w-7 items-center justify-center rounded-md text-app-subtle hover:bg-app-surface2 transition-colors">
                   {expandedId === e.id ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                 </button>
@@ -174,7 +178,7 @@ export default function EmpresasSection({ empresas, pessoas, onChange }: Props) 
 
             {expandedId === e.id && (
               <div className="px-4 pb-4 pt-3 border-t border-app-border/50 space-y-3">
-                <div className="flex gap-1">
+                <div className={somenteCadastro ? 'hidden' : 'flex gap-1'}>
                   {([['documentos', `Documentos (${e.documentos.length})`], ['anotacoes', `Anotações (${e.anotacoes.length})`]] as const).map(([id, label]) => (
                     <button key={id} onClick={() => setSubAba(id)}
                       className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${subAba === id ? 'bg-[#25D366]/15 text-[#25D366]' : 'text-app-muted hover:text-app-text'}`}>
@@ -182,7 +186,7 @@ export default function EmpresasSection({ empresas, pessoas, onChange }: Props) 
                     </button>
                   ))}
                 </div>
-                {subAba === 'documentos' ? (
+                {subAba === 'documentos' || somenteCadastro ? (
                   <DocumentosCredenciamento
                     dono={{ tabela: 'empresa_documentos', coluna: 'empresa_id', id: e.id, nome: e.nome }}
                     documentos={e.documentos}
@@ -242,13 +246,15 @@ export default function EmpresasSection({ empresas, pessoas, onChange }: Props) 
                   <input type="email" value={draft.email} onChange={e => set('email', e.target.value)} className={INPUT_CLASS} />
                 </div>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <CamposSituacao
-                  status={status} motivoVeto={draft.motivoVeto} avaliacao={avaliacao}
-                  erroMotivo={submitted && motivoEmBranco}
-                  onStatus={setStatus} onMotivoVeto={v => set('motivoVeto', v)} onAvaliacao={setAvaliacao}
-                />
-              </div>
+              {!somenteCadastro && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <CamposSituacao
+                    status={status} motivoVeto={draft.motivoVeto} avaliacao={avaliacao}
+                    erroMotivo={submitted && motivoEmBranco}
+                    onStatus={setStatus} onMotivoVeto={v => set('motivoVeto', v)} onAvaliacao={setAvaliacao}
+                  />
+                </div>
+              )}
               <div>
                 <label className="block text-xs text-app-muted mb-1">Observações do cadastro</label>
                 <textarea value={draft.observacoes} onChange={e => set('observacoes', e.target.value)} rows={2} className={INPUT_CLASS} />

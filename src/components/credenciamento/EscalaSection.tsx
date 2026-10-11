@@ -7,7 +7,7 @@ import { formatDate, hojeISO, mensagemDeErro } from '@/lib/utils'
 import { useEventos } from '@/contexts/EventosContext'
 import { situacaoCredenciamento } from '@/lib/credenciamento-config'
 import type { EscalaEvento, Terceirizado } from '@/types'
-import { descricaoContratacao, escalaFromRow, GREEN, INPUT_CLASS, SITUACAO_LABEL, VETADO_CLASS, type EscalaRow } from './dados'
+import { descricaoContratacao, escalaFromRow, numeroStaff, GREEN, INPUT_CLASS, SITUACAO_LABEL, VETADO_CLASS, type EscalaRow } from './dados'
 
 const FILTRO_CLASS = 'cursor-pointer rounded-lg border border-app-border2 bg-app-surface px-2.5 py-1.5 text-xs text-app-text focus:outline-none'
 
@@ -28,6 +28,7 @@ export default function EscalaSection({ pessoas }: Props) {
   const [soComEscala, setSoComEscala] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [pessoaParaAdicionar, setPessoaParaAdicionar] = useState('')
+  const [filtroStaff, setFiltroStaff] = useState('')
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -70,12 +71,13 @@ export default function EscalaSection({ pessoas }: Props) {
   function abrir(eventoId: string) {
     setExpandedId(id => id === eventoId ? null : eventoId)
     setPessoaParaAdicionar('')
+    setFiltroStaff('')
     setErro(null)
   }
 
-  async function handleAdicionar(eventoId: string) {
-    const pessoa = pessoaPorId.get(pessoaParaAdicionar)
-    if (!pessoa) return
+  async function handleAdicionar(eventoId: string, pessoaId: string) {
+    const pessoa = pessoaPorId.get(pessoaId)
+    if (!pessoa || busy) return
     setErro(null)
     setBusy(true)
     const supabase = createClient()
@@ -88,6 +90,7 @@ export default function EscalaSection({ pessoas }: Props) {
     if (error) return setErro(mensagemDeErro(error, 'Não foi possível escalar a pessoa.'))
     setEscalas(prev => [...prev, escalaFromRow(data as EscalaRow)])
     setPessoaParaAdicionar('')
+    setFiltroStaff('')
   }
 
   async function handleRemover(escala: EscalaEvento) {
@@ -143,6 +146,13 @@ export default function EscalaSection({ pessoas }: Props) {
           const idsEscalados = new Set(escalados.map(x => x.pessoa.id))
           const disponiveis = pessoas.filter(p => p.status === 'ativo' && !idsEscalados.has(p.id))
           const aberto = expandedId === ev.id
+          // Só dígitos = número do staff, exato; senão, parte do nome ou da função.
+          const filtro = filtroStaff.trim().toLowerCase()
+          const opcoes = !aberto || !filtro ? disponiveis
+            : /^\d+$/.test(filtro) ? disponiveis.filter(p => p.numero === Number(filtro))
+            : disponiveis.filter(p => `${p.nomeCompleto} ${p.funcao}`.toLowerCase().includes(filtro))
+          // Sobrou um só: já fica escolhido, é digitar o número e dar Enter.
+          const escolhida = opcoes.some(p => p.id === pessoaParaAdicionar) ? pessoaParaAdicionar : opcoes.length === 1 ? opcoes[0].id : ''
 
           return (
             <div key={ev.id} className={`rounded-lg border border-app-border2/50 bg-app-surface2/40 overflow-hidden ${ev.status === 'cancelado' ? 'opacity-60' : ''}`}>
@@ -179,6 +189,7 @@ export default function EscalaSection({ pessoas }: Props) {
                           <div key={escala.id} className="flex items-center justify-between gap-3 rounded-lg border border-app-border2/50 bg-app-surface px-3 py-2">
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[11px] font-semibold text-app-muted tabular-nums">{numeroStaff(pessoa.numero)}</span>
                                 <p className="text-xs font-medium text-app-text truncate">{pessoa.nomeCompleto}</p>
                                 {pessoa.status === 'vetado' ? (
                                   <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${VETADO_CLASS}`}>Vetado</span>
@@ -208,17 +219,22 @@ export default function EscalaSection({ pessoas }: Props) {
                   )}
 
                   <div className="flex items-center gap-2 flex-wrap">
-                    <select value={pessoaParaAdicionar} onChange={e => setPessoaParaAdicionar(e.target.value)} className={`${INPUT_CLASS} flex-1 min-w-[220px] cursor-pointer`}>
+                    <input value={filtroStaff} onChange={e => { setFiltroStaff(e.target.value); setPessoaParaAdicionar('') }}
+                      onKeyDown={e => { if (e.key === 'Enter' && escolhida) handleAdicionar(ev.id, escolhida) }}
+                      placeholder="Nº do staff ou nome" className={INPUT_CLASS.replace('w-full', 'w-44')} />
+                    <select value={escolhida} onChange={e => setPessoaParaAdicionar(e.target.value)} className={`${INPUT_CLASS} flex-1 min-w-[220px] cursor-pointer`}>
                       <option value="">
-                        {disponiveis.length === 0 ? 'Nenhuma ficha ativa disponível' : '— Escolha quem vai trabalhar neste evento —'}
+                        {disponiveis.length === 0 ? 'Nenhuma ficha ativa disponível'
+                          : opcoes.length === 0 ? 'Nenhuma ficha disponível com esse nº ou nome'
+                          : '— Escolha quem vai trabalhar neste evento —'}
                       </option>
-                      {disponiveis.map(p => (
+                      {opcoes.map(p => (
                         <option key={p.id} value={p.id}>
-                          {p.nomeCompleto} — {p.funcao}{p.tipoContratacao === 'empresa' && p.empresaNome ? ` (${p.empresaNome})` : ''}
+                          {numeroStaff(p.numero)} — {p.nomeCompleto} — {p.funcao}{p.tipoContratacao === 'empresa' && p.empresaNome ? ` (${p.empresaNome})` : ''}
                         </option>
                       ))}
                     </select>
-                    <button onClick={() => handleAdicionar(ev.id)} disabled={!pessoaParaAdicionar || busy}
+                    <button onClick={() => handleAdicionar(ev.id, escolhida)} disabled={!escolhida || busy}
                       className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50"
                       style={{ backgroundColor: GREEN }}>
                       <Plus className="h-4 w-4" />

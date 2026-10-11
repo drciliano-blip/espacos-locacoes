@@ -46,6 +46,7 @@ const roleLabels: Record<NivelAcesso, string> = {
   operacional: 'Operacional',
   visualizador:'Visualizador',
   socio:       'Sócio',
+  credenciamento: 'Credenciamento',
 }
 
 const roleBadgeColors: Record<NivelAcesso, string> = {
@@ -54,6 +55,7 @@ const roleBadgeColors: Record<NivelAcesso, string> = {
   operacional: 'bg-emerald-500/15 text-emerald-600',
   visualizador:'bg-zinc-500/15 text-zinc-500',
   socio:       'bg-violet-500/15 text-violet-600',
+  credenciamento: 'bg-amber-500/15 text-amber-600',
 }
 
 interface SidebarProps {

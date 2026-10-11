@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { deleteFile } from '@/lib/file-storage'
 import { hojeISO, mensagemDeErro } from '@/lib/utils'
 import { useAtividades } from '@/contexts/AtividadesContext'
+import { useCurrentUser } from '@/contexts/UserContext'
 import { documentosExigidos, situacaoCredenciamento } from '@/lib/credenciamento-config'
 import type { EmpresaTerceirizada, Terceirizado } from '@/types'
 import TerceirizadoModal from '@/components/credenciamento/TerceirizadoModal'
@@ -14,7 +15,7 @@ import AnotacoesCredenciamento from '@/components/credenciamento/AnotacoesCreden
 import EmpresasSection from '@/components/credenciamento/EmpresasSection'
 import EscalaSection from '@/components/credenciamento/EscalaSection'
 import {
-  AVALIACAO_LABEL, CONTRATACAO_LABEL, DARK_GREEN, descricaoContratacao, empresaFromRow, GREEN, SELECT_EMPRESA, SELECT_TERCEIRIZADO,
+  AVALIACAO_LABEL, CONTRATACAO_LABEL, DARK_GREEN, descricaoContratacao, empresaFromRow, GREEN, numeroStaff, SELECT_EMPRESA, SELECT_TERCEIRIZADO,
   SITUACAO_LABEL as SITUACAO, terceirizadoFromRow, VETADO_CLASS,
   type EmpresaRow, type TerceirizadoRow,
 } from '@/components/credenciamento/dados'
@@ -23,6 +24,9 @@ const FILTRO_CLASS = 'cursor-pointer rounded-lg border border-app-border2 bg-app
 
 export default function CredenciamentoPage() {
   const { logAtividade } = useAtividades()
+  // Login de cadastro: só cria e edita fichas e empresas e anexa documentos.
+  // Escala, exclusão, veto, avaliação e anotações ficam com o produtor.
+  const somenteCadastro = useCurrentUser().role === 'credenciamento'
   const [aba, setAba] = useState<'pessoas' | 'escalas' | 'empresas'>('pessoas')
   const [pessoas, setPessoas] = useState<Terceirizado[]>([])
   const [empresas, setEmpresas] = useState<EmpresaTerceirizada[]>([])
@@ -63,7 +67,9 @@ export default function CredenciamentoPage() {
 
   const filtradas = comSituacao.filter(({ pessoa, situacao }) => {
     const termo = busca.trim().toLowerCase()
-    if (termo && ![pessoa.nomeCompleto, pessoa.razaoSocial].some(t => t.toLowerCase().includes(termo))
+    // Só dígitos na busca = número do staff, exato ("12" não traz o 120).
+    const porNumero = /^\d{1,6}$/.test(termo) && pessoa.numero === Number(termo)
+    if (termo && !porNumero && ![pessoa.nomeCompleto, pessoa.razaoSocial].some(t => t.toLowerCase().includes(termo))
       && !pessoa.cpf.includes(termo) && !pessoa.cnpj.includes(termo)) return false
     if (filtroFuncao && pessoa.funcao !== filtroFuncao) return false
     // Vetado é uma situação à parte: quem está vetado não entra em
@@ -107,7 +113,8 @@ export default function CredenciamentoPage() {
     setModalOpen(false)
     // Ficha nova já abre nos documentos — é o passo seguinte do cadastro.
     if (criada) setExpandedId(pessoa.id)
-    registrar(criada ? 'Terceirizado credenciado' : 'Ficha de terceirizado alterada', pessoa)
+    // O login de cadastro não grava no log de atividades (o banco barra).
+    if (!somenteCadastro) registrar(criada ? 'Terceirizado credenciado' : 'Ficha de terceirizado alterada', pessoa)
   }
 
   async function handleRemove(pessoa: Terceirizado) {
@@ -134,7 +141,9 @@ export default function CredenciamentoPage() {
         </div>
 
         <div className="ml-auto flex rounded-lg border border-app-border2 bg-app-surface p-0.5">
-          {([['pessoas', 'Pessoas'], ['escalas', 'Escalas por evento'], ['empresas', 'Empresas']] as const).map(([id, label]) => (
+          {([['pessoas', 'Pessoas'], ['escalas', 'Escalas por evento'], ['empresas', 'Empresas']] as const)
+            .filter(([id]) => !(somenteCadastro && id === 'escalas'))
+            .map(([id, label]) => (
             <button key={id} onClick={() => setAba(id)}
               className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${aba === id ? 'bg-[#25D366]/15 text-[#25D366]' : 'text-app-muted hover:text-app-text'}`}>
               {label}
@@ -150,8 +159,8 @@ export default function CredenciamentoPage() {
           <p className="text-sm text-app-subtle">Carregando…</p>
         </div>
       ) : aba === 'empresas' ? (
-        <EmpresasSection empresas={empresas} pessoas={pessoas} onChange={setEmpresas} />
-      ) : aba === 'escalas' ? (
+        <EmpresasSection empresas={empresas} pessoas={pessoas} somenteCadastro={somenteCadastro} onChange={setEmpresas} />
+      ) : aba === 'escalas' && !somenteCadastro ? (
         <EscalaSection pessoas={pessoas} />
       ) : (
         <>
@@ -168,7 +177,7 @@ export default function CredenciamentoPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <div className="relative flex-1 min-w-[180px]">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-app-subtle" />
-              <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por nome, CPF ou CNPJ"
+              <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por nº do staff, nome, CPF ou CNPJ"
                 className="w-full rounded-lg border border-app-border2 bg-app-surface pl-8 pr-3 py-1.5 text-xs text-app-text focus:outline-none focus:border-[#25D366]" />
             </div>
             <select value={filtroFuncao} onChange={e => setFiltroFuncao(e.target.value)} className={FILTRO_CLASS}>
@@ -189,7 +198,7 @@ export default function CredenciamentoPage() {
               <option value="pendente">Pendente</option>
               <option value="vetado">Vetado</option>
             </select>
-            <select value={filtroAvaliacao} onChange={e => setFiltroAvaliacao(e.target.value)} className={FILTRO_CLASS}>
+            <select value={filtroAvaliacao} onChange={e => setFiltroAvaliacao(e.target.value)} className={somenteCadastro ? 'hidden' : FILTRO_CLASS}>
               <option value="">Toda avaliação</option>
               <option value="otimo">Ótimo</option>
               <option value="bom">Bom</option>
@@ -220,12 +229,13 @@ export default function CredenciamentoPage() {
                 <div className="flex items-center justify-between gap-4 px-4 py-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
+                      <span className="rounded-md bg-app-surface px-1.5 py-0.5 text-[11px] font-semibold text-app-muted tabular-nums">{numeroStaff(p.numero)}</span>
                       <p className="text-sm font-medium text-app-text truncate">{p.nomeCompleto}</p>
                       {p.status === 'vetado'
                         ? <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${VETADO_CLASS}`}>Vetado</span>
                         : <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${SITUACAO[situacao].className}`}>{SITUACAO[situacao].label}</span>}
                       {p.status === 'inativo' && <span className="rounded-full border border-app-border2 px-2 py-0.5 text-[11px] text-app-subtle">Inativo</span>}
-                      {p.avaliacao && <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${AVALIACAO_LABEL[p.avaliacao].className}`}>{AVALIACAO_LABEL[p.avaliacao].label}</span>}
+                      {!somenteCadastro && p.avaliacao && <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${AVALIACAO_LABEL[p.avaliacao].className}`}>{AVALIACAO_LABEL[p.avaliacao].label}</span>}
                       {p.empresaId && empresasVetadas.has(p.empresaId) && <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${VETADO_CLASS}`}>Empresa vetada</span>}
                     </div>
                     <div className="flex items-center gap-3 mt-0.5 flex-wrap text-xs text-app-subtle">
@@ -237,18 +247,20 @@ export default function CredenciamentoPage() {
                       {p.telefone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{p.telefone}</span>}
                       {p.cpf && <span>CPF {p.cpf}</span>}
                     </div>
-                    {p.status === 'vetado' && p.motivoVeto && <p className="text-xs text-red-400 mt-1">Motivo do veto: {p.motivoVeto}</p>}
+                    {!somenteCadastro && p.status === 'vetado' && p.motivoVeto && <p className="text-xs text-red-400 mt-1">Motivo do veto: {p.motivoVeto}</p>}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button onClick={() => abrirModal(p)} title="Editar ficha"
                       className="flex h-7 w-7 items-center justify-center rounded-md text-app-subtle hover:bg-app-surface2 transition-colors">
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
-                    <button onClick={() => handleRemove(p)} title="Remover"
-                      className="flex h-7 w-7 items-center justify-center rounded-md text-app-subtle hover:bg-red-500/10 hover:text-red-400 transition-colors">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                    <button onClick={() => setExpandedId(id => id === p.id ? null : p.id)} title="Documentos e anotações"
+                    {!somenteCadastro && (
+                      <button onClick={() => handleRemove(p)} title="Remover"
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-app-subtle hover:bg-red-500/10 hover:text-red-400 transition-colors">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    <button onClick={() => setExpandedId(id => id === p.id ? null : p.id)} title={somenteCadastro ? 'Documentos' : 'Documentos e anotações'}
                       className="flex h-7 w-7 items-center justify-center rounded-md text-app-subtle hover:bg-app-surface2 transition-colors">
                       {expandedId === p.id ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                     </button>
@@ -257,7 +269,7 @@ export default function CredenciamentoPage() {
 
                 {expandedId === p.id && (
                   <div className="px-4 pb-4 pt-3 border-t border-app-border/50 space-y-3">
-                    <div className="flex gap-1">
+                    <div className={somenteCadastro ? 'hidden' : 'flex gap-1'}>
                       {([['documentos', `Documentos (${p.documentos.length})`], ['anotacoes', `Anotações (${p.anotacoes.length})`]] as const).map(([id, label]) => (
                         <button key={id} onClick={() => setSubAba(id)}
                           className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${subAba === id ? 'bg-[#25D366]/15 text-[#25D366]' : 'text-app-muted hover:text-app-text'}`}>
@@ -265,7 +277,7 @@ export default function CredenciamentoPage() {
                         </button>
                       ))}
                     </div>
-                    {subAba === 'anotacoes' ? (
+                    {subAba === 'anotacoes' && !somenteCadastro ? (
                       <AnotacoesCredenciamento
                         dono={{ coluna: 'terceirizado_id', id: p.id }}
                         anotacoes={p.anotacoes}
@@ -293,6 +305,7 @@ export default function CredenciamentoPage() {
         <TerceirizadoModal
           pessoa={editando}
           empresas={empresas}
+          somenteCadastro={somenteCadastro}
           onClose={() => setModalOpen(false)}
           onSaved={handleSaved}
         />
