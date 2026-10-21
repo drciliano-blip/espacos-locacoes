@@ -9,7 +9,7 @@ import { formatCurrency } from '@/lib/utils'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useEspacoAtivo } from '@/contexts/EspacoAtivoContext'
 import { useEventos } from '@/contexts/EventosContext'
-import { useReceitas, isReceitaOperacional } from '@/contexts/ReceitasContext'
+import { useReceitas, isReceitaOperacional, statusEfetivoReceita, receitaEmAtraso } from '@/contexts/ReceitasContext'
 import type { TipoEvento } from '@/types'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
@@ -93,11 +93,12 @@ export default function DashboardPage() {
     .reduce((s, p) => s + p.valor, 0)
 
   const pendente = pagamentosFiltrados
-    .filter((p) => p.status === 'pendente')
+    .filter((p) => statusEfetivoReceita(p) === 'pendente')
     .reduce((s, p) => s + p.valor, 0)
 
+  const eventosCancelados = new Set(eventos.filter(e => e.status === 'cancelado').map(e => e.id))
   const atrasado = pagamentosFiltrados
-    .filter((p) => p.status === 'atrasado')
+    .filter((p) => receitaEmAtraso(p, eventosCancelados))
     .reduce((s, p) => s + p.valor, 0)
 
   // Um evento do próprio dia só deixa de ser "próximo" depois que o horário de

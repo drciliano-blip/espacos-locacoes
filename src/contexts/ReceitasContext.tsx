@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useAtividades } from '@/contexts/AtividadesContext'
 import { useFechamentos } from '@/contexts/FechamentosContext'
 import { dataEfetivaReceita, periodoFechado, mensagemPeriodoFechado } from '@/lib/fechamento-lock'
+import { hojeISO } from '@/lib/utils'
 import type { OrigemLancamento } from '@/types'
 
 export interface CategoriaReceita {
@@ -51,6 +52,24 @@ export interface Receita {
 // nenhum cálculo de faturamento, lucro ou divisão de lucro entre sócios.
 export function isReceitaOperacional(r: Receita): boolean {
   return r.tipoEntrada === 'evento'
+}
+
+// Mesma ideia do statusEfetivo de Contas a Pagar: parcela não paga com
+// vencimento (`data`) já passado conta como atrasada sozinha, sem ninguém
+// precisar trocar o status à mão. "atrasado" gravado manualmente continua
+// valendo. Qualquer tela que precise saber se uma receita está atrasada usa
+// esta função em vez de comparar `r.status` cru.
+export function statusEfetivoReceita(r: Receita): Receita['status'] {
+  if (r.status === 'pago') return 'pago'
+  if (r.status === 'atrasado') return 'atrasado'
+  return r.data < hojeISO() ? 'atrasado' : 'pendente'
+}
+
+// Parcela de evento cancelado não é cobrada do cliente — fica fora de
+// qualquer contagem de atraso (cobrança, sino, Dashboard).
+export function receitaEmAtraso(r: Receita, eventosCancelados: ReadonlySet<string>): boolean {
+  if (statusEfetivoReceita(r) !== 'atrasado') return false
+  return !(r.eventoId && eventosCancelados.has(r.eventoId))
 }
 
 interface ReceitaRow {

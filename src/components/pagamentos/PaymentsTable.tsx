@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { Search, ChevronDown, ChevronUp, FolderOpen, Paperclip, Pencil, Handshake } from 'lucide-react'
 import type { Receita, CategoriaReceita, TipoEntrada } from '@/contexts/ReceitasContext'
-import { useReceitas } from '@/contexts/ReceitasContext'
+import { useReceitas, statusEfetivoReceita } from '@/contexts/ReceitasContext'
 import { formatCurrency, formatDate, parseCurrencyBR } from '@/lib/utils'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { DIVISAO_SOCIOS } from '@/lib/socios-config'
@@ -83,7 +83,7 @@ export default function PaymentsTable({ receitas, categorias }: PaymentsTablePro
       const matchSearch  = (p.cliente ?? '').toLowerCase().includes(search.toLowerCase()) ||
         p.descricao.toLowerCase().includes(search.toLowerCase()) ||
         (p.socioResponsavel ?? '').toLowerCase().includes(search.toLowerCase())
-      const matchStatus    = statusFilter === 'todos' || p.status === statusFilter
+      const matchStatus    = statusFilter === 'todos' || statusEfetivoReceita(p) === statusFilter
       const matchEspaco    = espacoFilter === 'todos' || p.espaco === espacoFilter
       const matchCategoria = categoriaFilter === 'todos' || p.categoriaId === categoriaFilter
       const matchTipo       = tipoFilter === 'todos' || p.tipoEntrada === tipoFilter
@@ -101,8 +101,8 @@ export default function PaymentsTable({ receitas, categorias }: PaymentsTablePro
   const totals = useMemo(() => ({
     total:    filtered.reduce((s, p) => s + p.valor, 0),
     pago:     filtered.filter((p) => p.status === 'pago').reduce((s, p) => s + p.valor, 0),
-    pendente: filtered.filter((p) => p.status === 'pendente').reduce((s, p) => s + p.valor, 0),
-    atrasado: filtered.filter((p) => p.status === 'atrasado').reduce((s, p) => s + p.valor, 0),
+    pendente: filtered.filter((p) => statusEfetivoReceita(p) === 'pendente').reduce((s, p) => s + p.valor, 0),
+    atrasado: filtered.filter((p) => statusEfetivoReceita(p) === 'atrasado').reduce((s, p) => s + p.valor, 0),
   }), [filtered])
 
   function toggleRow(id: string) {
@@ -316,8 +316,8 @@ export default function PaymentsTable({ receitas, categorias }: PaymentsTablePro
                       <td className="px-4 py-3 text-app-muted whitespace-nowrap">{p.metodoPagamento ?? '—'}</td>
                       <td className="px-4 py-3 font-semibold text-app-text whitespace-nowrap">{formatCurrency(p.valor)}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusStyles[p.status]}`}>
-                          {statusLabels[p.status]}
+                        <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusStyles[statusEfetivoReceita(p)]}`}>
+                          {statusLabels[statusEfetivoReceita(p)]}
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">

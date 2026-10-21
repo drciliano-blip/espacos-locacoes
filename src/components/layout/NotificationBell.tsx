@@ -4,19 +4,24 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Bell, AlertCircle, Receipt, DollarSign } from 'lucide-react'
 import { useContasPagar, statusEfetivo } from '@/contexts/ContasPagarContext'
-import { useReceitas } from '@/contexts/ReceitasContext'
+import { useReceitas, receitaEmAtraso } from '@/contexts/ReceitasContext'
+import { useEventos } from '@/contexts/EventosContext'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
 export default function NotificationBell() {
   const { contas } = useContasPagar()
   const { receitas } = useReceitas()
+  const { eventos } = useEventos()
   const [open, setOpen] = useState(false)
 
   // "atrasado" não é um valor gravado no banco pra Contas a Pagar — é
   // calculado a partir do vencimento (ver statusEfetivo). Comparar c.status
   // cru aqui fazia o sino nunca mostrar conta realmente vencida.
   const contasAtrasadas = useMemo(() => contas.filter(c => statusEfetivo(c) === 'atrasado'), [contas])
-  const receitasAtrasadas = useMemo(() => receitas.filter(r => r.status === 'atrasado'), [receitas])
+  const receitasAtrasadas = useMemo(() => {
+    const cancelados = new Set(eventos.filter(e => e.status === 'cancelado').map(e => e.id))
+    return receitas.filter(r => receitaEmAtraso(r, cancelados))
+  }, [receitas, eventos])
   const total = contasAtrasadas.length + receitasAtrasadas.length
 
   return (

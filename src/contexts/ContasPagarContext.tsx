@@ -7,6 +7,7 @@ import { useAtividades } from '@/contexts/AtividadesContext'
 import { useFechamentos } from '@/contexts/FechamentosContext'
 import { dataEfetivaConta, periodoFechado, mensagemPeriodoFechado } from '@/lib/fechamento-lock'
 import { getFiles, deleteFile } from '@/lib/file-storage'
+import { hojeISO } from '@/lib/utils'
 import type { ContaPagar, CategoriaContaPagar, StatusContaPagar } from '@/types'
 
 // Fundo de Caixa (transferência de saldo), Retirada Sócio (distribuição a
@@ -29,8 +30,7 @@ export function isDespesaObra(c: ContaPagar): boolean {
 // função em vez de comparar `c.status` cru.
 export function statusEfetivo(conta: ContaPagar): StatusContaPagar {
   if (conta.status === 'pago') return 'pago'
-  const hoje = new Date().toISOString().split('T')[0]
-  return conta.dataVencimento < hoje ? 'atrasado' : 'pendente'
+  return conta.dataVencimento < hojeISO() ? 'atrasado' : 'pendente'
 }
 
 interface ContaPagarRow {

@@ -83,7 +83,7 @@ function formFromParcela(p: Receita): EditarParcelaForm {
   }
 }
 
-function EditarParcelaModal({ parcela, onClose, onSalvar }: {
+export function EditarParcelaModal({ parcela, onClose, onSalvar }: {
   parcela: Receita
   onClose: () => void
   onSalvar: (patch: BaixaReceitaInput) => Promise<void>

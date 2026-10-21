@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import Sidebar from '@/components/layout/Sidebar'
 import Header from '@/components/layout/Header'
+import AvisoAtrasoBanner from '@/components/layout/AvisoAtrasoBanner'
 import { createClient } from '@/lib/supabase/server'
 import { EventosProvider } from '@/contexts/EventosContext'
 import { EspacosProvider } from '@/contexts/EspacosContext'
@@ -57,6 +58,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
                                   <Sidebar userRole={role} />
                                   <div id="app-shell-inner" className="flex flex-1 flex-col overflow-hidden">
                                     <Header userName={profile.nome} userRole={role} />
+                                    <AvisoAtrasoBanner />
                                     <main id="app-main" className="flex-1 overflow-y-auto p-6">
                                       {children}
                                     </main>

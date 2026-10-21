@@ -86,9 +86,12 @@ export function maskCEP(value: string): string {
 }
 
 // Data de hoje em ISO (YYYY-MM-DD), no mesmo formato em que datas são
-// gravadas e comparadas no sistema inteiro.
+// gravadas e comparadas no sistema inteiro. Usa o fuso local, não UTC:
+// toISOString() vira o dia às 21h no horário de Brasília, e uma conta que
+// vence hoje aparecia como atrasada antes da hora.
 export function hojeISO(): string {
-  return new Date().toISOString().split('T')[0]
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 // Uma baixa não pode ter acontecido no futuro: data de recebimento/pagamento

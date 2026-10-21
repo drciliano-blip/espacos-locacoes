@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useMemo, useRef, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import {
   Receipt, TrendingDown, CheckCircle2, AlertCircle, Clock,
   Filter, X, Plus, FolderOpen, Paperclip, ChevronDown, ChevronUp, Sparkles, Camera, Banknote, Pencil, Trash2,
-  MessageSquareText, RefreshCw, Vault,
+  MessageSquareText, RefreshCw, Vault, Users,
 } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useEspacoAtivo, MSG_ESPACO_ESPECIFICO_NECESSARIO } from '@/contexts/EspacoAtivoContext'
@@ -15,6 +16,7 @@ import { saveFile, getFiles, getFileUrl, hashFile } from '@/lib/file-storage'
 import FileList from '@/components/shared/FileList'
 import FileSearchModal from '@/components/shared/FileSearchModal'
 import Toast from '@/components/shared/Toast'
+import CobrancaClientesModal, { useParcelasEmAtraso } from '@/components/contas-a-pagar/CobrancaClientesModal'
 import type { ContaPagar, CategoriaContaPagar, StatusContaPagar, OrigemLancamento } from '@/types'
 
 const ORIGEM_LABEL: Record<OrigemLancamento, string> = {
@@ -176,7 +178,18 @@ export default function ContasPagarPage() {
   const [contaBaixa,        setContaBaixa]        = useState<ContaPagar | null>(null)
   const [contaEditando,     setContaEditando]     = useState<ContaPagar | null>(null)
   const [contaExcluindo,    setContaExcluindo]    = useState<ContaPagar | null>(null)
-  const [tab,               setTab]               = useState<'apagar' | 'pagas' | 'atraso'>('apagar')
+  // ?aba=atraso abre direto em Em Atraso (link da faixa de aviso no topo).
+  // Se a página já estiver aberta, o link só troca a URL — por isso a aba
+  // também acompanha mudanças do parâmetro, não só o valor inicial.
+  const abaParam = useSearchParams().get('aba')
+  const abaDoParam = abaParam === 'atraso' || abaParam === 'pagas' ? abaParam : null
+  const [tab,               setTab]               = useState<'apagar' | 'pagas' | 'atraso'>(abaDoParam ?? 'apagar')
+  const [abaParamVisto,     setAbaParamVisto]     = useState(abaParam)
+  if (abaParam !== abaParamVisto) {
+    setAbaParamVisto(abaParam)
+    if (abaDoParam) setTab(abaDoParam)
+  }
+  const [cobrancaOpen,      setCobrancaOpen]      = useState(false)
   const [filterCategoria,   setFilterCategoria]   = useState<CategoriaContaPagar | ''>('')
   const [filterSubcategoria,setFilterSubcategoria]= useState('')
   const [filterOrigem,      setFilterOrigem]      = useState<OrigemLancamento | 'nao_classificado' | ''>('')
@@ -320,6 +333,16 @@ export default function ContasPagarPage() {
   const totalAtrasado = contasNoEspacoAtivo.filter(c => statusEfetivo(c) === 'atrasado').reduce((s, c) => s + c.valor, 0)
   const totalGeral    = contasNoEspacoAtivo.reduce((s, c) => s + c.valor, 0)
 
+  // Do outro lado do caixa: parcelas de clientes vencidas, pro financeiro
+  // cobrar. Mesma lista alimenta o card e a janela de cobrança.
+  // O destaque é o que dá pra cobrar já (evento ainda vai acontecer); evento
+  // realizado/sem evento aparece à parte como "a conferir".
+  const parcelasClientesEmAtraso = useParcelasEmAtraso(espacosEmEscopo)
+  const parcelasACobrar          = parcelasClientesEmAtraso.filter(p => p.situacao === 'futuro')
+  const totalClientesEmAtraso    = parcelasACobrar.reduce((s, p) => s + p.receita.valor, 0)
+  const qtdClientesEmAtraso      = new Set(parcelasACobrar.map(p => p.receita.eventoId)).size
+  const totalAConferir           = parcelasClientesEmAtraso.filter(p => p.situacao !== 'futuro').reduce((s, p) => s + p.receita.valor, 0)
+
   const hasFilters = !!(filterCategoria || filterSubcategoria || filterOrigem || filterVencDe || filterVencAte || filterPagDe || filterPagAte || filterFornecedor || filterValorMin || filterValorMax)
   function clearFilters() {
     setFilterCategoria(''); setFilterSubcategoria(''); setFilterOrigem('')
@@ -344,7 +367,7 @@ export default function ContasPagarPage() {
   return (
     <div className="space-y-5 max-w-7xl mx-auto">
       {/* KPIs */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <div className="rounded-xl border border-app-border bg-app-surface p-4">
           <div className="flex items-center gap-2 mb-2"><TrendingDown className="h-4 w-4 text-app-muted" /><span className="text-xs text-app-muted">Total Geral</span></div>
           <p className="text-xl font-bold text-app-text">{formatCurrency(totalGeral)}</p>
@@ -361,6 +384,20 @@ export default function ContasPagarPage() {
           <div className="flex items-center gap-2 mb-2"><AlertCircle className="h-4 w-4 text-red-500" /><span className="text-xs text-red-600">Atrasadas</span></div>
           <p className="text-xl font-bold text-red-600">{formatCurrency(totalAtrasado)}</p>
         </div>
+        <button
+          type="button"
+          onClick={() => setCobrancaOpen(true)}
+          className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-4 text-left hover:bg-rose-500/10 hover:border-rose-500/50 transition-colors"
+        >
+          <div className="flex items-center gap-2 mb-2"><Users className="h-4 w-4 text-rose-500" /><span className="text-xs text-rose-600">Clientes em Atraso</span></div>
+          <p className="text-xl font-bold text-rose-600">{formatCurrency(totalClientesEmAtraso)}</p>
+          <p className="text-xs text-app-muted mt-1">
+            {qtdClientesEmAtraso === 0 ? 'Nenhum evento a acontecer em atraso' : `${qtdClientesEmAtraso} ${qtdClientesEmAtraso === 1 ? 'cliente' : 'clientes'} a cobrar`}
+          </p>
+          {totalAConferir > 0 && (
+            <p className="text-xs text-amber-600 mt-0.5">+ {formatCurrency(totalAConferir)} a conferir · ver detalhes</p>
+          )}
+        </button>
       </div>
 
       {/* Ações */}
@@ -576,6 +613,7 @@ export default function ContasPagarPage() {
           }}
         />
       )}
+      {cobrancaOpen && <CobrancaClientesModal itens={parcelasClientesEmAtraso} onClose={() => setCobrancaOpen(false)} />}
       <Toast message={toastMsg} />
     </div>
   )
