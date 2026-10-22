@@ -53,6 +53,9 @@ interface ContaPagarRow {
   evento_id: string | null
   origem_lancamento: string | null
   origem: string | null
+  serie_id: string | null
+  serie_numero: number | null
+  serie_total: number | null
 }
 
 function fromRow(row: ContaPagarRow): ContaPagar {
@@ -76,7 +79,20 @@ function fromRow(row: ContaPagarRow): ContaPagar {
     eventoId: row.evento_id ?? undefined,
     origemLancamento: (row.origem_lancamento ?? undefined) as ContaPagar['origemLancamento'],
     origem: (row.origem ?? undefined) as ContaPagar['origem'],
+    serieId: row.serie_id ?? undefined,
+    serieNumero: row.serie_numero ?? undefined,
+    serieTotal: row.serie_total ?? undefined,
   }
+}
+
+// Mesmo dia do mês, N meses depois — dia 31 em mês de 30 dias cai no último
+// dia (nunca "pula" pro mês seguinte).
+export function somarMeses(dataISO: string, meses: number): string {
+  const [y, m, d] = dataISO.split('-').map(Number)
+  const alvo = new Date(y, m - 1 + meses, 1)
+  const ultimoDia = new Date(alvo.getFullYear(), alvo.getMonth() + 1, 0).getDate()
+  const dia = Math.min(d, ultimoDia)
+  return `${alvo.getFullYear()}-${String(alvo.getMonth() + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`
 }
 
 interface ContasPagarContextValue {
@@ -85,6 +101,14 @@ interface ContasPagarContextValue {
   addConta: (c: ContaPagar) => Promise<void>
   updateConta: (c: ContaPagar) => Promise<void>
   deleteConta: (id: string) => Promise<void>
+  // Conta fixa: lança `base` e as dos meses seguintes (total `meses`), todas
+  // pendentes exceto a primeira, que mantém o status do formulário.
+  addContasSerie: (base: ContaPagar, meses: number) => Promise<number>
+  // Aplica descrição/valor/categoria/fornecedor/espaço/observações a esta conta
+  // e às próximas da série que ainda não foram pagas. Retorna quantas mudaram.
+  updateSerieAPartirDe: (c: ContaPagar) => Promise<number>
+  // Exclui esta conta e as próximas da série ainda não pagas.
+  deleteSerieAPartirDe: (c: ContaPagar) => Promise<number>
   darBaixa: (id: string, dataPagamento: string, horaPagamento?: string, comprovanteInstituicao?: string, comprovanteIdentificador?: string) => Promise<void>
   // Corrige a data/hora do pagamento de uma conta JÁ paga (relendo o comprovante),
   // sem alterar o status nem a data em que a baixa foi originalmente registrada.
@@ -235,6 +259,91 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function espacoIdDe(supabase: ReturnType<typeof createClient>, espaco: ContaPagar['espaco']): Promise<string | null> {
+    if (!espaco || espaco === 'Todos') return null
+    const { data } = await supabase.from('espacos').select('id').eq('nome', espaco).single()
+    return data?.id ?? null
+  }
+
+  async function addContasSerie(base: ContaPagar, meses: number) {
+    const total = Math.max(1, Math.min(60, Math.floor(meses)))
+    const serieId = crypto.randomUUID()
+    const supabase = createClient()
+    const espacoId = await espacoIdDe(supabase, base.espaco)
+    const { data: { user } } = await supabase.auth.getUser()
+    const linhas = Array.from({ length: total }, (_, i) => {
+      const primeira = i === 0
+      const c: ContaPagar = primeira ? base : {
+        ...base, id: crypto.randomUUID(), status: 'pendente',
+        dataPagamento: undefined, horaPagamento: undefined, comprovanteInstituicao: undefined, comprovanteIdentificador: undefined,
+        dataVencimento: somarMeses(base.dataVencimento, i),
+      }
+      const bloqueio = periodoFechado(fechamentos, c.espaco, dataEfetivaConta(c))
+      if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
+      return {
+        id: c.id, descricao: c.descricao, espaco_id: espacoId, categoria: c.categoria, subcategoria: c.subcategoria,
+        valor: c.valor, status: c.status, data_vencimento: c.dataVencimento,
+        data_pagamento: c.dataPagamento ?? null, hora_pagamento: c.horaPagamento ?? null,
+        comprovante_instituicao: c.comprovanteInstituicao ?? null, comprovante_identificador: c.comprovanteIdentificador ?? null,
+        fornecedor: c.fornecedor ?? null, observacoes: c.observacoes ?? null,
+        texto_origem_whatsapp: primeira ? (c.textoOrigemWhatsapp ?? null) : null,
+        evento_id: c.eventoId ?? null, origem_lancamento: c.origemLancamento ?? null, origem: c.origem ?? 'manual',
+        created_by: user?.id ?? null, serie_id: serieId, serie_numero: i + 1, serie_total: total,
+      }
+    })
+    const { data, error } = await supabase.from('contas_pagar').insert(linhas).select(SELECT)
+    if (error) throw error
+    const novas = ((data as unknown as ContaPagarRow[]) ?? []).map(fromRow)
+    setContas(prev => [...novas, ...prev])
+    try {
+      await logAtividade({ tipo: 'financeiro', acao: 'Conta fixa programada', detalhes: `${base.descricao} — ${total} meses`, espaco: base.espaco !== 'Todos' ? base.espaco : undefined })
+    } catch {
+      // log é secundário
+    }
+    return novas.length
+  }
+
+  // Esta conta e as próximas da série que ainda dá pra mexer: não pagas e
+  // fora de período fechado.
+  function proximasDaSerie(c: ContaPagar): ContaPagar[] {
+    if (!c.serieId) return [c]
+    return contas.filter(x => x.serieId === c.serieId && (x.serieNumero ?? 0) >= (c.serieNumero ?? 0) && x.status !== 'pago'
+      && !periodoFechado(fechamentos, x.espaco, dataEfetivaConta(x)))
+  }
+
+  async function updateSerieAPartirDe(c: ContaPagar) {
+    await updateConta(c)
+    const outras = proximasDaSerie(c).filter(x => x.id !== c.id)
+    if (outras.length === 0) return 1
+    const supabase = createClient()
+    const espacoId = await espacoIdDe(supabase, c.espaco)
+    const { data, error } = await supabase.from('contas_pagar')
+      .update({ descricao: c.descricao, espaco_id: espacoId, categoria: c.categoria, subcategoria: c.subcategoria, valor: c.valor,
+                fornecedor: c.fornecedor ?? null, observacoes: c.observacoes ?? null })
+      .in('id', outras.map(x => x.id))
+      .select(SELECT)
+    if (error) throw error
+    const mapa = new Map(((data as unknown as ContaPagarRow[]) ?? []).map(r => [r.id, fromRow(r)]))
+    setContas(prev => prev.map(x => mapa.get(x.id) ?? x))
+    return 1 + mapa.size
+  }
+
+  async function deleteSerieAPartirDe(c: ContaPagar) {
+    const alvos = proximasDaSerie(c)
+    if (!alvos.some(x => x.id === c.id)) throw new Error('Esta conta já está paga ou num período fechado e não pode ser excluída.')
+    const supabase = createClient()
+    const { error } = await supabase.from('contas_pagar').delete().in('id', alvos.map(x => x.id))
+    if (error) throw error
+    const ids = new Set(alvos.map(x => x.id))
+    setContas(prev => prev.filter(x => !ids.has(x.id)))
+    try {
+      await logAtividade({ tipo: 'financeiro', acao: 'Conta fixa excluída', detalhes: `${c.descricao} — ${alvos.length} mês(es)`, espaco: c.espaco !== 'Todos' ? c.espaco : undefined })
+    } catch {
+      // log é secundário
+    }
+    return alvos.length
+  }
+
   async function darBaixa(id: string, dataPagamento: string, horaPagamento?: string, comprovanteInstituicao?: string, comprovanteIdentificador?: string) {
     const existente = contas.find(c => c.id === id)
     if (existente) {
@@ -295,7 +404,7 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <ContasPagarContext.Provider value={{ contas, loading, addConta, updateConta, deleteConta, darBaixa, corrigirDataPagamento }}>
+    <ContasPagarContext.Provider value={{ contas, loading, addConta, updateConta, deleteConta, addContasSerie, updateSerieAPartirDe, deleteSerieAPartirDe, darBaixa, corrigirDataPagamento }}>
       {children}
     </ContasPagarContext.Provider>
   )

@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import {
   Receipt, TrendingDown, CheckCircle2, AlertCircle, Clock,
   Filter, X, Plus, FolderOpen, Paperclip, ChevronDown, ChevronUp, Sparkles, Camera, Banknote, Pencil, Trash2,
-  MessageSquareText, RefreshCw, Vault, Users,
+  MessageSquareText, RefreshCw, Vault, Users, List, CalendarDays,
 } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useEspacoAtivo, MSG_ESPACO_ESPECIFICO_NECESSARIO } from '@/contexts/EspacoAtivoContext'
@@ -17,6 +17,7 @@ import FileList from '@/components/shared/FileList'
 import FileSearchModal from '@/components/shared/FileSearchModal'
 import Toast from '@/components/shared/Toast'
 import CobrancaClientesModal, { useParcelasEmAtraso } from '@/components/contas-a-pagar/CobrancaClientesModal'
+import CalendarioFinanceiro from '@/components/contas-a-pagar/CalendarioFinanceiro'
 import type { ContaPagar, CategoriaContaPagar, StatusContaPagar, OrigemLancamento } from '@/types'
 
 const ORIGEM_LABEL: Record<OrigemLancamento, string> = {
@@ -131,7 +132,7 @@ const subcategoriaBadge: Record<string, string> = {
   aluguel: 'bg-violet-500/10 text-violet-600', energia: 'bg-yellow-500/10 text-yellow-600',
   agua: 'bg-cyan-500/10 text-cyan-600', iptu: 'bg-rose-500/10 text-rose-600',
   internet: 'bg-sky-500/10 text-sky-600', funcionários: 'bg-blue-500/10 text-blue-600',
-  manutenção: 'bg-orange-500/10 text-orange-600', fornecedores: 'bg-teal-500/10 text-teal-600',
+  manutenção: 'bg-orange-500/10 text-orange-600', fornecedores: 'bg-fuchsia-500/10 text-fuchsia-600',
   extras: 'bg-zinc-500/10 text-zinc-600', outros: 'bg-slate-500/10 text-slate-600',
   despesa_a_comprovar: 'bg-red-500/10 text-red-600',
 }
@@ -174,7 +175,30 @@ function contaParaForm(conta: ContaPagar): FormState {
 
 export default function ContasPagarPage() {
   const { espacosEmEscopo, espacoUnico, precisaEspacoEspecifico } = useEspacoAtivo()
-  const { contas, addConta, updateConta, deleteConta, darBaixa, corrigirDataPagamento } = useContasPagar()
+  const { contas, addConta, updateConta, deleteConta, darBaixa, corrigirDataPagamento, addContasSerie, updateSerieAPartirDe, deleteSerieAPartirDe } = useContasPagar()
+  const [excluirSerie, setExcluirSerie] = useState(false)
+  const [visao, setVisao] = useState<'lista' | 'calendario'>('lista')
+  // Calendário Financeiro: "Nova conta" a partir de um dia já vem com o vencimento.
+  const [vencimentoNovaConta, setVencimentoNovaConta] = useState<string | undefined>(undefined)
+
+  async function salvarNovaConta(conta: ContaPagar, opcoes: OpcoesSalvarConta) {
+    if (opcoes.meses) {
+      const n = await addContasSerie(conta, opcoes.meses)
+      showToast(`Conta fixa programada: ${n} meses lançados.`)
+    } else {
+      await addConta(conta)
+      showToast('Conta cadastrada com sucesso.')
+    }
+  }
+  async function salvarEdicaoConta(conta: ContaPagar, opcoes: OpcoesSalvarConta) {
+    if (opcoes.aplicarProximas) {
+      const n = await updateSerieAPartirDe(conta)
+      showToast(n > 1 ? `Conta atualizada (esta e mais ${n - 1}).` : 'Conta atualizada com sucesso.')
+    } else {
+      await updateConta(conta)
+      showToast('Conta atualizada com sucesso.')
+    }
+  }
   const [contaBaixa,        setContaBaixa]        = useState<ContaPagar | null>(null)
   const [contaEditando,     setContaEditando]     = useState<ContaPagar | null>(null)
   const [contaExcluindo,    setContaExcluindo]    = useState<ContaPagar | null>(null)
@@ -354,9 +378,15 @@ export default function ContasPagarPage() {
     if (!contaExcluindo) return
     setExcluindo(true)
     try {
-      await deleteConta(contaExcluindo.id)
+      if (excluirSerie && contaExcluindo.serieId) {
+        const n = await deleteSerieAPartirDe(contaExcluindo)
+        showToast(n > 1 ? `${n} contas da série excluídas.` : 'Conta excluída.')
+      } else {
+        await deleteConta(contaExcluindo.id)
+        showToast('Conta excluída.')
+      }
       setContaExcluindo(null)
-      showToast('Conta excluída.')
+      setExcluirSerie(false)
     } catch (err) {
       showToast(err instanceof Error ? `Falha ao excluir: ${err.message}` : 'Falha ao excluir a conta.')
     } finally {
@@ -434,6 +464,31 @@ export default function ContasPagarPage() {
         </button>
       </div>
 
+      {/* Lista × Calendário Financeiro */}
+      <div className="flex w-fit rounded-lg border border-app-border2 bg-app-surface p-0.5">
+        {([['lista', 'Lista', List], ['calendario', 'Calendário', CalendarDays]] as const).map(([v, rotulo, Icon]) => (
+          <button key={v} onClick={() => setVisao(v)}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${visao === v ? 'bg-[#25D366]/15 text-[#128C7E]' : 'text-app-muted hover:text-app-text'}`}>
+            <Icon className="h-3.5 w-3.5" /> {rotulo}
+          </button>
+        ))}
+      </div>
+
+      {visao === 'calendario' ? (
+        <CalendarioFinanceiro
+          contas={contasNoEspacoAtivo}
+          espacosEmEscopo={espacosEmEscopo}
+          subcategoriaLabel={subcategoriaLabel}
+          onNovaConta={venc => {
+            if (precisaEspacoEspecifico()) { showToast(MSG_ESPACO_ESPECIFICO_NECESSARIO); return }
+            setVencimentoNovaConta(venc); setNovaContaOpen(true)
+          }}
+          onDarBaixa={setContaBaixa}
+          onEditar={setContaEditando}
+          showToast={showToast}
+        />
+      ) : (
+      <>
       {/* Tabela */}
       <div className="rounded-xl border border-app-border bg-app-surface">
         {/* Tabs */}
@@ -552,12 +607,15 @@ export default function ContasPagarPage() {
           )}
         </div>
       </div>
+      </>
+      )}
 
       {/* Modal Nova Conta */}
       {novaContaOpen && (
         <ContaFormModal
-          onClose={() => setNovaContaOpen(false)}
-          onSave={async conta => { await addConta(conta); showToast('Conta cadastrada com sucesso.') }}
+          vencimentoInicial={vencimentoNovaConta}
+          onClose={() => { setNovaContaOpen(false); setVencimentoNovaConta(undefined) }}
+          onSave={salvarNovaConta}
         />
       )}
 
@@ -575,18 +633,24 @@ export default function ContasPagarPage() {
         <ContaFormModal
           conta={contaEditando}
           onClose={() => setContaEditando(null)}
-          onSave={async conta => { await updateConta(conta); showToast('Conta atualizada com sucesso.') }}
+          onSave={salvarEdicaoConta}
         />
       )}
 
       {/* Confirmação de exclusão */}
       {contaExcluindo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setContaExcluindo(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => { setContaExcluindo(null); setExcluirSerie(false) }}>
           <div className="w-full max-w-sm rounded-2xl border border-app-border bg-app-surface p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-base font-bold text-app-text mb-2">Excluir conta?</h3>
             <p className="text-sm text-app-muted mb-5">
               "{contaExcluindo.descricao}" — {formatCurrency(contaExcluindo.valor)}. Esta ação não pode ser desfeita.
             </p>
+            {contaExcluindo.serieId && contaExcluindo.status !== 'pago' && (
+              <label className="flex items-center gap-2 text-sm text-app-text mb-4 -mt-2 cursor-pointer">
+                <input type="checkbox" checked={excluirSerie} onChange={e => setExcluirSerie(e.target.checked)} className="h-4 w-4 accent-red-600" />
+                Excluir também as próximas desta conta fixa (as já pagas ficam)
+              </label>
+            )}
             <div className="flex justify-end gap-2">
               <button onClick={() => setContaExcluindo(null)} disabled={excluindo}
                 className="rounded-lg border border-app-border2 px-4 py-2 text-sm text-app-muted hover:bg-app-surface2 transition-colors disabled:opacity-50">
@@ -673,20 +737,29 @@ function FiltroValor({ label, value, onChange }: { label: string; value: string;
   )
 }
 
+// meses: conta nova marcada como fixa (repete todo mês). aplicarProximas:
+// edição de conta de série — aplicar também às próximas ainda não pagas.
+export interface OpcoesSalvarConta { meses?: number; aplicarProximas?: boolean }
+
 interface ContaFormModalProps {
   conta?: ContaPagar
+  // Conta nova criada a partir de um dia do Calendário Financeiro.
+  vencimentoInicial?: string
   onClose: () => void
-  onSave: (c: ContaPagar) => Promise<void>
+  onSave: (c: ContaPagar, opcoes: OpcoesSalvarConta) => Promise<void>
 }
 
-function ContaFormModal({ conta, onClose, onSave }: ContaFormModalProps) {
+function ContaFormModal({ conta, vencimentoInicial, onClose, onSave }: ContaFormModalProps) {
   const { espacosNomes } = useEspacos()
   // Só usado pra travar o espaço de contas NOVAS — editar uma conta existente
   // continua livre pra trocar o espaço (ela já pode pertencer a outro
   // diferente do que está ativo agora, isso é legítimo).
   const { espacoUnico } = useEspacoAtivo()
   const isEdit = !!conta
-  const [form, setForm] = useState<FormState>(() => conta ? contaParaForm(conta) : { ...FORM_EMPTY, espaco: espacoUnico ?? espacosNomes[0] ?? '' })
+  const [form, setForm] = useState<FormState>(() => conta ? contaParaForm(conta) : { ...FORM_EMPTY, espaco: espacoUnico ?? espacosNomes[0] ?? '', dataVencimento: vencimentoInicial ?? '' })
+  const [contaFixa, setContaFixa] = useState(false)
+  const [mesesFixa, setMesesFixa] = useState('12')
+  const [aplicarProximas, setAplicarProximas] = useState(true)
   const [saving, setSaving] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const cameraRef = useRef<HTMLInputElement>(null)
@@ -809,6 +882,9 @@ function ContaFormModal({ conta, onClose, onSave }: ContaFormModalProps) {
       // Preserva a origem já registrada ao editar — só fica sem valor (e cai
       // no default "Manual" do addConta) quando a conta é nova de verdade.
       origem: conta?.origem,
+      serieId: conta?.serieId,
+      serieNumero: conta?.serieNumero,
+      serieTotal: conta?.serieTotal,
     }
     try {
       if (pendingFile) {
@@ -819,7 +895,10 @@ function ContaFormModal({ conta, onClose, onSave }: ContaFormModalProps) {
           espaco:     form.espaco,
         })
       }
-      await onSave(payload)
+      await onSave(payload, {
+        meses: !isEdit && contaFixa ? Math.max(2, Math.min(60, Number(mesesFixa) || 12)) : undefined,
+        aplicarProximas: isEdit && !!conta?.serieId && aplicarProximas,
+      })
       onClose()
     } catch (err) {
       setErro(err instanceof Error ? `Falha ao salvar: ${err.message}` : 'Falha ao salvar a conta. Tente novamente.')
@@ -1047,6 +1126,37 @@ function ContaFormModal({ conta, onClose, onSave }: ContaFormModalProps) {
               <p className="text-xs text-app-subtle italic mt-1.5">Texto do WhatsApp usado no preenchimento fica salvo com esta conta.</p>
             )}
           </div>
+
+          {/* Conta fixa — só em conta nova: gera as dos próximos meses, pendentes. */}
+          {!isEdit && (
+            <div className="rounded-lg border border-app-border2 bg-app-surface2/50 px-3 py-2.5 space-y-2">
+              <label className="flex items-center gap-2 text-sm text-app-text cursor-pointer">
+                <input type="checkbox" checked={contaFixa} onChange={e => setContaFixa(e.target.checked)} className="h-4 w-4 accent-[#25D366]" />
+                <span className="font-medium">Conta fixa — repetir todo mês</span>
+              </label>
+              {contaFixa && (
+                <div className="flex flex-wrap items-center gap-2 pl-6 text-xs text-app-muted">
+                  <span>Lançar</span>
+                  <input type="number" min={2} max={60} value={mesesFixa} onChange={e => setMesesFixa(e.target.value)}
+                    className="w-16 rounded-lg border border-app-border2 bg-app-surface px-2 py-1 text-sm text-app-text focus:outline-none" />
+                  <span>meses, sempre no mesmo dia do vencimento. As próximas entram como pendentes e aparecem no Calendário.</span>
+                </div>
+              )}
+            </div>
+          )}
+          {/* Edição de conta de série: escopo da alteração. */}
+          {isEdit && conta?.serieId && (
+            <div className="rounded-lg border border-app-border2 bg-app-surface2/50 px-3 py-2.5 space-y-1.5">
+              <p className="text-xs font-medium text-app-text">Conta fixa ({conta.serieNumero} de {conta.serieTotal}). Aplicar a alteração em:</p>
+              <label className="flex items-center gap-2 text-sm text-app-text cursor-pointer">
+                <input type="radio" checked={!aplicarProximas} onChange={() => setAplicarProximas(false)} className="accent-[#25D366]" /> Só esta conta
+              </label>
+              <label className="flex items-center gap-2 text-sm text-app-text cursor-pointer">
+                <input type="radio" checked={aplicarProximas} onChange={() => setAplicarProximas(true)} className="accent-[#25D366]" /> Esta e as próximas ainda não pagas
+              </label>
+              <p className="text-[11px] text-app-subtle">Nas próximas mudam descrição, valor, tipo, fornecedor, espaço e observações — cada uma mantém o próprio vencimento.</p>
+            </div>
+          )}
 
           {erro && (
             <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5">

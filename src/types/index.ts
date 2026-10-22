@@ -158,6 +158,11 @@ export interface ContaPagar {
   // De onde este lançamento veio (Agenda/Manual/Extrato Bancário/Automático)
   // — ausente em registros criados antes desta coluna existir.
   origem?: OrigemLancamento
+  // Conta fixa: contas da mesma série (uma por mês) compartilham serieId;
+  // serieNumero/serieTotal = "3 de 12". Ausente em conta avulsa.
+  serieId?: string
+  serieNumero?: number
+  serieTotal?: number
 }
 
 // Feature 2: Usuário do sistema
