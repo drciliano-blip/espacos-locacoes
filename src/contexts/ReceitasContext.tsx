@@ -199,6 +199,9 @@ export interface BaixaReceitaInput {
   // já existente e usada até aqui só por aportes/retiradas. Ver
   // src/lib/repasse-socio.ts pra quem consome isso pra gerar o repasse.
   socioRepasse?: string
+  // Pagamento parcial: o cliente pagou só `valor`; a diferença vira uma nova
+  // parcela pendente "(restante)" no mesmo evento, com o mesmo vencimento.
+  valorRestante?: number
 }
 
 // Edição completa — usada pelo formulário de editar uma entrada manual
@@ -438,10 +441,45 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
       parcela_label: patch.parcelaLabel ?? null,
       socio_responsavel: patch.socioRepasse ?? null,
     }
-    const { data, error } = await supabase.from('receitas').update(payload).eq('id', id).select(SELECT).single()
+    const parcial = !!patch.valorRestante && patch.valorRestante > 0
+    // A descrição da parcela segue o padrão do Plano de Pagamento ("Label — Cliente");
+    // mantê-la em dia evita que salvar o plano depois veja a parcela paga como "mudada".
+    const descricaoParcial = parcial && existente?.cliente && patch.parcelaLabel ? `${patch.parcelaLabel} — ${existente.cliente}` : undefined
+    const { data, error } = await supabase.from('receitas')
+      .update(descricaoParcial ? { ...payload, descricao: descricaoParcial } : payload)
+      .eq('id', id).select(SELECT).single()
     if (error) throw error
     const atualizada = fromRow(data as unknown as ReceitaRow)
     setReceitas(prev => prev.map(r => (r.id === id ? atualizada : r)))
+
+    if (parcial) {
+      const raw = data as unknown as { categoria_id: string; evento_id: string | null; espaco_id: string | null; cliente: string | null; tipo_entrada: string; data: string }
+      let proximoNumero: number | null = null
+      if (raw.evento_id) {
+        const { data: ultima } = await supabase.from('receitas').select('parcela_numero')
+          .eq('evento_id', raw.evento_id).not('parcela_numero', 'is', null)
+          .order('parcela_numero', { ascending: false }).limit(1).maybeSingle()
+        proximoNumero = ((ultima?.parcela_numero as number | undefined) ?? 0) + 1
+      }
+      const base = (patch.parcelaLabel ?? atualizada.descricao).replace(/\s*\(parcial\)$/, '')
+      const labelRestante = `${base} (restante)`
+      const { data: nova, error: erroNova } = await supabase.from('receitas').insert({
+        categoria_id: raw.categoria_id,
+        evento_id: raw.evento_id,
+        espaco_id: raw.espaco_id,
+        cliente: raw.cliente,
+        descricao: raw.cliente ? `${labelRestante} — ${raw.cliente}` : labelRestante,
+        data: raw.data,
+        valor: Math.round(patch.valorRestante! * 100) / 100,
+        status: 'pendente',
+        parcela_numero: proximoNumero,
+        parcela_label: labelRestante,
+        tipo_entrada: raw.tipo_entrada,
+        origem: 'manual',
+      }).select(SELECT).single()
+      if (erroNova) throw new Error(`Pagamento parcial registrado, mas não foi possível criar a parcela do restante: ${erroNova.message}`)
+      setReceitas(prev => [fromRow(nova as unknown as ReceitaRow), ...prev])
+    }
     try {
       await logAtividade({ tipo: 'financeiro', acao: 'Baixa registrada', detalhes: `${atualizada.descricao} — ${atualizada.status}`, espaco: atualizada.espaco })
     } catch {

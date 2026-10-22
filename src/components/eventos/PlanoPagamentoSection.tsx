@@ -89,6 +89,10 @@ export function EditarParcelaModal({ parcela, onClose, onSalvar }: {
   onSalvar: (patch: BaixaReceitaInput) => Promise<void>
 }) {
   const [form, setForm] = useState<EditarParcelaForm>(() => formFromParcela(parcela))
+  // Pagamento parcial: só faz sentido ao dar baixa numa parcela ainda em aberto.
+  const podeParcial = parcela.status !== 'pago'
+  const [parcial, setParcial] = useState(false)
+  const [valorRecebido, setValorRecebido] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [saving, setSaving] = useState(false)
   const [filesVersion, setFilesVersion] = useState(0)
@@ -110,12 +114,14 @@ export function EditarParcelaModal({ parcela, onClose, onSalvar }: {
 
   const sociosDoEspaco = DIVISAO_SOCIOS[parcela.espaco ?? ''] ?? []
 
+  const parcialAtivo = podeParcial && parcial && form.status === 'pago'
   const errors = {
     valor: !form.valor || parseCurrencyBR(form.valor) <= 0,
     data: !form.data,
     dataRecebimento: form.status === 'pago' && !form.dataRecebimento,
     dataRecebimentoFutura: isDataFutura(form.dataRecebimento),
     socioRepasse: form.metodoPagamento === 'Repasse Sócio' && !form.socioRepasse,
+    valorRecebido: parcialAtivo && (parseCurrencyBR(valorRecebido) <= 0 || parseCurrencyBR(valorRecebido) >= parseCurrencyBR(form.valor)),
   }
   const hasErrors = Object.values(errors).some(Boolean)
 
@@ -124,9 +130,13 @@ export function EditarParcelaModal({ parcela, onClose, onSalvar }: {
     if (hasErrors) return
     setSaving(true)
     try {
+      const valorParcela = parseCurrencyBR(form.valor)
+      const recebido = parcialAtivo ? parseCurrencyBR(valorRecebido) : valorParcela
+      const labelBase = form.parcelaLabel.trim().replace(/\s*\(parcial\)$/, '')
       await onSalvar({
         status: form.status,
-        valor: parseCurrencyBR(form.valor),
+        valor: recebido,
+        valorRestante: parcialAtivo ? Math.round((valorParcela - recebido) * 100) / 100 : undefined,
         data: form.data,
         dataRecebimento: form.dataRecebimento || undefined,
         horaRecebimento: form.horaRecebimento || undefined,
@@ -134,7 +144,7 @@ export function EditarParcelaModal({ parcela, onClose, onSalvar }: {
         observacoes: form.observacoes.trim() || undefined,
         comprovanteInstituicao: parcela.comprovanteInstituicao,
         comprovanteIdentificador: parcela.comprovanteIdentificador,
-        parcelaLabel: form.parcelaLabel.trim() || undefined,
+        parcelaLabel: parcialAtivo ? `${labelBase || 'Parcela'} (parcial)` : (form.parcelaLabel.trim() || undefined),
         socioRepasse: form.metodoPagamento === 'Repasse Sócio' ? form.socioRepasse : undefined,
       })
       onClose()
@@ -196,6 +206,28 @@ export function EditarParcelaModal({ parcela, onClose, onSalvar }: {
               <option value="atrasado">Atrasado</option>
             </select>
           </div>
+
+          {podeParcial && form.status === 'pago' && (
+            <div className="rounded-lg border border-app-border2 bg-app-surface2/50 px-3 py-2.5 space-y-2">
+              <label className="flex items-center gap-2 text-sm text-app-text cursor-pointer">
+                <input type="checkbox" checked={parcial} onChange={e => setParcial(e.target.checked)} className="h-4 w-4 accent-[#25D366]" />
+                <span className="font-medium">Pagamento parcial — o cliente pagou só uma parte</span>
+              </label>
+              {parcial && (
+                <div className="pl-6 space-y-1">
+                  <label className="text-xs text-app-subtle block">Valor recebido agora (R$)<span className="text-red-400 ml-0.5">*</span></label>
+                  <input type="text" inputMode="decimal" value={valorRecebido} onChange={e => setValorRecebido(e.target.value)} placeholder="0,00"
+                    className={`w-40 rounded-lg border ${submitted && errors.valorRecebido ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface px-2.5 py-1.5 text-sm text-app-text focus:outline-none`} />
+                  {(() => {
+                    const restante = parseCurrencyBR(form.valor) - parseCurrencyBR(valorRecebido)
+                    return parseCurrencyBR(valorRecebido) > 0 && restante > 0
+                      ? <p className="text-xs text-app-muted">Restante de <span className="font-semibold text-app-text">{formatCurrency(restante)}</span> fica em aberto como nova parcela &quot;(restante)&quot;, com o mesmo vencimento.</p>
+                      : <p className="text-xs text-app-subtle">Informe um valor menor que o da parcela ({formatCurrency(parseCurrencyBR(form.valor) || 0)}).</p>
+                  })()}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -285,6 +317,8 @@ export function EditarParcelaModal({ parcela, onClose, onSalvar }: {
                   nada a quem errou só o ano. */}
               {errors.dataRecebimentoFutura
                 ? <p className="text-xs text-red-400">A data de pagamento não pode ser futura — confira o ano digitado.</p>
+                : errors.valorRecebido
+                ? <p className="text-xs text-red-400">No pagamento parcial, o valor recebido precisa ser maior que zero e menor que o valor da parcela.</p>
                 : <p className="text-xs text-red-400">Preencha os campos obrigatórios (valor, vencimento{form.status === 'pago' ? ', data de pagamento' : ''}{form.metodoPagamento === 'Repasse Sócio' ? ', sócio' : ''}).</p>}
             </div>
           )}
