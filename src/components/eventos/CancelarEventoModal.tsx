@@ -13,7 +13,9 @@ interface Props {
   onClose: () => void
   onManterReceita: () => Promise<void>
   onReembolso: (valor: number) => Promise<void>
-  onExcluir: () => Promise<void>
+  // Só administrador vê a opção de excluir; o motivo vai para a auditoria.
+  podeExcluir: boolean
+  onExcluir: (motivo: string) => Promise<void>
 }
 
 // Diferencia claramente os 3 caminhos de "cancelar um evento": cancelamento
@@ -21,13 +23,14 @@ interface Props {
 // financeiro (dinheiro recebido é devolvido — vira uma saída vinculada ao
 // evento, nunca apaga a receita original) e exclusão por erro de cadastro
 // (evento nunca deveria ter existido — some tudo).
-export default function CancelarEventoModal({ evento, totalRecebido, onClose, onManterReceita, onReembolso, onExcluir }: Props) {
+export default function CancelarEventoModal({ evento, totalRecebido, podeExcluir, onClose, onManterReceita, onReembolso, onExcluir }: Props) {
   const [passo, setPasso] = useState<Passo>('escolha')
   const [tipoReembolso, setTipoReembolso] = useState<'integral' | 'parcial' | null>(null)
   const [valorParcial, setValorParcial] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [processando, setProcessando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const [motivo, setMotivo] = useState('')
 
   async function handleManterReceita() {
     setProcessando(true)
@@ -57,10 +60,11 @@ export default function CancelarEventoModal({ evento, totalRecebido, onClose, on
   }
 
   async function handleExcluir() {
+    if (!motivo.trim()) { setErro('Informe o motivo da exclusão.'); return }
     setProcessando(true)
     setErro(null)
     try {
-      await onExcluir()
+      await onExcluir(motivo.trim())
     } catch (err) {
       setErro(err instanceof Error ? err.message : 'Não foi possível excluir o evento.')
     } finally {
@@ -110,14 +114,16 @@ export default function CancelarEventoModal({ evento, totalRecebido, onClose, on
               </p>
             </button>
 
+            {podeExcluir && (
             <button
               onClick={() => setPasso('excluir-confirma')}
               disabled={processando}
               className="w-full text-left rounded-lg border border-red-500/30 bg-red-500/5 p-3 hover:bg-red-500/10 transition-colors disabled:opacity-50"
             >
               <p className="text-sm font-medium text-red-400 flex items-center gap-1.5"><Trash2 className="h-3.5 w-3.5" />Excluir definitivamente</p>
-              <p className="text-xs text-app-subtle mt-0.5">Use só se o evento foi criado por engano e nunca deveria ter existido.</p>
+              <p className="text-xs text-app-subtle mt-0.5">Tira o evento e todos os lançamentos dele do sistema. Só administradores; fica registrado quem excluiu e por quê.</p>
             </button>
+            )}
 
             {erro && <p className="text-xs text-red-400">{erro}</p>}
           </div>
@@ -189,7 +195,16 @@ export default function CancelarEventoModal({ evento, totalRecebido, onClose, on
             <p className="text-sm text-red-400 font-medium">
               Este evento e todos os registros financeiros gerados por ele serão excluídos definitivamente. Deseja continuar?
             </p>
-            <p className="text-xs text-app-subtle">Isso remove o evento, as receitas e reembolsos vinculados a ele — não fica só como "Cancelado". Esta ação não pode ser desfeita.</p>
+            <p className="text-xs text-app-subtle">Isso remove o evento, as receitas, reembolsos e contratos vinculados a ele — não fica só como "Cancelado". Esta ação não pode ser desfeita.</p>
+            {totalRecebido > 0 && (
+              <p className="text-xs text-amber-600">Atenção: este evento tem {formatCurrency(totalRecebido)} já recebidos — esse valor sai do Financeiro.</p>
+            )}
+            <div>
+              <label className="text-xs text-app-subtle mb-0.5 block">Motivo da exclusão<span className="text-red-400 ml-0.5">*</span></label>
+              <textarea value={motivo} onChange={e => setMotivo(e.target.value)} rows={2} placeholder="Ex.: cliente desistiu, data liberada para venda"
+                className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none" />
+              <p className="text-[11px] text-app-subtle mt-0.5">Fica gravado com seu usuário, data e uma cópia do evento e dos lançamentos — o registro não pode ser apagado.</p>
+            </div>
             {erro && <p className="text-xs text-red-400">{erro}</p>}
             <div className="flex justify-end gap-2 pt-1">
               <button onClick={onClose} disabled={processando} className="rounded-lg border border-app-border2 px-4 py-2 text-sm text-app-muted hover:bg-app-surface2 transition-colors disabled:opacity-50">

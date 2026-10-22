@@ -227,6 +227,8 @@ interface ReceitasContextValue {
   updateReceita: (id: string, patch: BaixaReceitaInput) => Promise<void>
   editarReceita: (id: string, patch: EditarReceitaInput) => Promise<void>
   deleteReceita: (id: string) => Promise<void>
+  // Relê do banco — usado depois de exclusões feitas direto no banco (ex.: excluir_evento).
+  recarregar: () => Promise<void>
 }
 
 const ReceitasContext = createContext<ReceitasContextValue | null>(null)
@@ -498,8 +500,9 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
       if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
     }
     const supabase = createClient()
-    const { error } = await supabase.from('receitas').delete().eq('id', id)
+    const { data: apagadas, error } = await supabase.from('receitas').delete().eq('id', id).select('id')
     if (error) throw error
+    if (!apagadas?.length) throw new Error('Você não tem permissão para excluir este lançamento.')
     setReceitas(prev => prev.filter(r => r.id !== id))
     if (alvo) {
       try {
@@ -511,7 +514,7 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <ReceitasContext.Provider value={{ receitas, categorias, loading, addReceita, syncParcelasDoEvento, updateReceita, editarReceita, deleteReceita }}>
+    <ReceitasContext.Provider value={{ receitas, categorias, loading, addReceita, syncParcelasDoEvento, updateReceita, editarReceita, deleteReceita, recarregar: load }}>
       {children}
     </ReceitasContext.Provider>
   )

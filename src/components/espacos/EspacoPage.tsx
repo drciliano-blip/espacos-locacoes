@@ -176,8 +176,8 @@ export default function EspacoPage({ config }: EspacoPageProps) {
     setSelectedEvento(updated)
   }
 
-  async function handleDeleteEvento(id: string) {
-    await deleteEvento(id)
+  async function handleDeleteEvento(id: string, motivo: string) {
+    await deleteEvento(id, motivo)
     setSelectedEvento(null)
   }
 

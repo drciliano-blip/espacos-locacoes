@@ -138,7 +138,9 @@ interface EventosContextValue {
   // Transforma um pré-evento no evento completo: grava os dados do formulário
   // sobre o mesmo id, status confirmado, e gera o plano de pagamento padrão.
   confirmarPreEvento: (e: Evento) => Promise<void>
-  deleteEvento: (id: string) => Promise<void>
+  // Só admin. Exclui evento + parcelas + despesas + contratos de uma vez no
+  // banco (excluir_evento) e grava a auditoria com o motivo.
+  deleteEvento: (id: string, motivo: string) => Promise<void>
 }
 
 const EventosContext = createContext<EventosContextValue | null>(null)
@@ -259,17 +261,17 @@ export function EventosProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function deleteEvento(id: string) {
+  async function deleteEvento(id: string, motivo: string) {
     const alvo = eventos.find(e => e.id === id)
     const supabase = createClient()
-    const { error } = await supabase.from('eventos').delete().eq('id', id)
-    if (error) throw error
+    const { error } = await supabase.rpc('excluir_evento', { p_evento_id: id, p_motivo: motivo })
+    if (error) throw new Error(error.message)
     setEventos(prev => prev.filter(x => x.id !== id))
     if (alvo) {
       try {
-        await logAtividade({ tipo: 'evento', acao: 'Evento excluído', detalhes: `${alvo.cliente} — ${alvo.data}`, espaco: alvo.espaco })
+        await logAtividade({ tipo: 'evento', acao: 'Evento excluído', detalhes: `${alvo.cliente} — ${alvo.data} — motivo: ${motivo}`, espaco: alvo.espaco })
       } catch {
-        // log é secundário, não deve impedir a exclusão já concluída
+        // log é secundário — a auditoria oficial já foi gravada pelo banco (eventos_excluidos)
       }
     }
   }

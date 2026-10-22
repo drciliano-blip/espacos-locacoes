@@ -66,10 +66,13 @@ export default function AgendaPage() {
     setTimeout(() => setToastMsg(null), 3500)
   }
 
-  const eventosFiltrados = useMemo(() => {
-    if (!espacosEmEscopo) return eventos
-    return eventos.filter(e => espacosEmEscopo.includes(e.espaco))
-  }, [eventos, espacosEmEscopo])
+  // Cancelado sai da Agenda (a data volta a ficar livre para o comercial
+  // vender); "Mostrar cancelados" traz de volta só para consulta.
+  const [mostrarCancelados, setMostrarCancelados] = useState(false)
+  const qtdCancelados = useMemo(() => eventos.filter(e => e.status === 'cancelado' && (!espacosEmEscopo || espacosEmEscopo.includes(e.espaco))).length, [eventos, espacosEmEscopo])
+  const eventosFiltrados = useMemo(() => eventos.filter(e =>
+    (mostrarCancelados || e.status !== 'cancelado') && (!espacosEmEscopo || espacosEmEscopo.includes(e.espaco)),
+  ), [eventos, espacosEmEscopo, mostrarCancelados])
 
   // Mês navegado no CalendarView — só usado quando a aba "mes" está ativa
   // (as outras duas abas, Próximos/Passados, não dependem de mês nenhum).
@@ -183,8 +186,8 @@ export default function AgendaPage() {
     setSelectedEvento(updated)
   }
 
-  async function handleDelete(id: string) {
-    await deleteEvento(id)
+  async function handleDelete(id: string, motivo: string) {
+    await deleteEvento(id, motivo)
     setSelectedEvento(null)
   }
 
@@ -233,6 +236,12 @@ export default function AgendaPage() {
         {/* Espaço já é definido globalmente pelo Dashboard — aqui só mostra
             quantos eventos estão em escopo e o botão de criar. */}
         <div className="flex items-center gap-2 flex-wrap">
+          {qtdCancelados > 0 && (
+            <label className="flex items-center gap-1.5 text-xs text-app-muted cursor-pointer">
+              <input type="checkbox" checked={mostrarCancelados} onChange={e => setMostrarCancelados(e.target.checked)} className="h-3.5 w-3.5 accent-[#25D366]" />
+              Mostrar cancelados ({qtdCancelados})
+            </label>
+          )}
           {espacosEmEscopo && (
             <span className="text-xs text-app-subtle">
               {eventosFiltrados.length} evento{eventosFiltrados.length !== 1 ? 's' : ''}

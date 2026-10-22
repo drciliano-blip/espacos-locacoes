@@ -60,7 +60,7 @@ interface EventoDrawerProps {
   evento: Evento
   onClose: () => void
   onUpdate: (updated: Evento) => void | Promise<void>
-  onDelete: (id: string) => Promise<void>
+  onDelete: (id: string, motivo: string) => Promise<void>
 }
 
 export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: EventoDrawerProps) {
@@ -71,14 +71,16 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
   // Depois de confirmado, os dados deste drawer (prop `evento`) ficam velhos —
   // fecha o drawer junto com o formulário.
   const [preConfirmado, setPreConfirmado] = useState(false)
-  const { receitas, syncParcelasDoEvento, updateReceita, deleteReceita } = useReceitas()
+  const { receitas, syncParcelasDoEvento, updateReceita, recarregar: recarregarReceitas } = useReceitas()
   const { repasses, addRepasse } = useRepasses()
-  const { contas, addConta, deleteConta } = useContasPagar()
-  const { contratos, addContrato } = useContratos()
+  const { addConta, recarregar: recarregarContas } = useContasPagar()
+  const { contratos, addContrato, recarregar: recarregarContratos } = useContratos()
   const [tab, setTab] = useState<DrawerTab>('detalhes')
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<Evento>({ ...evento })
   const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [motivoExclusao, setMotivoExclusao] = useState('')
+  const [motivoErro, setMotivoErro] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [cancelConfirm, setCancelConfirm] = useState(false)
   const [cancelarEventoOpen, setCancelarEventoOpen] = useState(false)
@@ -110,10 +112,11 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
   // dele (receitas e eventuais saídas de reembolso) — nunca fica só
   // "Cancelado". Usado tanto pelo ícone de lixeira quanto pela opção
   // "Excluir definitivamente" do fluxo de cancelamento.
-  async function excluirEventoEDependencias() {
-    for (const r of receitas.filter(r => r.eventoId === evento.id)) await deleteReceita(r.id)
-    for (const c of contas.filter(c => c.eventoId === evento.id)) await deleteConta(c.id)
-    await onDelete(evento.id)
+  // Tudo sai de uma vez no banco (função excluir_evento, só admin, com
+  // auditoria); depois relê receitas/contas/contratos que saíram junto.
+  async function excluirEventoEDependencias(motivo: string) {
+    await onDelete(evento.id, motivo)
+    await Promise.all([recarregarReceitas(), recarregarContas(), recarregarContratos()])
   }
 
   async function handleCancelarMantendoReceita() {
@@ -141,8 +144,8 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
     showToast('Reembolso registrado e evento cancelado.')
   }
 
-  async function handleExcluirDefinitivoViaModal() {
-    await excluirEventoEDependencias()
+  async function handleExcluirDefinitivoViaModal(motivo: string) {
+    await excluirEventoEDependencias(motivo)
     setCancelarEventoOpen(false)
   }
 
@@ -181,9 +184,10 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
   }
 
   async function handleDelete() {
+    if (!motivoExclusao.trim()) { setMotivoErro(true); return }
     setDeleting(true)
     try {
-      await excluirEventoEDependencias()
+      await excluirEventoEDependencias(motivoExclusao.trim())
     } catch (err) {
       showToast(err instanceof Error ? `Não foi possível excluir: ${err.message}` : 'Não foi possível excluir o evento. Tente novamente.')
     } finally {
@@ -321,11 +325,12 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                 <>
                   {role === 'admin' && (
                     <button
-                      onClick={() => setDeleteConfirm(true)}
-                      title="Excluir evento"
-                      className="flex h-7 w-7 items-center justify-center rounded-lg text-app-subtle hover:bg-red-500/10 hover:text-red-400 transition-colors"
+                      onClick={() => { setMotivoExclusao(''); setMotivoErro(false); setDeleteConfirm(true) }}
+                      title="Excluir definitivamente (só administrador)"
+                      className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
+                      Excluir definitivamente
                     </button>
                   )}
                   {role !== 'socio' && (
@@ -627,10 +632,18 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
       {deleteConfirm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60" onClick={(e) => e.stopPropagation()}>
           <div className="w-full max-w-sm rounded-2xl border border-app-border bg-app-surface p-6 shadow-2xl">
-            <h3 className="text-base font-bold text-app-text mb-2">Excluir evento?</h3>
-            <p className="text-sm text-app-muted mb-5">
-              Esta ação não pode ser desfeita. O evento, as receitas e os reembolsos vinculados a ele serão excluídos permanentemente — não fica só como "Cancelado".
+            <h3 className="text-base font-bold text-app-text mb-2">Excluir evento definitivamente?</h3>
+            <p className="text-sm text-app-muted mb-3">
+              Esta ação não pode ser desfeita. O evento, as receitas, reembolsos e contratos vinculados a ele serão excluídos — não fica só como "Cancelado".
             </p>
+            {totalRecebidoEvento > 0 && (
+              <p className="text-xs text-amber-600 mb-3">Atenção: este evento tem {formatCurrency(totalRecebidoEvento)} já recebidos — esse valor sai do Financeiro.</p>
+            )}
+            <label className="text-xs text-app-subtle mb-0.5 block">Motivo da exclusão<span className="text-red-400 ml-0.5">*</span></label>
+            <textarea value={motivoExclusao} onChange={e => { setMotivoExclusao(e.target.value); setMotivoErro(false) }} rows={2}
+              placeholder="Ex.: cliente desistiu, data liberada para venda"
+              className={`w-full rounded-lg border ${motivoErro ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`} />
+            <p className="text-[11px] text-app-subtle mt-0.5 mb-5">Fica gravado com seu usuário, data e uma cópia do evento e dos lançamentos — o registro não pode ser apagado.</p>
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setDeleteConfirm(false)}
@@ -718,6 +731,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
           onClose={() => setCancelarEventoOpen(false)}
           onManterReceita={handleCancelarMantendoReceita}
           onReembolso={handleCancelarComReembolso}
+          podeExcluir={role === 'admin'}
           onExcluir={handleExcluirDefinitivoViaModal}
         />
       )}

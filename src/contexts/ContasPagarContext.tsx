@@ -109,6 +109,7 @@ interface ContasPagarContextValue {
   updateSerieAPartirDe: (c: ContaPagar) => Promise<number>
   // Exclui esta conta e as próximas da série ainda não pagas.
   deleteSerieAPartirDe: (c: ContaPagar) => Promise<number>
+  recarregar: () => Promise<void>
   darBaixa: (id: string, dataPagamento: string, horaPagamento?: string, comprovanteInstituicao?: string, comprovanteIdentificador?: string) => Promise<void>
   // Corrige a data/hora do pagamento de uma conta JÁ paga (relendo o comprovante),
   // sem alterar o status nem a data em que a baixa foi originalmente registrada.
@@ -239,8 +240,9 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
       if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
     }
     const supabase = createClient()
-    const { error } = await supabase.from('contas_pagar').delete().eq('id', id)
+    const { data: apagadas, error } = await supabase.from('contas_pagar').delete().eq('id', id).select('id')
     if (error) throw error
+    if (!apagadas?.length) throw new Error('Você não tem permissão para excluir esta conta.')
     setContas(prev => prev.filter(c => c.id !== id))
     try {
       const arquivos = await getFiles({ module: 'contas', entityId: id })
@@ -404,7 +406,7 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <ContasPagarContext.Provider value={{ contas, loading, addConta, updateConta, deleteConta, addContasSerie, updateSerieAPartirDe, deleteSerieAPartirDe, darBaixa, corrigirDataPagamento }}>
+    <ContasPagarContext.Provider value={{ contas, loading, addConta, updateConta, deleteConta, addContasSerie, updateSerieAPartirDe, deleteSerieAPartirDe, darBaixa, corrigirDataPagamento, recarregar: load }}>
       {children}
     </ContasPagarContext.Provider>
   )

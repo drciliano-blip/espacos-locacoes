@@ -58,6 +58,7 @@ interface ContratosContextValue {
   contratos: Contrato[]
   loading: boolean
   addContrato: (c: Contrato) => Promise<void>
+  recarregar: () => Promise<void>
 }
 
 const ContratosContext = createContext<ContratosContextValue | null>(null)
@@ -121,7 +122,7 @@ export function ContratosProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <ContratosContext.Provider value={{ contratos, loading, addContrato }}>
+    <ContratosContext.Provider value={{ contratos, loading, addContrato, recarregar: load }}>
       {children}
     </ContratosContext.Provider>
   )
