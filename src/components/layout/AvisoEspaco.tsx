@@ -6,8 +6,9 @@ import { useEspacos } from '@/contexts/EspacosContext'
 import { useEspacoAtivo } from '@/contexts/EspacoAtivoContext'
 
 // Telas onde se lança coisa (evento, contrato, receita, conta, fechamento).
-// Dashboard fica de fora: lá "Todos os espaços" é um modo de uso normal.
-const TELAS_DE_LANCAMENTO = ['/agenda', '/eventos', '/pagamentos', '/contas-a-pagar', '/fechamento']
+// Dashboard e Agenda ficam de fora: lá "Todos os espaços" é um modo de uso
+// normal e a própria tela já tem os botões de espaço (SeletorEspacoBotoes).
+const TELAS_DE_LANCAMENTO = ['/eventos', '/pagamentos', '/contas-a-pagar', '/fechamento']
 
 // Faixa de aviso logo abaixo do topo: avisa, antes de a pessoa tentar lançar,
 // que precisa escolher um espaço — e já oferece os espaços para clicar.

@@ -18,6 +18,7 @@ import { useEventos } from '@/contexts/EventosContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
 import { useCurrentUser } from '@/contexts/UserContext'
 import { useEspacoAtivo, MSG_ESPACO_ESPECIFICO_NECESSARIO } from '@/contexts/EspacoAtivoContext'
+import SeletorEspacoBotoes from '@/components/layout/SeletorEspacoBotoes'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { downloadWorkbook, type ExportSheet } from '@/lib/xlsx-export'
@@ -211,6 +212,9 @@ export default function AgendaPage() {
 
       {abaPrincipal === 'agenda' && (
         <>
+      <div className="mb-4">
+        <SeletorEspacoBotoes />
+      </div>
       {/* Cabeçalho impresso — escondido na tela, só aparece no PDF exportado
           pela "Exportar Relação" (window.print, restrito ao bloco abaixo
           porque o resto da página fica print:hidden). */}
@@ -253,7 +257,9 @@ export default function AgendaPage() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4 items-start">
+        {/* Calendário na parte larga: as etiquetas com o nome do evento (estilo
+            Google Agenda) precisam de espaço; a lista do dia fica ao lado. */}
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-4 items-start">
           <CalendarView
             eventos={eventosFiltrados}
             selectedDate={selectedDate}
