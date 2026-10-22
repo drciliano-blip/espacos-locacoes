@@ -42,6 +42,7 @@ const COR_HEX: Record<string, string> = {
   indigo: '#6366f1',
   sky: '#0ea5e9',
   emerald: '#10b981',
+  pink: '#ec4899',
   orange: '#f97316',
 }
 

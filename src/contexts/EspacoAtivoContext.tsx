@@ -6,7 +6,7 @@ import { useEspacos } from '@/contexts/EspacosContext'
 
 const STORAGE_KEY = 'espacoAtivo'
 
-export const MSG_ESPACO_ESPECIFICO_NECESSARIO = 'Para realizar este lançamento, selecione primeiro um espaço específico no Dashboard.'
+export const MSG_ESPACO_ESPECIFICO_NECESSARIO = 'Para realizar este lançamento, selecione primeiro um espaço no seletor do topo da tela.'
 
 interface EspacoAtivoContextValue {
   // Não-nulo = modo operação, travado a ESTE espaço — usado pra filtrar

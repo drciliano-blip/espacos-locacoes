@@ -20,7 +20,7 @@ const espacoColors: Record<string, string> = {
   'Usine': 'border-l-violet-500',
   'Fabrique': 'border-l-indigo-500',
   'House Pacaembu': 'border-l-sky-500',
-  'Complexo Jussara': 'border-l-emerald-500',
+  'Complexo Jussara': 'border-l-pink-500',
   'Espaço Solon': 'border-l-orange-500',
 }
 

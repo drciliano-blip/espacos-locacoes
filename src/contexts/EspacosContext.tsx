@@ -12,7 +12,7 @@ const PALETTE: Pick<EspacoConfig, 'cor' | 'colorClass' | 'bgClass' | 'borderClas
   { cor: 'violet', colorClass: 'text-violet-400', bgClass: 'bg-violet-500/10', borderClass: 'border-violet-500/20', dotClass: 'bg-violet-500', gradientFrom: 'from-violet-500/20' },
   { cor: 'indigo', colorClass: 'text-indigo-400', bgClass: 'bg-indigo-500/10', borderClass: 'border-indigo-500/20', dotClass: 'bg-indigo-500', gradientFrom: 'from-indigo-500/20' },
   { cor: 'sky', colorClass: 'text-sky-400', bgClass: 'bg-sky-500/10', borderClass: 'border-sky-500/20', dotClass: 'bg-sky-500', gradientFrom: 'from-sky-500/20' },
-  { cor: 'emerald', colorClass: 'text-emerald-400', bgClass: 'bg-emerald-500/10', borderClass: 'border-emerald-500/20', dotClass: 'bg-emerald-500', gradientFrom: 'from-emerald-500/20' },
+  { cor: 'pink', colorClass: 'text-pink-400', bgClass: 'bg-pink-500/10', borderClass: 'border-pink-500/20', dotClass: 'bg-pink-500', gradientFrom: 'from-pink-500/20' },
   { cor: 'orange', colorClass: 'text-orange-400', bgClass: 'bg-orange-500/10', borderClass: 'border-orange-500/20', dotClass: 'bg-orange-500', gradientFrom: 'from-orange-500/20' },
 ]
 

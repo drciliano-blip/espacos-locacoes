@@ -18,6 +18,7 @@ const COR_HEX: Record<string, string> = {
   indigo: '#6366f1',
   sky: '#0ea5e9',
   emerald: '#10b981',
+  pink: '#ec4899',
   orange: '#f97316',
 }
 
@@ -47,8 +48,9 @@ export default function DashboardPage() {
   const espacoColors: Record<string, string> = Object.fromEntries(
     espacosConfig.map(e => [e.nome, COR_HEX[e.cor] ?? '#8b5cf6'])
   )
-  // Dashboard é a ÚNICA tela com seletor de espaço — a seleção aqui vale pro
-  // sistema inteiro (EspacoAtivoContext). "Todos" localmente é só uma forma
+  // O seletor de espaço fica no topo de todas as telas (EspacoSwitcher) e
+  // também aqui em forma de botões — a seleção vale pro sistema inteiro
+  // (EspacoAtivoContext). "Todos" localmente é só uma forma
   // de exibir o modo consolidado (espacoUnico null) sem espalhar `null` por
   // toda a JSX abaixo, que já lida com a string literal 'Todos'.
   const { espacoUnico, espacosConsolidado, setEspacoUnico, setTodos, setEspacosConsolidado } = useEspacoAtivo()
@@ -144,41 +146,43 @@ export default function DashboardPage() {
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Seletor de espaço */}
       <div className="space-y-2">
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex flex-wrap items-center gap-1.5 bg-app-surface border border-app-border rounded-xl p-1 shadow-sm">
+        <p className="text-sm font-semibold text-app-text">
+          {comparativo ? 'Quais espaços comparar?' : 'Em qual espaço você quer trabalhar?'}
+        </p>
+        <div className="flex items-stretch gap-2 flex-wrap">
+          <div className="flex flex-wrap items-stretch gap-2">
             <button
               onClick={() => comparativo ? setEspacosConsolidado([]) : setTodos()}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+              className={`rounded-xl border px-4 py-2.5 text-sm font-semibold transition-all ${
                 (comparativo ? espacosConsolidado.length === 0 : espacoSelecionado === 'Todos')
-                  ? 'text-white font-bold shadow-md'
-                  : 'bg-[#F0F2F5] text-[#667781] hover:bg-[#E9EDEF]'
+                  ? 'border-[#25D366] bg-[#25D366]/15 text-app-text shadow-sm ring-1 ring-[#25D366]'
+                  : 'border-app-border bg-app-surface text-app-muted hover:border-app-border2 hover:text-app-text'
               }`}
-              style={(comparativo ? espacosConsolidado.length === 0 : espacoSelecionado === 'Todos') ? { backgroundColor: '#25D366' } : undefined}
             >
-              Todos
+              Todos os espaços
             </button>
-            {espacosNomes.map((esp) => {
+            {espacosConfig.map(({ nome: esp, dotClass }) => {
               const ativo = comparativo ? espacoIncluidoNoComparativo(esp) : espacoSelecionado === esp
               return (
                 <button
                   key={esp}
                   onClick={() => comparativo ? toggleComparativoEspaco(esp) : setEspacoUnico(esp)}
-                  className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                  className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-all ${
                     ativo
-                      ? 'text-white font-bold shadow-md'
-                      : 'bg-[#F0F2F5] text-[#667781] hover:bg-[#E9EDEF]'
+                      ? 'border-[#25D366] bg-[#25D366]/15 text-app-text shadow-sm ring-1 ring-[#25D366]'
+                      : 'border-app-border bg-app-surface text-app-muted hover:border-app-border2 hover:text-app-text'
                   }`}
-                  style={ativo ? { backgroundColor: '#25D366' } : undefined}
                 >
-                  {comparativo && ativo && <Check className="h-3 w-3" />}
-                  {esp.split(' ')[0]}
+                  <span className={`h-3 w-3 shrink-0 rounded-full ${dotClass}`} />
+                  {esp}
+                  {ativo && <Check className="h-4 w-4 text-[#128C7E]" />}
                 </button>
               )
             })}
           </div>
           <button
             onClick={() => { setComparativo(!comparativo); setTodos() }}
-            className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-all ${
+            className={`flex items-center gap-1.5 rounded-xl border px-4 py-2.5 text-sm font-medium transition-all ${
               comparativo
                 ? 'border-[#25D366]/30 bg-[#25D366]/10 text-[#128C7E]'
                 : 'border-app-border bg-app-surface text-app-muted hover:text-app-text'
@@ -188,9 +192,13 @@ export default function DashboardPage() {
             Comparativo
           </button>
         </div>
-        {comparativo && (
-          <p className="text-xs text-app-subtle">Marque quais espaços entram no comparativo/soma abaixo — desmarque pra excluir um específico.</p>
-        )}
+        <p className="text-xs text-app-subtle">
+          {comparativo
+            ? 'Marque quais espaços entram no comparativo/soma abaixo — desmarque pra excluir um específico.'
+            : espacoSelecionado === 'Todos'
+              ? 'Você está vendo a soma de todos os espaços. Para lançar eventos, contas e receitas, escolha um espaço — a escolha vale para o sistema inteiro.'
+              : `Tudo o que você lançar agora vai para ${espacoSelecionado}. Dá para trocar a qualquer momento no topo da tela.`}
+        </p>
 
         {/* Indicador de espaço ativo */}
         {espacoSelecionado !== 'Todos' && !comparativo && (
