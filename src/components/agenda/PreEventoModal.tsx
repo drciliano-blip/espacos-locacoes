@@ -5,7 +5,7 @@ import { X, CalendarClock, AlertTriangle } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { useEventos } from '@/contexts/EventosContext'
 import { formatDate, maskPhone, mensagemDeErro } from '@/lib/utils'
-import type { Espaco, Evento } from '@/types'
+import { eventoAtivo, type Espaco, type Evento } from '@/types'
 
 const GREEN = '#25D366'
 
@@ -34,7 +34,7 @@ export default function PreEventoModal({ espacoPadrao, onClose, onSalvo }: {
   const temErro = Object.values(erros).some(Boolean)
 
   // Só avisa — não impede: pode haver mais de um evento no mesmo dia/espaço.
-  const ocupado = data && espaco ? eventos.filter(e => e.data === data && e.espaco === espaco && e.status !== 'cancelado') : []
+  const ocupado = data && espaco ? eventos.filter(e => e.data === data && e.espaco === espaco && eventoAtivo(e)) : []
 
   async function salvar() {
     setEnviado(true)

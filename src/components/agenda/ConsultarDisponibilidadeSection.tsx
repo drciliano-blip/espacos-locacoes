@@ -1,5 +1,6 @@
 'use client'
 
+import { eventoAtivo } from '@/types'
 import { useEffect, useMemo, useState } from 'react'
 import { Check, Copy, FileText } from 'lucide-react'
 import { eachDayOfInterval, endOfMonth, format, getDay, startOfMonth } from 'date-fns'
@@ -124,7 +125,7 @@ export default function ConsultarDisponibilidadeSection() {
   // atualiza sozinha conforme a Agenda muda, sem nenhuma sincronização extra.
   const bloqueios = useMemo(() => {
     const set = new Set<string>()
-    for (const e of eventos) if (e.status === 'confirmado') set.add(`${e.espaco}|${e.data}`)
+    for (const e of eventos) if (e.status === 'confirmado' && eventoAtivo(e)) set.add(`${e.espaco}|${e.data}`)
     return set
   }, [eventos])
 
@@ -132,7 +133,7 @@ export default function ConsultarDisponibilidadeSection() {
   const preEventos = useMemo(() => {
     const mapa = new Map<string, string[]>()
     for (const e of eventos) {
-      if (e.status !== 'em_negociacao') continue
+      if (e.status !== 'em_negociacao' || !eventoAtivo(e)) continue
       const k = `${e.espaco}|${e.data}`
       mapa.set(k, [...(mapa.get(k) ?? []), e.cliente])
     }

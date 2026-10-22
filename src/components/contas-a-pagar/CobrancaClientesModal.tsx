@@ -10,7 +10,7 @@ import { downloadWorkbook } from '@/lib/xlsx-export'
 import { formatCurrency, formatDate, hojeISO, mensagemDeErro } from '@/lib/utils'
 import { EditarParcelaModal } from '@/components/eventos/PlanoPagamentoSection'
 import Toast from '@/components/shared/Toast'
-import type { Evento } from '@/types'
+import { eventoAtivo, type Evento } from '@/types'
 
 // Em que pé está o evento da parcela vencida — muda o que o financeiro faz:
 // - futuro: a festa ainda vai acontecer e o pagamento não veio → cobrar já;
@@ -76,7 +76,7 @@ export function useParcelasEmAtraso(espacosEmEscopo: string[] | undefined): Parc
   return useMemo(() => {
     const hoje = hojeISO()
     const eventosPorId = new Map(eventos.map(e => [e.id, e]))
-    const cancelados = new Set(eventos.filter(e => e.status === 'cancelado').map(e => e.id))
+    const cancelados = new Set(eventos.filter(e => !eventoAtivo(e) || e.status === 'em_negociacao').map(e => e.id))
     return receitas
       .filter(r => r.tipoEntrada === 'evento' && receitaEmAtraso(r, cancelados))
       .filter(r => !espacosEmEscopo || (!!r.espaco && espacosEmEscopo.includes(r.espaco)))

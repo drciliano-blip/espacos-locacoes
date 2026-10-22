@@ -45,6 +45,9 @@ interface EventoRow {
   nome_fantasia: string | null
   cnpj: string | null
   endereco_empresa: EnderecoCompleto | null
+  exclusao_solicitada_em: string | null
+  exclusao_solicitada_por: string | null
+  exclusao_motivo: string | null
 }
 
 function fromRow(row: EventoRow): Evento {
@@ -87,6 +90,9 @@ function fromRow(row: EventoRow): Evento {
     nomeFantasia: row.nome_fantasia ?? undefined,
     cnpj: row.cnpj ?? undefined,
     enderecoEmpresa: row.endereco_empresa ?? undefined,
+    exclusaoSolicitadaEm: row.exclusao_solicitada_em ?? undefined,
+    exclusaoSolicitadaPor: row.exclusao_solicitada_por ?? undefined,
+    exclusaoMotivo: row.exclusao_motivo ?? undefined,
   }
 }
 
@@ -141,6 +147,11 @@ interface EventosContextValue {
   // Só admin. Exclui evento + parcelas + despesas + contratos de uma vez no
   // banco (excluir_evento) e grava a auditoria com o motivo.
   deleteEvento: (id: string, motivo: string) => Promise<void>
+  // Qualquer perfil que lança eventos: tira da Agenda (data livre) e deixa
+  // pendente para um admin aprovar ou recusar.
+  solicitarExclusao: (id: string, motivo: string) => Promise<void>
+  // Só admin: recusa o pedido — o evento volta para a Agenda.
+  recusarExclusao: (id: string) => Promise<void>
 }
 
 const EventosContext = createContext<EventosContextValue | null>(null)
@@ -261,6 +272,41 @@ export function EventosProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function solicitarExclusao(id: string, motivo: string) {
+    const supabase = createClient()
+    const { error } = await supabase.rpc('solicitar_exclusao_evento', { p_evento_id: id, p_motivo: motivo })
+    if (error) throw new Error(error.message)
+    const { data: { user } } = await supabase.auth.getUser()
+    const alvo = eventos.find(e => e.id === id)
+    setEventos(prev => prev.map(x => x.id === id
+      ? { ...x, exclusaoSolicitadaEm: new Date().toISOString(), exclusaoSolicitadaPor: user?.id, exclusaoMotivo: motivo }
+      : x))
+    if (alvo) {
+      try {
+        await logAtividade({ tipo: 'evento', acao: 'Exclusão solicitada', detalhes: `${alvo.cliente} — ${alvo.data} — motivo: ${motivo}`, espaco: alvo.espaco })
+      } catch {
+        // log é secundário
+      }
+    }
+  }
+
+  async function recusarExclusao(id: string) {
+    const supabase = createClient()
+    const { error } = await supabase.rpc('recusar_exclusao_evento', { p_evento_id: id })
+    if (error) throw new Error(error.message)
+    const alvo = eventos.find(e => e.id === id)
+    setEventos(prev => prev.map(x => x.id === id
+      ? { ...x, exclusaoSolicitadaEm: undefined, exclusaoSolicitadaPor: undefined, exclusaoMotivo: undefined }
+      : x))
+    if (alvo) {
+      try {
+        await logAtividade({ tipo: 'evento', acao: 'Exclusão recusada', detalhes: `${alvo.cliente} — ${alvo.data}`, espaco: alvo.espaco })
+      } catch {
+        // log é secundário
+      }
+    }
+  }
+
   async function deleteEvento(id: string, motivo: string) {
     const alvo = eventos.find(e => e.id === id)
     const supabase = createClient()
@@ -277,7 +323,7 @@ export function EventosProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <EventosContext.Provider value={{ eventos, loading, addEvento, updateEvento, confirmarPreEvento, deleteEvento }}>
+    <EventosContext.Provider value={{ eventos, loading, addEvento, updateEvento, confirmarPreEvento, deleteEvento, solicitarExclusao, recusarExclusao }}>
       {children}
     </EventosContext.Provider>
   )

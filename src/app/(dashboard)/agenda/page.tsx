@@ -12,6 +12,7 @@ import EspacoGoogleCalendar from '@/components/espacos/EspacoGoogleCalendar'
 import EventoDrawer from '@/components/eventos/EventoDrawer'
 import NovoEventoModal from '@/components/eventos/NovoEventoModal'
 import PreEventoModal from '@/components/agenda/PreEventoModal'
+import ExclusoesPendentes from '@/components/agenda/ExclusoesPendentes'
 import ExportarRelatorioButton from '@/components/relatorios/ExportarRelatorioButton'
 import FullTable from '@/components/shared/FullTable'
 import Toast from '@/components/shared/Toast'
@@ -20,6 +21,7 @@ import { useReceitas } from '@/contexts/ReceitasContext'
 import { useCurrentUser } from '@/contexts/UserContext'
 import { useEspacoAtivo, MSG_ESPACO_ESPECIFICO_NECESSARIO } from '@/contexts/EspacoAtivoContext'
 import SeletorEspacoBotoes from '@/components/layout/SeletorEspacoBotoes'
+import { eventoAtivo } from '@/types'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { downloadWorkbook, type ExportSheet } from '@/lib/xlsx-export'
@@ -69,9 +71,9 @@ export default function AgendaPage() {
   // Cancelado sai da Agenda (a data volta a ficar livre para o comercial
   // vender); "Mostrar cancelados" traz de volta só para consulta.
   const [mostrarCancelados, setMostrarCancelados] = useState(false)
-  const qtdCancelados = useMemo(() => eventos.filter(e => e.status === 'cancelado' && (!espacosEmEscopo || espacosEmEscopo.includes(e.espaco))).length, [eventos, espacosEmEscopo])
+  const qtdCancelados = useMemo(() => eventos.filter(e => !eventoAtivo(e) && (!espacosEmEscopo || espacosEmEscopo.includes(e.espaco))).length, [eventos, espacosEmEscopo])
   const eventosFiltrados = useMemo(() => eventos.filter(e =>
-    (mostrarCancelados || e.status !== 'cancelado') && (!espacosEmEscopo || espacosEmEscopo.includes(e.espaco)),
+    (mostrarCancelados || eventoAtivo(e)) && (!espacosEmEscopo || espacosEmEscopo.includes(e.espaco)),
   ), [eventos, espacosEmEscopo, mostrarCancelados])
 
   // Mês navegado no CalendarView — só usado quando a aba "mes" está ativa
@@ -220,6 +222,7 @@ export default function AgendaPage() {
       <div className="mb-4">
         <SeletorEspacoBotoes />
       </div>
+      {role === 'admin' && <ExclusoesPendentes eventos={eventos} onAbrir={setSelectedEvento} />}
       {/* Cabeçalho impresso — escondido na tela, só aparece no PDF exportado
           pela "Exportar Relação" (window.print, restrito ao bloco abaixo
           porque o resto da página fica print:hidden). */}
@@ -239,7 +242,7 @@ export default function AgendaPage() {
           {qtdCancelados > 0 && (
             <label className="flex items-center gap-1.5 text-xs text-app-muted cursor-pointer">
               <input type="checkbox" checked={mostrarCancelados} onChange={e => setMostrarCancelados(e.target.checked)} className="h-3.5 w-3.5 accent-[#25D366]" />
-              Mostrar cancelados ({qtdCancelados})
+              Mostrar cancelados/excluídos ({qtdCancelados})
             </label>
           )}
           {espacosEmEscopo && (

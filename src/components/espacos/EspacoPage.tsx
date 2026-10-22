@@ -13,6 +13,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import type { EspacoConfig } from '@/lib/espacos-config'
+import { eventoAtivo } from '@/types'
 import type { Evento } from '@/types'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import EventoDrawer from '@/components/eventos/EventoDrawer'
@@ -133,10 +134,10 @@ export default function EspacoPage({ config }: EspacoPageProps) {
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
   const receitaConfirmada = useMemo(
-    () => eventosEspaco.filter(e => e.status === 'confirmado').reduce((s, e) => s + e.valor, 0),
+    () => eventosEspaco.filter(e => e.status === 'confirmado' && eventoAtivo(e)).reduce((s, e) => s + e.valor, 0),
     [eventosEspaco],
   )
-  const confirmados = eventosEspaco.filter(e => e.status === 'confirmado').length
+  const confirmados = eventosEspaco.filter(e => e.status === 'confirmado' && eventoAtivo(e)).length
   const ticketMedio = confirmados > 0 ? receitaConfirmada / confirmados : 0
 
   const eventsWithPeople = eventosEspaco.filter(e => (e.numeroPessoas ?? 0) > 0)
@@ -162,7 +163,7 @@ export default function EspacoPage({ config }: EspacoPageProps) {
   // ── Dados para gráfico ─────────────────────────────────────────────────────
   const monthlyData = useMemo(() => {
     const acc: Record<string, number> = {}
-    eventosEspaco.filter(e => e.status === 'confirmado').forEach(e => {
+    eventosEspaco.filter(e => e.status === 'confirmado' && eventoAtivo(e)).forEach(e => {
       const [, m] = e.data.split('-')
       const label = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][Number(m) - 1]
       acc[label] = (acc[label] ?? 0) + e.valor
@@ -477,8 +478,8 @@ export default function EspacoPage({ config }: EspacoPageProps) {
               <h4 className="text-sm font-semibold text-app-text mb-3">Categorias de Eventos</h4>
               <div className="space-y-2.5">
                 {config.categorias.map((cat) => {
-                  const total = eventosEspaco.filter(e => e.status !== 'cancelado').length
-                  const count = eventosEspaco.filter(e => e.tipo.toLowerCase() === cat.label.toLowerCase() && e.status !== 'cancelado').length
+                  const total = eventosEspaco.filter(e => eventoAtivo(e)).length
+                  const count = eventosEspaco.filter(e => e.tipo.toLowerCase() === cat.label.toLowerCase() && eventoAtivo(e)).length
                   const pct = total > 0 ? Math.round((count / total) * 100) : 0
                   return (
                     <div key={cat.label}>

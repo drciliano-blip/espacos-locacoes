@@ -11,7 +11,7 @@ import { useRepasses } from '@/contexts/RepassesContext'
 import { aplicarBaixaComRepasseAutomatico } from '@/lib/repasse-socio'
 import { EditarParcelaModal } from '@/components/eventos/PlanoPagamentoSection'
 import { formatCurrency, hojeISO, mensagemDeErro } from '@/lib/utils'
-import type { ContaPagar } from '@/types'
+import { eventoAtivo, type ContaPagar } from '@/types'
 
 // Cor sólida da etiqueta por tipo de despesa (subcategoria) — mesmos tons dos
 // selos da lista de Contas a Pagar. Verde fica reservado para "a receber".
@@ -67,7 +67,7 @@ export default function CalendarioFinanceiro({ contas, espacosEmEscopo, subcateg
       if (r.tipoEntrada !== 'evento') continue
       if (espacosEmEscopo && !(r.espaco && espacosEmEscopo.includes(r.espaco))) continue
       const ev = r.eventoId ? eventosPorId.get(r.eventoId) : undefined
-      if (ev && (ev.status === 'cancelado' || ev.status === 'em_negociacao')) continue
+      if (ev && (!eventoAtivo(ev) || ev.status === 'em_negociacao')) continue
       const st = statusEfetivoReceita(r)
       const feito = st === 'pago'
       const parcela = r.parcelaLabel ?? r.descricao

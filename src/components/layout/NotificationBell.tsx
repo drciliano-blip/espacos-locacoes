@@ -6,6 +6,7 @@ import { Bell, AlertCircle, Receipt, DollarSign } from 'lucide-react'
 import { useContasPagar, statusEfetivo } from '@/contexts/ContasPagarContext'
 import { useReceitas, receitaEmAtraso } from '@/contexts/ReceitasContext'
 import { useEventos } from '@/contexts/EventosContext'
+import { eventoAtivo } from '@/types'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
 export default function NotificationBell() {
@@ -19,7 +20,7 @@ export default function NotificationBell() {
   // cru aqui fazia o sino nunca mostrar conta realmente vencida.
   const contasAtrasadas = useMemo(() => contas.filter(c => statusEfetivo(c) === 'atrasado'), [contas])
   const receitasAtrasadas = useMemo(() => {
-    const cancelados = new Set(eventos.filter(e => e.status === 'cancelado').map(e => e.id))
+    const cancelados = new Set(eventos.filter(e => !eventoAtivo(e)).map(e => e.id))
     return receitas.filter(r => receitaEmAtraso(r, cancelados))
   }, [receitas, eventos])
   const total = contasAtrasadas.length + receitasAtrasadas.length

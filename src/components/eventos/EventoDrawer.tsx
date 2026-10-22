@@ -65,7 +65,37 @@ interface EventoDrawerProps {
 
 export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: EventoDrawerProps) {
   const { role } = useCurrentUser()
-  const { confirmarPreEvento } = useEventos()
+  const { confirmarPreEvento, solicitarExclusao, recusarExclusao } = useEventos()
+  const exclusaoPendente = !!evento.exclusaoSolicitadaEm
+  // Pedido de exclusão (quem não é admin): sai da Agenda, admin decide depois.
+  const [pedirExclusaoOpen, setPedirExclusaoOpen] = useState(false)
+  const [motivoPedido, setMotivoPedido] = useState('')
+  const [enviandoPedido, setEnviandoPedido] = useState(false)
+  const [erroPedido, setErroPedido] = useState<string | null>(null)
+
+  async function handlePedirExclusao() {
+    if (!motivoPedido.trim()) { setErroPedido('Informe o motivo.'); return }
+    setEnviandoPedido(true)
+    setErroPedido(null)
+    try {
+      await solicitarExclusao(evento.id, motivoPedido.trim())
+      setPedirExclusaoOpen(false)
+      onClose()
+    } catch (err) {
+      setErroPedido(err instanceof Error ? err.message : 'Não foi possível excluir da agenda.')
+    } finally {
+      setEnviandoPedido(false)
+    }
+  }
+
+  async function handleRecusarExclusao() {
+    try {
+      await recusarExclusao(evento.id)
+      onClose()
+    } catch (err) {
+      showToast(err instanceof Error ? `Não foi possível recusar: ${err.message}` : 'Não foi possível recusar a exclusão.')
+    }
+  }
   const ehPreEvento = evento.status === 'em_negociacao'
   const [confirmarPreOpen, setConfirmarPreOpen] = useState(false)
   // Depois de confirmado, os dados deste drawer (prop `evento`) ficam velhos —
@@ -323,6 +353,16 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
             <div className="flex items-center gap-2">
               {tab === 'detalhes' && !editing && (
                 <>
+                  {role !== 'admin' && role !== 'socio' && !exclusaoPendente && (
+                    <button
+                      onClick={() => { setMotivoPedido(''); setErroPedido(null); setPedirExclusaoOpen(true) }}
+                      title="Tira da Agenda e libera a data; um administrador confirma a exclusão definitiva"
+                      className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Excluir da agenda
+                    </button>
+                  )}
                   {role === 'admin' && (
                     <button
                       onClick={() => { setMotivoExclusao(''); setMotivoErro(false); setDeleteConfirm(true) }}
@@ -424,6 +464,32 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
         {/* Conteúdo da aba Detalhes */}
         {tab === 'detalhes' && (
           <div className="p-5 space-y-5">
+            {exclusaoPendente && (
+              <div className="rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 space-y-2">
+                <p className="text-sm font-semibold text-red-500">Exclusão solicitada — fora da Agenda, data liberada</p>
+                <p className="text-xs text-app-text">
+                  Pedido em {new Date(evento.exclusaoSolicitadaEm!).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                  {evento.exclusaoMotivo ? <> · Motivo: <span className="font-medium">{evento.exclusaoMotivo}</span></> : null}
+                </p>
+                <p className="text-xs text-app-subtle">O evento e o faturamento continuam no sistema até um administrador aprovar ou recusar.</p>
+                {role === 'admin' && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <button
+                      onClick={() => { setMotivoExclusao(`Aprovado: ${evento.exclusaoMotivo ?? ''}`.trim()); setMotivoErro(false); setDeleteConfirm(true) }}
+                      className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-500 transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Aprovar e excluir definitivamente
+                    </button>
+                    <button
+                      onClick={handleRecusarExclusao}
+                      className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs font-medium text-app-text hover:bg-app-surface2 transition-colors"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" /> Recusar — voltar para a Agenda
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             {/* Status e valor */}
             <div className="flex items-center gap-3">
               <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusBadge[current.status]}`}>
@@ -665,6 +731,29 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
       )}
 
       {/* Confirmação de reativação — cancelar tem o fluxo próprio (CancelarEventoModal) */}
+      {pedirExclusaoOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" onClick={() => setPedirExclusaoOpen(false)}>
+          <div className="w-full max-w-sm rounded-2xl border border-app-border bg-app-surface p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-bold text-app-text mb-2">Excluir da agenda?</h3>
+            <p className="text-sm text-app-muted mb-3">
+              O evento sai da Agenda agora e a data fica livre para venda. A exclusão definitiva (e do faturamento) fica pendente até um administrador aprovar.
+            </p>
+            <label className="text-xs text-app-subtle mb-0.5 block">Motivo<span className="text-red-400 ml-0.5">*</span></label>
+            <textarea value={motivoPedido} onChange={e => setMotivoPedido(e.target.value)} rows={2} placeholder="Ex.: cliente desistiu"
+              className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none" />
+            {erroPedido && <p className="text-xs text-red-400 mt-1">{erroPedido}</p>}
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => setPedirExclusaoOpen(false)} disabled={enviandoPedido}
+                className="rounded-lg border border-app-border2 px-4 py-2 text-sm text-app-muted hover:bg-app-surface2 transition-colors disabled:opacity-50">Voltar</button>
+              <button onClick={handlePedirExclusao} disabled={enviandoPedido}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 transition-colors disabled:opacity-50">
+                {enviandoPedido ? 'Enviando…' : 'Excluir da agenda'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {confirmarPreOpen && (
         <NovoEventoModal
           preEvento={evento}

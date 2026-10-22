@@ -11,6 +11,7 @@ import { useEspacoAtivo } from '@/contexts/EspacoAtivoContext'
 import { useEventos } from '@/contexts/EventosContext'
 import { useReceitas, isReceitaOperacional, statusEfetivoReceita, receitaEmAtraso } from '@/contexts/ReceitasContext'
 import type { TipoEvento } from '@/types'
+import { eventoAtivo } from '@/types'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
 const COR_HEX: Record<string, string> = {
@@ -85,7 +86,7 @@ export default function DashboardPage() {
   const nomeMesAtual = hoje.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
 
   const confirmedThisMonth = eventosFiltrados.filter(
-    (e) => e.status === 'confirmado' && e.data.startsWith(mesAtual)
+    (e) => e.status === 'confirmado' && eventoAtivo(e) && e.data.startsWith(mesAtual)
   ).length
 
   // Aporte societário e outras entradas manuais não contam como faturamento —
@@ -98,7 +99,7 @@ export default function DashboardPage() {
     .filter((p) => statusEfetivoReceita(p) === 'pendente')
     .reduce((s, p) => s + p.valor, 0)
 
-  const eventosCancelados = new Set(eventos.filter(e => e.status === 'cancelado').map(e => e.id))
+  const eventosCancelados = new Set(eventos.filter(e => !eventoAtivo(e)).map(e => e.id))
   const atrasado = pagamentosFiltrados
     .filter((p) => receitaEmAtraso(p, eventosCancelados))
     .reduce((s, p) => s + p.valor, 0)
@@ -108,7 +109,7 @@ export default function DashboardPage() {
   const hojeSemHora = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate())
   const proximosEventos = eventosFiltrados
     .filter((e) => {
-      if (e.status !== 'confirmado') return false
+      if (e.status !== 'confirmado' || !eventoAtivo(e)) return false
       const [y, m, d] = e.data.split('-').map(Number)
       const dataEvento = new Date(y, m - 1, d)
       if (dataEvento.getTime() !== hojeSemHora.getTime()) return dataEvento.getTime() > hojeSemHora.getTime()

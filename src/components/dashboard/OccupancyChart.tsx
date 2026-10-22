@@ -1,5 +1,6 @@
 'use client'
 
+import { eventoAtivo } from '@/types'
 import { useMemo } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { useEventos } from '@/contexts/EventosContext'
@@ -25,7 +26,7 @@ export default function OccupancyChart() {
   const data = useMemo(() => {
     const porEspaco: Record<string, number> = {}
     for (const e of eventos) {
-      if (e.status === 'cancelado') continue
+      if (!eventoAtivo(e)) continue
       porEspaco[e.espaco] = (porEspaco[e.espaco] ?? 0) + 1
     }
     return Object.entries(porEspaco)

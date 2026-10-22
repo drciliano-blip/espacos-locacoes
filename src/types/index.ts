@@ -83,6 +83,17 @@ export interface Evento {
   nomeFantasia?: string
   cnpj?: string
   enderecoEmpresa?: EnderecoCompleto
+  // Exclusão pedida por quem não é admin: o evento sai da Agenda e a data
+  // fica livre, mas só some de vez quando um admin aprovar.
+  exclusaoSolicitadaEm?: string
+  exclusaoSolicitadaPor?: string
+  exclusaoMotivo?: string
+}
+
+// Evento que ocupa a data e conta nos números: nem cancelado, nem com
+// exclusão pedida aguardando o admin. Único lugar que decide isso.
+export function eventoAtivo(e: Pick<Evento, 'status' | 'exclusaoSolicitadaEm'>): boolean {
+  return e.status !== 'cancelado' && !e.exclusaoSolicitadaEm
 }
 
 export interface Pagamento {
