@@ -6,7 +6,9 @@ export type Espaco =
   | 'Espaço Solon'
 
 export type StatusPagamento = 'pago' | 'pendente' | 'atrasado'
-export type StatusEvento = 'confirmado' | 'cancelado'
+// 'em_negociacao' = Pré-evento: data segurada só com cliente e nome do evento,
+// sem parcelas nem contrato, até alguém clicar em "Confirmar evento".
+export type StatusEvento = 'confirmado' | 'cancelado' | 'em_negociacao'
 export type FormaPagamento = 'PIX' | 'Transferência' | 'Dinheiro' | 'Cartão de Crédito' | 'Cartão de Débito' | 'Cheque' | 'Parcelado' | 'Repasse Sócio'
 export type Decoracao = 'própria' | 'terceirizada' | 'não aplicável'
 export type StatusVistoria = 'pendente' | 'aprovada' | 'aprovada com ressalvas' | 'reprovada' | 'não realizada'

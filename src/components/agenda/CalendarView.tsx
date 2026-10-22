@@ -116,22 +116,27 @@ export default function CalendarView({ eventos, onDaySelect, selectedDate, onMon
                 {dayEvents.slice(0, 3).map((e, i) => (
                   <span
                     key={i}
-                    className={`h-1.5 w-1.5 rounded-full ${e.status === 'cancelado' ? 'bg-zinc-400/60' : corDoEspaco(e.espaco)}`}
-                    title={e.status === 'cancelado' ? 'Cancelado' : e.espaco}
+                    className={`h-1.5 w-1.5 rounded-full ${e.status === 'cancelado' ? 'bg-zinc-400/60' : e.status === 'em_negociacao' ? 'border border-amber-500 bg-transparent' : corDoEspaco(e.espaco)}`}
+                    title={e.status === 'cancelado' ? 'Cancelado' : e.status === 'em_negociacao' ? 'Pré-evento' : e.espaco}
                   />
                 ))}
               </div>
               {/* Computador: etiqueta como no Google Agenda — cor do espaço com o nome escrito. */}
               <div className="hidden sm:flex flex-col gap-0.5 min-w-0">
                 {dayEvents.slice(0, MAX_ETIQUETAS_POR_DIA).map((e, i) => {
-                  const texto = variosEspacos ? `${e.espaco} · ${e.cliente}` : e.cliente
+                  const pre = e.status === 'em_negociacao'
+                  const texto = `${pre ? 'PRÉ · ' : ''}${variosEspacos ? `${e.espaco} · ` : ''}${e.cliente}`
                   const cancelado = e.status === 'cancelado'
                   return (
                     <span
                       key={i}
-                      title={`${e.cliente} · ${e.espaco} · ${e.horaInicio?.slice(0, 5) ?? ''}–${e.horaFim?.slice(0, 5) ?? ''}${cancelado ? ' · Cancelado' : ''}`}
-                      className={`block w-full truncate rounded px-1.5 py-0.5 text-left text-[10px] font-semibold leading-tight text-white ${
-                        cancelado ? 'bg-zinc-400/70 line-through' : corDoEspaco(e.espaco)
+                      title={pre
+                        ? `Pré-evento · ${e.cliente} · ${e.espaco}`
+                        : `${e.cliente} · ${e.espaco} · ${e.horaInicio?.slice(0, 5) ?? ''}–${e.horaFim?.slice(0, 5) ?? ''}${cancelado ? ' · Cancelado' : ''}`}
+                      className={`block w-full truncate rounded px-1.5 py-0.5 text-left text-[10px] font-semibold leading-tight ${
+                        cancelado ? 'bg-zinc-400/70 line-through text-white'
+                          : pre ? 'border border-dashed border-amber-500 bg-amber-500/10 text-amber-700'
+                          : `${corDoEspaco(e.espaco)} text-white`
                       }`}
                     >
                       {texto}
@@ -156,6 +161,10 @@ export default function CalendarView({ eventos, onDaySelect, selectedDate, onMon
           ))}
         </div>
         <div className="flex flex-wrap gap-3">
+          <div className="flex items-center gap-1.5">
+            <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold border border-dashed border-amber-500 bg-amber-500/10 text-amber-700">PRÉ · Cliente</span>
+            <span className="text-xs text-app-subtle">Pré-evento</span>
+          </div>
           <div className="flex items-center gap-1.5">
             <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-white bg-zinc-400/70 line-through">Evento</span>
             <span className="text-xs text-app-subtle">Cancelado</span>

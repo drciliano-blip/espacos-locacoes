@@ -9,11 +9,13 @@ export type AbaAgenda = 'proximos' | 'passados' | 'mes'
 const statusBadge: Record<string, string> = {
   confirmado: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
   cancelado:  'bg-red-500/10 text-red-400 border-red-500/20',
+  em_negociacao: 'bg-amber-500/10 text-amber-600 border-amber-500/40 border-dashed',
 }
 
 const statusLabel: Record<string, string> = {
   confirmado: 'Confirmado',
   cancelado:  'Cancelado',
+  em_negociacao: 'Pré-evento',
 }
 
 const espacoColors: Record<string, string> = {
@@ -86,7 +88,7 @@ export default function EventList({ eventos, selectedDate, aba, onAbaChange, mes
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-app-text truncate">{evento.cliente}</p>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <p className="text-xs text-app-muted">{evento.tipo}</p>
+                    <p className="text-xs text-app-muted">{evento.status === 'em_negociacao' ? (evento.nomeEvento || 'Aguardando confirmação') : evento.tipo}</p>
                     {evento.tipoEvento && (
                       <span className={`rounded-full px-1.5 py-0.5 text-xs font-medium ${tipoEventoColors[evento.tipoEvento]}`}>
                         {evento.tipoEvento}
@@ -106,11 +108,16 @@ export default function EventList({ eventos, selectedDate, aba, onAbaChange, mes
                 </div>
                 <div className="flex items-center gap-1 text-xs text-app-subtle">
                   <Clock className="h-3 w-3" />
-                  {formatDate(evento.data)} · {evento.horaInicio}–{evento.horaFim}
+                  {/* Pré-evento ainda não tem horário nem valor (gravados como 00:00 e 0). */}
+                  {formatDate(evento.data)} · {evento.status === 'em_negociacao' ? 'Horário a definir' : `${evento.horaInicio}–${evento.horaFim}`}
                 </div>
-                <div className="ml-auto text-xs font-semibold text-[#25D366]">
-                  {formatCurrency(evento.valor)}
-                </div>
+                {evento.status === 'em_negociacao' ? (
+                  evento.telefoneContato && <div className="ml-auto text-xs text-app-subtle">{evento.telefoneContato}</div>
+                ) : (
+                  <div className="ml-auto text-xs font-semibold text-[#25D366]">
+                    {formatCurrency(evento.valor)}
+                  </div>
+                )}
               </div>
 
               {evento.responsavel && (

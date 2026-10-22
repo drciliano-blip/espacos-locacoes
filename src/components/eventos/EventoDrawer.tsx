@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { X, Save, Edit3, Users, DollarSign, User, Calendar, ClipboardCheck, Paperclip, Trash2, FileSignature, Ban, RotateCcw } from 'lucide-react'
+import { X, Save, Edit3, Users, DollarSign, User, Calendar, ClipboardCheck, Paperclip, Trash2, FileSignature, Ban, RotateCcw, CheckCircle2 } from 'lucide-react'
 import type { Evento, StatusVistoria, TipoEvento, Contrato, TipoMinuta } from '@/types'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useCurrentUser } from '@/contexts/UserContext'
@@ -16,6 +16,8 @@ import PlanoPagamentoSection from '@/components/eventos/PlanoPagamentoSection'
 import GerarContratoDoEventoModal from '@/components/eventos/GerarContratoDoEventoModal'
 import GerarContratoModal from '@/components/contratos/GerarContratoModal'
 import CancelarEventoModal from '@/components/eventos/CancelarEventoModal'
+import NovoEventoModal from '@/components/eventos/NovoEventoModal'
+import { useEventos } from '@/contexts/EventosContext'
 import Toast from '@/components/shared/Toast'
 
 const statusBadge: Record<string, string> = {
@@ -63,6 +65,12 @@ interface EventoDrawerProps {
 
 export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: EventoDrawerProps) {
   const { role } = useCurrentUser()
+  const { confirmarPreEvento } = useEventos()
+  const ehPreEvento = evento.status === 'em_negociacao'
+  const [confirmarPreOpen, setConfirmarPreOpen] = useState(false)
+  // Depois de confirmado, os dados deste drawer (prop `evento`) ficam velhos —
+  // fecha o drawer junto com o formulário.
+  const [preConfirmado, setPreConfirmado] = useState(false)
   const { receitas, syncParcelasDoEvento, updateReceita, deleteReceita } = useReceitas()
   const { repasses, addRepasse } = useRepasses()
   const { contas, addConta, deleteConta } = useContasPagar()
@@ -322,6 +330,16 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                   )}
                   {role !== 'socio' && (
                     <>
+                      {ehPreEvento ? (
+                        <button
+                          onClick={() => setConfirmarPreOpen(true)}
+                          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-colors"
+                          style={{ backgroundColor: '#25D366' }}
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Confirmar evento
+                        </button>
+                      ) : (
                       <button
                         onClick={() => contratoExistente ? setContratoParaGerar(contratoExistente) : setGerarContratoDoEventoOpen(true)}
                         className="flex items-center gap-1.5 rounded-lg border border-app-border2 px-3 py-1.5 text-xs font-medium text-app-muted hover:bg-app-surface2 transition-colors"
@@ -329,7 +347,8 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                         <FileSignature className="h-3.5 w-3.5" />
                         {contratoExistente ? 'Gerar documento do contrato' : 'Gerar Contrato'}
                       </button>
-                      {evento.status === 'confirmado' ? (
+                      )}
+                      {ehPreEvento ? null : evento.status === 'confirmado' ? (
                         <button
                           onClick={() => setCancelarEventoOpen(true)}
                           className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors"
@@ -633,6 +652,14 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
       )}
 
       {/* Confirmação de reativação — cancelar tem o fluxo próprio (CancelarEventoModal) */}
+      {confirmarPreOpen && (
+        <NovoEventoModal
+          preEvento={evento}
+          onSave={async ev => { await confirmarPreEvento(ev); setPreConfirmado(true) }}
+          onClose={() => { setConfirmarPreOpen(false); if (preConfirmado) onClose() }}
+        />
+      )}
+
       {cancelConfirm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60" onClick={(e) => e.stopPropagation()}>
           <div className="w-full max-w-sm rounded-2xl border border-app-border bg-app-surface p-6 shadow-2xl">

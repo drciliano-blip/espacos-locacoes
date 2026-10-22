@@ -49,6 +49,7 @@ const COR_HEX: Record<string, string> = {
 const STATUS_CFG: Record<string, { badge: string; label: string; Icon: ComponentType<{ className?: string }> }> = {
   confirmado: { badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', label: 'Confirmado', Icon: CheckCircle2 },
   cancelado:  { badge: 'bg-red-500/10    text-red-400    border-red-500/20',       label: 'Cancelado',  Icon: XCircle },
+  em_negociacao: { badge: 'bg-amber-500/10 text-amber-600 border-amber-500/40 border-dashed', label: 'Pré-evento', Icon: Clock },
 }
 
 const AT_CFG: Record<TipoAtividade, { color: string; Icon: ComponentType<{ className?: string }> }> = {

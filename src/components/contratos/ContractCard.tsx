@@ -13,11 +13,13 @@ import { useCurrentUser } from '@/contexts/UserContext'
 const statusBadge: Record<string, string> = {
   confirmado: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
   cancelado:  'bg-red-500/10 text-red-400 border-red-500/20',
+  em_negociacao: 'bg-amber-500/10 text-amber-600 border-amber-500/40 border-dashed',
 }
 
 const statusLabel: Record<string, string> = {
   confirmado: 'Confirmado',
   cancelado:  'Cancelado',
+  em_negociacao: 'Pré-evento',
 }
 
 const espacoColors: Record<string, string> = {

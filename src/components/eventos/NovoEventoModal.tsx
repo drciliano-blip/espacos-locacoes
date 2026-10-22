@@ -276,6 +276,9 @@ interface NovoEventoModalProps {
   // Quando presente, o formulário já abre preenchido com os dados desta
   // ficha recebida (ver FichasRecebidasSection.tsx, "Criar evento desta ficha").
   fichaOrigem?: FichaCliente
+  // Quando presente, o formulário confirma este pré-evento: abre com cliente,
+  // nome do evento, data e espaço já preenchidos e salva sobre o mesmo id.
+  preEvento?: Evento
   onClose: () => void
   onSave: (evento: Evento) => void | Promise<void>
 }
@@ -318,16 +321,27 @@ function Field({
   )
 }
 
-export default function NovoEventoModal({ espacoPadrao, fichaOrigem, onClose, onSave }: NovoEventoModalProps) {
+function draftFromPreEvento(e: Evento): Draft {
+  return {
+    ...emptyDraft(e.espaco),
+    cliente: e.cliente,
+    nomeEvento: e.nomeEvento ?? '',
+    telefoneContato: e.telefoneContato ?? '',
+    data: e.data,
+    observacoes: e.observacoes ?? '',
+  }
+}
+
+export default function NovoEventoModal({ espacoPadrao, fichaOrigem, preEvento, onClose, onSave }: NovoEventoModalProps) {
   const { espacosNomes } = useEspacos()
   const { syncParcelasDoEvento } = useReceitas()
   const { addContrato } = useContratos()
-  const [draft, setDraft]         = useState<Draft>(() => fichaOrigem ? draftFromFicha(fichaOrigem, espacosNomes, espacoPadrao).draft : emptyDraft(espacoPadrao))
+  const [draft, setDraft]         = useState<Draft>(() => preEvento ? draftFromPreEvento(preEvento) : fichaOrigem ? draftFromFicha(fichaOrigem, espacosNomes, espacoPadrao).draft : emptyDraft(espacoPadrao))
   const [submitted, setSubmitted] = useState(false)
   const [parcelas, setParcelas]   = useState<ParcelaDraft[] | null>(() => fichaOrigem ? draftFromFicha(fichaOrigem, espacosNomes, espacoPadrao).parcelas : null)
   // Generate stable ID upfront so file attachments are linked before save
   // (precisa ser um UUID real: vira o id definitivo do evento no Postgres)
-  const [eventId]                 = useState(() => crypto.randomUUID())
+  const [eventId]                 = useState(() => preEvento?.id ?? crypto.randomUUID())
   const [fileCount, setFileCount] = useState(0)
   const fichaFileRef = useRef<HTMLInputElement>(null)
   const fichaCameraRef = useRef<HTMLInputElement>(null)
@@ -609,7 +623,7 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, onClose, on
         <div className="sticky top-0 z-10 border-b border-app-border bg-app-bg">
           <div className="flex items-center justify-between px-5 py-4">
             <div>
-              <p className="text-sm font-bold text-app-text">Novo Evento</p>
+              <p className="text-sm font-bold text-app-text">{preEvento ? 'Confirmar evento' : 'Novo Evento'}</p>
               <p className="text-xs text-app-muted mt-0.5">
                 {espacoPadrao ? `Espaço: ${espacoPadrao}` : 'Preencha os dados do evento'}
               </p>
@@ -630,7 +644,7 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, onClose, on
                 onMouseLeave={e => { e.currentTarget.style.backgroundColor = GREEN }}
               >
                 <Save className="h-3.5 w-3.5" />
-                {saving ? 'Salvando…' : 'Salvar evento'}
+                {saving ? 'Salvando…' : preEvento ? 'Confirmar evento' : 'Salvar evento'}
               </button>
               <button
                 onClick={onClose}
@@ -643,6 +657,15 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, onClose, on
         </div>
 
         <div className="p-5 space-y-6">
+
+          {preEvento && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5">
+              <p className="text-xs text-app-text">
+                Confirmando o pré-evento de <span className="font-medium">{preEvento.cliente}</span>. Complete os dados abaixo — ao salvar, ele vira
+                evento confirmado, gera o plano de pagamento e você pode gerar o contrato em seguida.
+              </p>
+            </div>
+          )}
 
           {fichaOrigem && (
             <div className="rounded-lg border border-[#25D366]/30 bg-[#25D366]/5 px-4 py-2.5">

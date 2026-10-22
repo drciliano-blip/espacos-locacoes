@@ -128,6 +128,17 @@ export default function ConsultarDisponibilidadeSection() {
     return set
   }, [eventos])
 
+  // Pré-evento não bloqueia a data — só avisa que já tem cliente na frente.
+  const preEventos = useMemo(() => {
+    const mapa = new Map<string, string[]>()
+    for (const e of eventos) {
+      if (e.status !== 'em_negociacao') continue
+      const k = `${e.espaco}|${e.data}`
+      mapa.set(k, [...(mapa.get(k) ?? []), e.cliente])
+    }
+    return mapa
+  }, [eventos])
+
   const { linhas, totalCandidatas, erroPeriodo } = useMemo(() => {
     if (!periodoInicio || !periodoFim || espacosSelecionados.length === 0) {
       return { linhas: [] as LinhaDisponibilidade[], totalCandidatas: 0, erroPeriodo: null as string | null }
@@ -343,9 +354,16 @@ export default function ConsultarDisponibilidadeSection() {
                         <td className="px-2 py-2 text-app-text2 whitespace-nowrap">{diaSemanaLabel(l.data)}</td>
                         {mostrarColunaEspaco && <td className="px-2 py-2 text-app-text2 whitespace-nowrap">{l.espaco}</td>}
                         <td className="px-2 py-2 whitespace-nowrap">
-                          <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 px-2 py-0.5 text-xs font-medium">
-                            Disponível
-                          </span>
+                          {preEventos.has(chave(l)) ? (
+                            <span className="rounded-full border border-dashed border-amber-500/50 bg-amber-500/10 text-amber-600 px-2 py-0.5 text-xs font-medium"
+                              title="Data ainda disponível, mas com pré-evento na frente">
+                              Pré-reservada · {preEventos.get(chave(l))!.join(', ')}
+                            </span>
+                          ) : (
+                            <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 px-2 py-0.5 text-xs font-medium">
+                              Disponível
+                            </span>
+                          )}
                         </td>
                       </tr>
                     ))}

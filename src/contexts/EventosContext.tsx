@@ -135,6 +135,9 @@ interface EventosContextValue {
   loading: boolean
   addEvento: (e: Evento) => Promise<void>
   updateEvento: (e: Evento) => Promise<void>
+  // Transforma um pré-evento no evento completo: grava os dados do formulário
+  // sobre o mesmo id, status confirmado, e gera o plano de pagamento padrão.
+  confirmarPreEvento: (e: Evento) => Promise<void>
   deleteEvento: (id: string) => Promise<void>
 }
 
@@ -195,6 +198,15 @@ export function EventosProvider({ children }: { children: ReactNode }) {
     if (error) throw error
     const novo = fromRow(data as unknown as EventoRow)
     setEventos(prev => [novo, ...prev])
+    // Pré-evento não tem valor nem parcelas — só ganha plano de pagamento ao ser confirmado.
+    if (novo.status === 'em_negociacao') {
+      try {
+        await logAtividade({ tipo: 'evento', acao: 'Pré-evento criado', detalhes: `${novo.cliente} — ${novo.data}`, espaco: novo.espaco })
+      } catch {
+        // log é secundário
+      }
+      return
+    }
     try {
       await syncParcelasDoEvento({
         eventoId: novo.id,
@@ -232,6 +244,21 @@ export function EventosProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function confirmarPreEvento(e: Evento) {
+    await updateEvento({ ...e, status: 'confirmado' })
+    try {
+      await syncParcelasDoEvento({
+        eventoId: e.id,
+        cliente: e.cliente,
+        espaco: e.espaco,
+        parcelas: gerarPlanoPadrao(e.data, e.valor, e.valorSinal, e.dataVencimentoSaldo),
+      })
+      await logAtividade({ tipo: 'evento', acao: 'Pré-evento confirmado', detalhes: `${e.cliente} — ${e.data}`, espaco: e.espaco })
+    } catch {
+      // mesmo critério do addEvento: plano/log não derrubam a confirmação já gravada
+    }
+  }
+
   async function deleteEvento(id: string) {
     const alvo = eventos.find(e => e.id === id)
     const supabase = createClient()
@@ -248,7 +275,7 @@ export function EventosProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <EventosContext.Provider value={{ eventos, loading, addEvento, updateEvento, deleteEvento }}>
+    <EventosContext.Provider value={{ eventos, loading, addEvento, updateEvento, confirmarPreEvento, deleteEvento }}>
       {children}
     </EventosContext.Provider>
   )

@@ -11,6 +11,7 @@ import ExportarPdfAgendaModal, { type CamposPdfAgenda, CAMPOS_PDF_PADRAO } from 
 import EspacoGoogleCalendar from '@/components/espacos/EspacoGoogleCalendar'
 import EventoDrawer from '@/components/eventos/EventoDrawer'
 import NovoEventoModal from '@/components/eventos/NovoEventoModal'
+import PreEventoModal from '@/components/agenda/PreEventoModal'
 import ExportarRelatorioButton from '@/components/relatorios/ExportarRelatorioButton'
 import FullTable from '@/components/shared/FullTable'
 import Toast from '@/components/shared/Toast'
@@ -24,7 +25,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { downloadWorkbook, type ExportSheet } from '@/lib/xlsx-export'
 import type { Evento, Espaco } from '@/types'
 
-const statusLabelEvento: Record<string, string> = { confirmado: 'Confirmado', cancelado: 'Cancelado' }
+const statusLabelEvento: Record<string, string> = { confirmado: 'Confirmado', cancelado: 'Cancelado', em_negociacao: 'Pré-evento' }
 
 function contatoLabel(evento: Evento): string {
   if (!evento.responsavel) return '—'
@@ -56,6 +57,7 @@ export default function AgendaPage() {
   const [selectedDate, setSelectedDate]     = useState<Date | null>(null)
   const [selectedEvento, setSelectedEvento] = useState<Evento | null>(null)
   const [novoEventoOpen, setNovoEventoOpen] = useState(false)
+  const [preEventoOpen, setPreEventoOpen] = useState(false)
   const [pdfModalOpen, setPdfModalOpen] = useState(false)
   const [camposPdf, setCamposPdf] = useState<CamposPdfAgenda>(CAMPOS_PDF_PADRAO)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
@@ -239,6 +241,18 @@ export default function AgendaPage() {
 
           <ExportarRelatorioButton onExcel={handleExportExcelRelacao} onPdf={() => setPdfModalOpen(true)} label="Exportar Relação" />
 
+          {/* Pré-evento: só segura a data (cliente, evento, data, espaço). Não
+              exige espaço selecionado no topo — o próprio formulário pede. */}
+          {role !== 'socio' && (
+            <button
+              onClick={() => setPreEventoOpen(true)}
+              className="ml-auto flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-600 shrink-0 hover:bg-amber-500/20 transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Pré-evento
+            </button>
+          )}
+
           {/* Botão Novo Evento */}
           {role !== 'socio' && (
             <button
@@ -246,7 +260,7 @@ export default function AgendaPage() {
                 if (precisaEspacoEspecifico()) { showToast(MSG_ESPACO_ESPECIFICO_NECESSARIO); return }
                 setNovoEventoOpen(true)
               }}
-              className="ml-auto flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white shrink-0 transition-opacity"
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white shrink-0 transition-opacity"
               style={{ backgroundColor: '#25D366' }}
               onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#128C7E' }}
               onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#25D366' }}
@@ -329,6 +343,9 @@ export default function AgendaPage() {
         />
       )}
 
+      {preEventoOpen && (
+        <PreEventoModal espacoPadrao={espacoUnico ?? undefined} onClose={() => setPreEventoOpen(false)} onSalvo={showToast} />
+      )}
       <Toast message={toastMsg} />
     </div>
   )
