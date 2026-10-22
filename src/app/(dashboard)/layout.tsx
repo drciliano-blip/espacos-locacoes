@@ -54,12 +54,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
                           <ConciliacaoProvider>
                             <PadroesClassificacaoProvider>
                               <SidebarUIProvider>
-                                <div id="app-shell" className="flex h-screen bg-app-bg overflow-hidden">
+                                <div id="app-shell" className="flex h-dvh bg-app-bg overflow-hidden">
                                   <Sidebar userRole={role} />
                                   <div id="app-shell-inner" className="flex flex-1 flex-col overflow-hidden">
                                     <Header userName={profile.nome} userRole={role} />
                                     <AvisoAtrasoBanner />
-                                    <main id="app-main" className="flex-1 overflow-y-auto p-6">
+                                    <main id="app-main" className="flex-1 overflow-y-auto p-4 sm:p-6">
                                       {children}
                                     </main>
                                   </div>

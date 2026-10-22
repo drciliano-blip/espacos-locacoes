@@ -97,7 +97,7 @@ export default function Sidebar({ userRole }: SidebarProps) {
       {open && (
         <div className="fixed inset-0 z-40 bg-black/60 lg:hidden" onClick={close} />
       )}
-      <aside className={`fixed inset-y-0 left-0 z-50 flex h-screen w-64 flex-col bg-app-surface border-r border-app-border transition-transform duration-200 lg:static lg:translate-x-0 ${
+      <aside className={`fixed inset-y-0 left-0 z-50 flex h-dvh w-64 flex-col bg-app-surface border-r border-app-border transition-transform duration-200 lg:static lg:translate-x-0 ${
         open ? 'translate-x-0' : '-translate-x-full'
       }`}>
       <div className="flex items-center gap-3 px-6 py-5 border-b border-app-border">

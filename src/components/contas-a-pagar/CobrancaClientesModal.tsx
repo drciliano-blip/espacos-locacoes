@@ -270,10 +270,13 @@ export default function CobrancaClientesModal({ itens, onClose }: { itens: Parce
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-5xl rounded-2xl border border-app-border bg-app-surface shadow-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+    // Celular: tela cheia, rolando inteira. Computador: janela centralizada
+    // com a lista rolando por dentro. `min-w-0` impede o conteúdo de
+    // alargar a janela além da tela (era o que a cortava à esquerda).
+    <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-black/40 backdrop-blur-sm sm:p-4" onClick={onClose}>
+      <div className="w-full min-w-0 max-w-5xl h-dvh sm:h-auto sm:max-h-[90vh] overflow-y-auto sm:overflow-hidden sm:rounded-2xl border-app-border sm:border bg-app-surface shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
         {/* Cabeçalho */}
-        <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-app-border">
+        <div className="sticky top-0 z-10 sm:static flex items-start justify-between gap-4 px-3 sm:px-5 py-3 sm:py-4 border-b border-app-border bg-app-surface">
           <div>
             <p className="text-base font-semibold text-app-text">Clientes em atraso</p>
             <p className="text-xs text-app-muted mt-0.5">Parcelas de eventos vencidas e não pagas.</p>
@@ -284,38 +287,39 @@ export default function CobrancaClientesModal({ itens, onClose }: { itens: Parce
         </div>
 
         {/* Seções */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 px-5 pt-4">
+        {/* Seções — três colunas compactas também no celular, pra não empilhar três caixas grandes */}
+        <div className="grid grid-cols-3 gap-1.5 sm:gap-2 px-3 sm:px-5 pt-3 sm:pt-4">
           {resumoSecoes.map(s => (
             <button key={s.valor} type="button" onClick={() => setSecao(s.valor)}
-              className={`rounded-xl border p-3 text-left transition-colors ${secao === s.valor
+              className={`min-w-0 rounded-xl border p-2 sm:p-3 text-left transition-colors ${secao === s.valor
                 ? (s.valor === 'futuro' ? 'border-red-500/60 bg-red-500/10' : 'border-amber-500/60 bg-amber-500/10')
                 : 'border-app-border hover:bg-app-surface2/60'}`}>
-              <p className={`text-xs font-medium ${s.valor === 'futuro' ? 'text-red-600' : 'text-amber-600'}`}>{s.label}</p>
-              <p className="text-sm font-bold text-app-text">{formatCurrency(s.total)}</p>
-              <p className="text-xs text-app-muted">{s.qtd} {s.qtd === 1 ? 'parcela' : 'parcelas'}</p>
+              <p className={`text-[11px] sm:text-xs font-medium leading-tight ${s.valor === 'futuro' ? 'text-red-600' : 'text-amber-600'}`}>{s.label}</p>
+              <p className="text-xs sm:text-sm font-bold text-app-text truncate">{formatCurrency(s.total)}</p>
+              <p className="text-[11px] sm:text-xs text-app-muted">{s.qtd} {s.qtd === 1 ? 'parcela' : 'parcelas'}</p>
             </button>
           ))}
         </div>
-        <p className="px-5 pt-2 text-xs text-app-muted">{secaoAtual.descricao}</p>
+        <p className="px-3 sm:px-5 pt-2 text-xs text-app-muted">{secaoAtual.descricao}</p>
 
         {/* Resumo */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 px-5 pt-3">
-          <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-3">
-            <p className="text-xs text-red-600">Total da seção</p>
-            <p className="text-lg font-bold text-red-600">{formatCurrency(total)}</p>
+        <div className="grid grid-cols-3 gap-1.5 sm:gap-3 px-3 sm:px-5 pt-2 sm:pt-3">
+          <div className="min-w-0 rounded-xl border border-red-500/20 bg-red-500/5 p-2 sm:p-3">
+            <p className="text-[11px] sm:text-xs text-red-600">Total da seção</p>
+            <p className="text-xs sm:text-lg font-bold text-red-600 truncate">{formatCurrency(total)}</p>
           </div>
-          <div className="rounded-xl border border-app-border bg-app-surface2/40 p-3">
-            <p className="text-xs text-app-muted">Clientes / parcelas</p>
-            <p className="text-lg font-bold text-app-text">{qtdClientes} / {filtrados.length}</p>
+          <div className="min-w-0 rounded-xl border border-app-border bg-app-surface2/40 p-2 sm:p-3">
+            <p className="text-[11px] sm:text-xs text-app-muted">Clientes / parcelas</p>
+            <p className="text-xs sm:text-lg font-bold text-app-text">{qtdClientes} / {filtrados.length}</p>
           </div>
-          <div className="rounded-xl border border-app-border bg-app-surface2/40 p-3">
-            <p className="text-xs text-app-muted">Maior atraso</p>
-            <p className="text-lg font-bold text-app-text">{maiorAtraso} {maiorAtraso === 1 ? 'dia' : 'dias'}</p>
+          <div className="min-w-0 rounded-xl border border-app-border bg-app-surface2/40 p-2 sm:p-3">
+            <p className="text-[11px] sm:text-xs text-app-muted">Maior atraso</p>
+            <p className="text-xs sm:text-lg font-bold text-app-text">{maiorAtraso} {maiorAtraso === 1 ? 'dia' : 'dias'}</p>
           </div>
         </div>
 
         {/* Controles */}
-        <div className="flex flex-wrap items-center gap-2 px-5 py-3">
+        <div className="flex flex-wrap items-center gap-2 px-3 sm:px-5 py-3">
           <div className="flex rounded-lg border border-app-border2 p-0.5">
             {([['cliente', 'Por cliente', Users], ['data', 'Por vencimento', CalendarDays]] as const).map(([v, label, Icon]) => (
               <button key={v} onClick={() => setVisao(v)}
@@ -324,7 +328,7 @@ export default function CobrancaClientesModal({ itens, onClose }: { itens: Parce
               </button>
             ))}
           </div>
-          <div className="relative flex-1 min-w-[180px]">
+          <div className="relative basis-full sm:basis-auto flex-1 min-w-0 sm:min-w-[180px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-app-subtle" />
             <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar cliente, evento ou telefone"
               className="w-full rounded-lg border border-app-border2 bg-app-surface2 pl-8 pr-2.5 py-1.5 text-sm text-app-text focus:outline-none" />
@@ -336,7 +340,7 @@ export default function CobrancaClientesModal({ itens, onClose }: { itens: Parce
         </div>
 
         {/* Lista */}
-        <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-3">
+        <div className="sm:flex-1 sm:overflow-y-auto px-3 sm:px-5 pb-4 space-y-3">
           {filtrados.length === 0 ? (
             <p className="py-10 text-center text-sm text-app-subtle">
               {itens.length === 0 ? 'Nenhum cliente em atraso 🎉' : busca.trim() ? 'Nenhum resultado para a busca.' : 'Nada nesta seção.'}
@@ -363,12 +367,12 @@ export default function CobrancaClientesModal({ itens, onClose }: { itens: Parce
                 <div className="divide-y divide-app-border/50">
                   {g.parcelas.map(p => (
                     <div key={p.receita.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5">
-                      <div className="flex-1 min-w-[140px]">
+                      <div className="flex-1 min-w-0 basis-40">
                         <p className="text-sm text-app-text">{nomeParcela(p.receita)}</p>
                         <p className="text-xs text-app-subtle">Venceu {formatDate(p.receita.data)}</p>
                       </div>
                       {atraso(p.diasAtraso)}
-                      <p className="w-28 text-right text-sm font-semibold text-app-text">{formatCurrency(p.receita.valor)}</p>
+                      <p className="sm:w-28 text-right text-sm font-semibold text-app-text">{formatCurrency(p.receita.valor)}</p>
                       {botaoBaixa(p.receita)}
                     </div>
                   ))}
@@ -387,13 +391,13 @@ export default function CobrancaClientesModal({ itens, onClose }: { itens: Parce
                     const g = grupoPorChave.get(p.receita.eventoId ?? `cliente:${p.cliente}`)
                     return (
                       <div key={p.receita.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5">
-                        <div className="flex-1 min-w-[180px]">
+                        <div className="flex-1 min-w-0 basis-48">
                           <p className="text-sm font-medium text-app-text">{p.cliente}</p>
                           <p className="text-xs text-app-subtle">
                             {[p.nomeEvento, p.dataEvento ? `Evento em ${formatDate(p.dataEvento)}` : '', nomeParcela(p.receita), p.telefone].filter(Boolean).join(' · ')}
                           </p>
                         </div>
-                        <p className="w-28 text-right text-sm font-semibold text-app-text">{formatCurrency(p.receita.valor)}</p>
+                        <p className="sm:w-28 text-right text-sm font-semibold text-app-text">{formatCurrency(p.receita.valor)}</p>
                         {g && acoesCliente(g)}
                         {botaoBaixa(p.receita)}
                       </div>
@@ -406,7 +410,7 @@ export default function CobrancaClientesModal({ itens, onClose }: { itens: Parce
         </div>
 
         {/* Rodapé */}
-        <div className="flex items-center justify-between px-5 py-3 border-t border-app-border">
+        <div className="flex items-center justify-between px-3 sm:px-5 py-3 border-t border-app-border">
           <p className="text-xs text-app-muted">{filtrados.length} {filtrados.length === 1 ? 'parcela' : 'parcelas'} em atraso</p>
           <p className="text-sm font-semibold text-app-text">Total: <span className="text-red-600">{formatCurrency(total)}</span></p>
         </div>

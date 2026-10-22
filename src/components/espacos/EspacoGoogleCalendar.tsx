@@ -52,6 +52,11 @@ export default function EspacoGoogleCalendar({ espacoId, espacoNome, variant = '
   const [email, setEmail] = useState<string | null>(null)
   const [events, setEvents] = useState<GCalEvent[]>([])
   const [error, setError] = useState<string | null>(null)
+  // A conexão existe no banco, mas o Google recusou renovar a autorização —
+  // mostra o botão de reconectar em vez de um erro genérico.
+  const [expirada, setExpirada] = useState(false)
+  // Só no celular: dia tocado no mês, cujos eventos aparecem listados abaixo.
+  const [diaSelecionado, setDiaSelecionado] = useState<Date | null>(() => new Date())
   const [disconnecting, setDisconnecting] = useState(false)
   const [newEventOpen, setNewEventOpen] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -70,10 +75,13 @@ export default function EspacoGoogleCalendar({ espacoId, espacoNome, variant = '
       params.set('timeMax', fim.toISOString())
     }
     const evRes = await fetch(`/api/google-calendar/events?${params.toString()}`)
-    const evData = await evRes.json()
-    if (!evRes.ok || evData.error) {
+    const evData = await evRes.json().catch(() => ({ error: `Erro ${evRes.status} ao carregar os eventos.` }))
+    if (evData.code === 'reconectar') {
+      setExpirada(true)
+    } else if (!evRes.ok || evData.error) {
       setError(evData.error ?? 'Não foi possível carregar os eventos.')
     } else {
+      setExpirada(false)
       setEvents(evData.events ?? [])
     }
   }, [espacoId, variant])
@@ -163,7 +171,8 @@ export default function EspacoGoogleCalendar({ espacoId, espacoNome, variant = '
           location: `${espacoNome} — São Paulo, SP`,
         }),
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => ({ error: `Erro ${res.status} ao criar evento.` }))
+      if (data.code === 'reconectar') { setExpirada(true); return }
       if (!res.ok || data.error) throw new Error(data.error ?? 'Erro ao criar evento.')
       setNewEventOpen(false)
       setNewEvent({ title: '', date: '', startTime: '', endTime: '' })
@@ -205,13 +214,17 @@ export default function EspacoGoogleCalendar({ espacoId, espacoNome, variant = '
     )
   }
 
-  if (!connected) {
+  if (!connected || expirada) {
     return (
       <div className="rounded-xl border border-app-border bg-app-surface p-5 flex flex-col items-center gap-3 text-center">
-        <Calendar className="h-6 w-6 text-app-subtle" />
+        <Calendar className={`h-6 w-6 ${expirada ? 'text-amber-500' : 'text-app-subtle'}`} />
         <div>
-          <p className="text-sm font-semibold text-app-text">Google Calendar deste espaço</p>
-          <p className="text-xs text-app-muted mt-1">Conecte a conta Google própria de {espacoNome} para sincronizar a agenda.</p>
+          <p className="text-sm font-semibold text-app-text">{expirada ? 'A conexão com o Google Calendar expirou' : 'Google Calendar deste espaço'}</p>
+          <p className="text-xs text-app-muted mt-1">
+            {expirada
+              ? `O Google pediu uma nova autorização. Reconecte a conta Google de ${espacoNome} para voltar a sincronizar a agenda.`
+              : `Conecte a conta Google própria de ${espacoNome} para sincronizar a agenda.`}
+          </p>
         </div>
         <button
           onClick={conectar}
@@ -220,7 +233,7 @@ export default function EspacoGoogleCalendar({ espacoId, espacoNome, variant = '
           onMouseEnter={e => { e.currentTarget.style.backgroundColor = DARK_GREEN }}
           onMouseLeave={e => { e.currentTarget.style.backgroundColor = GREEN }}
         >
-          Conectar Google Calendar
+          {expirada ? 'Reconectar Google Calendar' : 'Conectar Google Calendar'}
         </button>
         {error && (
           <div className="w-full rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5 text-left">
@@ -330,7 +343,7 @@ export default function EspacoGoogleCalendar({ espacoId, espacoNome, variant = '
       {error && <div className="px-5 py-2.5 text-xs text-red-500 border-b border-app-border">{error}</div>}
 
       {variant === 'calendario' ? (
-        <div className="p-5">
+        <div className="p-3 sm:p-5">
           <div className="flex items-center justify-between mb-4">
             <h4 className="text-sm font-semibold text-app-text capitalize">
               {format(mesExibido, 'MMMM yyyy', { locale: ptBR })}
@@ -363,18 +376,26 @@ export default function EspacoGoogleCalendar({ espacoId, espacoNome, variant = '
               const eventosDia = eventosDoDia(dia)
               const isToday = isSameDay(dia, new Date())
               const isCurrentMonth = isSameMonth(dia, mesExibido)
+              const selecionado = diaSelecionado ? isSameDay(dia, diaSelecionado) : false
               return (
                 <div
                   key={dia.toISOString()}
-                  className={`flex flex-col items-stretch rounded-lg p-1.5 min-h-[92px] sm:min-h-[112px] border border-transparent ${!isCurrentMonth ? 'opacity-30' : ''}`}
+                  onClick={() => setDiaSelecionado(dia)}
+                  className={`flex flex-col items-center sm:items-stretch rounded-lg p-1 sm:p-1.5 min-h-[44px] sm:min-h-[112px] border cursor-pointer sm:cursor-default ${selecionado ? 'border-[#25D366]/50 bg-[#25D366]/5 sm:border-transparent sm:bg-transparent' : 'border-transparent'} ${!isCurrentMonth ? 'opacity-30' : ''}`}
                 >
                   <span
-                    className="text-xs font-medium mb-1 h-5 w-5 flex items-center justify-center rounded-full self-end shrink-0"
+                    className="text-xs font-medium sm:mb-1 h-5 w-5 flex items-center justify-center rounded-full sm:self-end shrink-0"
                     style={isToday ? { backgroundColor: GREEN, color: 'white' } : undefined}
                   >
                     {format(dia, 'd')}
                   </span>
-                  <div className="flex-1 min-w-0 flex flex-col gap-0.5 overflow-hidden">
+                  {/* Celular: coluna estreita demais pra texto — só um ponto por evento; a lista do dia aparece abaixo do mês. */}
+                  {eventosDia.length > 0 && (
+                    <div className="sm:hidden flex gap-0.5 mt-1">
+                      {eventosDia.slice(0, 3).map(ev => <span key={ev.id} className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: GREEN }} />)}
+                    </div>
+                  )}
+                  <div className="hidden sm:flex flex-1 min-w-0 flex-col gap-0.5 overflow-hidden">
                     {eventosDia.slice(0, MAX_CHIPS_POR_DIA).map(ev => (
                       <button
                         key={ev.id}
@@ -393,6 +414,27 @@ export default function EspacoGoogleCalendar({ espacoId, espacoNome, variant = '
               )
             })}
           </div>
+
+          {diaSelecionado && isSameMonth(diaSelecionado, mesExibido) && (
+            <div className="sm:hidden mt-3 border-t border-app-border pt-3">
+              <p className="text-xs font-semibold text-app-text mb-2 capitalize">
+                {format(diaSelecionado, "EEEE, d 'de' MMMM", { locale: ptBR })}
+              </p>
+              {eventosDoDia(diaSelecionado).length === 0 ? (
+                <p className="text-xs text-app-subtle">Nenhum evento neste dia.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {eventosDoDia(diaSelecionado).map(ev => (
+                    <a key={ev.id} href={ev.htmlLink} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center justify-between gap-2 rounded-lg bg-[#25D366]/10 px-3 py-2">
+                      <span className="text-sm font-medium text-[#128C7E] truncate">{ev.summary}</span>
+                      <span className="text-xs text-app-muted shrink-0">{fmtTime(ev)}</span>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <div className="divide-y divide-app-border/60 max-h-72 overflow-y-auto">

@@ -8,6 +8,17 @@ interface TokenRow {
   access_token_expires_at: string | null
 }
 
+// O Google recusou o refresh_token (invalid_grant): a autorização foi
+// revogada ou expirou — com o app OAuth em modo "Teste", isso acontece
+// sozinho 7 dias depois de conectar. Não adianta tentar de novo; só
+// reconectando a conta Google do espaço.
+export class GoogleReconexaoNecessaria extends Error {
+  constructor() {
+    super('A conexão com o Google Calendar expirou. Clique em "Reconectar" para autorizar de novo.')
+    this.name = 'GoogleReconexaoNecessaria'
+  }
+}
+
 async function refreshAccessToken(refreshToken: string) {
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
@@ -19,7 +30,11 @@ async function refreshAccessToken(refreshToken: string) {
       grant_type: 'refresh_token',
     }),
   })
-  if (!res.ok) throw new Error('Não foi possível renovar o token do Google.')
+  if (!res.ok) {
+    const body = await res.json().catch(() => null) as { error?: string } | null
+    if (body?.error === 'invalid_grant') throw new GoogleReconexaoNecessaria()
+    throw new Error('Não foi possível renovar o token do Google.')
+  }
   return res.json() as Promise<{ access_token: string; expires_in: number }>
 }
 

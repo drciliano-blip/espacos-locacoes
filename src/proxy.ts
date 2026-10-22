@@ -13,8 +13,14 @@ export async function proxy(request: NextRequest) {
   const { supabase, response } = createClient(request)
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Unauthenticated → login
+  // Unauthenticated → login. Chamada de API recebe 401 em JSON, não o
+  // redirect: o fetch seguia o redirect e recebia o HTML do login, o
+  // `res.json()` quebrava e a tela mostrava erro genérico em vez de tentar
+  // de novo (ex.: sessão ainda renovando ao voltar pro app no celular).
   if (!user && !isPublic) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })
+    }
     return NextResponse.redirect(new URL('/login', request.url))
   }
 

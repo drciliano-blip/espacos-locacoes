@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getValidAccessToken } from '@/lib/google-calendar-tokens'
+import { getValidAccessToken, GoogleReconexaoNecessaria } from '@/lib/google-calendar-tokens'
 import { createClient } from '@/lib/supabase/server'
 
 export async function GET(request: Request) {
@@ -34,6 +34,9 @@ export async function GET(request: Request) {
     const data = await res.json()
     return NextResponse.json({ events: data.items ?? [] })
   } catch (err) {
+    if (err instanceof GoogleReconexaoNecessaria) {
+      return NextResponse.json({ error: err.message, code: 'reconectar' }, { status: 409 })
+    }
     const message = err instanceof Error ? err.message : 'Erro desconhecido ao consultar o Google Calendar.'
     return NextResponse.json({ error: message }, { status: 502 })
   }
@@ -68,6 +71,9 @@ export async function POST(request: Request) {
     const created = await res.json()
     return NextResponse.json({ event: created })
   } catch (err) {
+    if (err instanceof GoogleReconexaoNecessaria) {
+      return NextResponse.json({ error: err.message, code: 'reconectar' }, { status: 409 })
+    }
     const message = err instanceof Error ? err.message : 'Erro desconhecido ao criar evento no Google Calendar.'
     return NextResponse.json({ error: message }, { status: 502 })
   }
