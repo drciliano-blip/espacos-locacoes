@@ -16,7 +16,7 @@ import PlanoPagamentoSection from '@/components/eventos/PlanoPagamentoSection'
 import GerarContratoDoEventoModal from '@/components/eventos/GerarContratoDoEventoModal'
 import GerarContratoModal from '@/components/contratos/GerarContratoModal'
 import CancelarEventoModal from '@/components/eventos/CancelarEventoModal'
-import NovoEventoModal from '@/components/eventos/NovoEventoModal'
+import NovoEventoModal, { semPrefixoPre } from '@/components/eventos/NovoEventoModal'
 import { useEventos } from '@/contexts/EventosContext'
 import Toast from '@/components/shared/Toast'
 
@@ -96,7 +96,10 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
       showToast(err instanceof Error ? `Não foi possível recusar: ${err.message}` : 'Não foi possível recusar a exclusão.')
     }
   }
-  const ehPreEvento = evento.status === 'em_negociacao'
+  // Pré-evento: o status próprio, ou o jeito antigo — evento normal com
+  // "PRÉ" na frente do nome do cliente.
+  const ehPreEventoAntigo = evento.status === 'confirmado' && semPrefixoPre(evento.cliente) !== evento.cliente
+  const ehPreEvento = evento.status === 'em_negociacao' || ehPreEventoAntigo
   const [confirmarPreOpen, setConfirmarPreOpen] = useState(false)
   // Depois de confirmado, os dados deste drawer (prop `evento`) ficam velhos —
   // fecha o drawer junto com o formulário.
@@ -132,6 +135,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
     () => receitas.filter(r => r.eventoId === evento.id && r.categoriaSlug === 'aluguel' && r.parcelaNumero != null),
     [receitas, evento.id],
   )
+  const temParcelas = receitas.some(r => r.eventoId === evento.id)
 
   const totalRecebidoEvento = useMemo(
     () => receitas.filter(r => r.eventoId === evento.id && r.status === 'pago').reduce((s, r) => s + r.valor, 0),
@@ -187,6 +191,13 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
     const parcela = receitas.find(r => r.id === id)
     if (!parcela) return
     await aplicarBaixaComRepasseAutomatico(parcela, patch, updateReceita, addRepasse, repasses)
+    // Valor de uma parcela mudou pelo lápis: o valor do evento (topo do
+    // painel) segue a soma do plano, igual ao "Salvar plano". Pagamento
+    // parcial não muda a soma (pago + restante = valor original).
+    if (patch.valor !== undefined && !patch.valorRestante) {
+      const novoTotal = Math.round((parcelas.filter(p => p.id !== id).reduce((s, p) => s + p.valor, 0) + patch.valor) * 100) / 100
+      if (Math.round(novoTotal * 100) !== Math.round(evento.valor * 100)) await onUpdate({ ...evento, valor: novoTotal })
+    }
   }
 
   // O valor do evento segue o plano de pagamento (ver PlanoPagamentoSection) —
@@ -383,7 +394,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                           style={{ backgroundColor: '#25D366' }}
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" />
-                          Confirmar evento
+                          Converter em evento confirmado
                         </button>
                       ) : (
                       <button
@@ -394,7 +405,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                         {contratoExistente ? 'Gerar documento do contrato' : 'Gerar Contrato'}
                       </button>
                       )}
-                      {ehPreEvento ? null : evento.status === 'confirmado' ? (
+                      {evento.status === 'em_negociacao' ? null : evento.status === 'confirmado' ? (
                         <button
                           onClick={() => setCancelarEventoOpen(true)}
                           className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors"
@@ -412,7 +423,9 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                         </button>
                       )}
                       <button
-                        onClick={() => setEditing(true)}
+                        // Recomeça do evento atual: o rascunho antigo ainda teria o valor de
+                        // antes de uma mudança no plano de pagamento e o desfaria ao salvar.
+                        onClick={() => { setDraft({ ...evento }); setEditing(true) }}
                         className="flex items-center gap-1.5 rounded-lg border border-[#25D366]/30 bg-[#25D366]/10 px-3 py-1.5 text-xs font-medium text-[#128C7E] hover:bg-[#25D366]/20 transition-colors"
                       >
                         <Edit3 className="h-3.5 w-3.5" />
@@ -506,7 +519,8 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                 Informações do Evento
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
-                {/* Editável por qualquer perfil que edita o evento (operação inclusive). */}
+                {/* Editáveis por qualquer perfil que edita o evento (operação inclusive). */}
+                {field('Cliente', current.cliente, 'cliente')}
                 {field('Nome do evento', current.nomeEvento ?? '', 'nomeEvento')}
                 {field('Data', formatDate(current.data), 'data', 'date')}
                 {field('Horário', `${current.horaInicio} – ${current.horaFim}`, 'horaInicio')}
@@ -760,7 +774,14 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
       {confirmarPreOpen && (
         <NovoEventoModal
           preEvento={evento}
-          onSave={async ev => { await confirmarPreEvento(ev); setPreConfirmado(true) }}
+          manterPlanoDePagamento={temParcelas}
+          onSave={async ev => {
+            // Com parcelas já lançadas (às vezes pagas), só grava os dados — nunca
+            // regenera o plano por cima delas.
+            if (temParcelas) await onUpdate({ ...ev, status: 'confirmado' })
+            else await confirmarPreEvento(ev)
+            setPreConfirmado(true)
+          }}
           onClose={() => { setConfirmarPreOpen(false); if (preConfirmado) onClose() }}
         />
       )}

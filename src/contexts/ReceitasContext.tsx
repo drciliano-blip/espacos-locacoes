@@ -170,14 +170,15 @@ interface ParcelaExistente {
   descricao: string
 }
 
-// Compara só o que o Plano de Pagamento edita — vencimento, valor e
-// identificação (e a descrição, que carrega o nome do cliente). Valor vem do
-// banco como numeric(12,2): compara em centavos pra não tropeçar em float.
-function parcelaMudou(atual: ParcelaExistente, nova: ParcelaPlano, cliente: string): boolean {
+// Compara só o que pesa num período fechado — vencimento, valor e
+// identificação. A descrição ("Label — Cliente") fica de fora: renomear o
+// cliente do evento muda só o texto, não o dinheiro, e não pode travar o
+// plano de um mês fechado. Valor vem do banco como numeric(12,2): compara em
+// centavos pra não tropeçar em float.
+function parcelaMudou(atual: ParcelaExistente, nova: ParcelaPlano): boolean {
   return atual.data !== nova.data
     || Math.round(atual.valor * 100) !== Math.round(nova.valor * 100)
     || (atual.parcela_label ?? '') !== nova.label
-    || atual.descricao !== `${nova.label} — ${cliente}`
 }
 
 // Patch de uma parcela/receita já existente — usado tanto pra "dar baixa"
@@ -351,7 +352,7 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
     for (const parcela of input.parcelas) {
       const match = existing.find(e => e.parcela_numero === parcela.numero)
       if (!match || match.status !== 'pago') continue
-      if (!parcelaMudou(match, parcela, input.cliente)) continue
+      if (!parcelaMudou(match, parcela)) continue
       // Parcela paga que muda: olha os dois lados — o período de onde o
       // dinheiro sai (data efetiva atual) e o período pra onde vai (novo
       // vencimento), senão dava pra empurrar valor pra dentro de um mês

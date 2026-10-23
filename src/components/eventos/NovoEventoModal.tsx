@@ -279,6 +279,9 @@ interface NovoEventoModalProps {
   // Quando presente, o formulário confirma este pré-evento: abre com cliente,
   // nome do evento, data e espaço já preenchidos e salva sobre o mesmo id.
   preEvento?: Evento
+  // Pré-evento que já tem parcelas (ex.: "PRÉ ..." antigo, cadastrado como
+  // evento normal, às vezes já com pagamento): confirma sem mexer no plano.
+  manterPlanoDePagamento?: boolean
   onClose: () => void
   onSave: (evento: Evento) => void | Promise<void>
 }
@@ -321,18 +324,58 @@ function Field({
   )
 }
 
+// "PRÉ ", "PRE - ", "RPÉ " (erro de digitação comum) etc. no começo do nome:
+// era como pré-eventos eram marcados antes do status próprio existir.
+export function semPrefixoPre(nome: string): string {
+  // Exige espaço depois do prefixo — "PRÉ-ESTREIA" é nome de evento, não marcador.
+  return nome.replace(/^\s*(pr[ée]|rp[ée])(\s+[-:–]?\s*|\s*[-:–]\s+)/iu, '').trim() || nome
+}
+
+function enderecoDraft(e?: { rua?: string; numero?: string; complemento?: string; bairro?: string; cidade?: string; estado?: string; cep?: string }): EnderecoDraft {
+  return e ? {
+    rua: e.rua ?? '', numero: e.numero ?? '', complemento: e.complemento ?? '', bairro: e.bairro ?? '',
+    cidade: e.cidade ?? '', estado: e.estado ?? '', cep: e.cep ?? '',
+  } : ENDERECO_VAZIO
+}
+
+// Abre a confirmação com tudo que o evento já tem. Horário 00:00 e valor
+// R$ 0/1 eram só marcadores de "a definir" — vêm em branco para preencher.
 function draftFromPreEvento(e: Evento): Draft {
+  const horaReal = (h?: string) => (h && !h.startsWith('00:00') ? h.slice(0, 5) : '')
   return {
     ...emptyDraft(e.espaco),
-    cliente: e.cliente,
+    cliente: semPrefixoPre(e.cliente),
     nomeEvento: e.nomeEvento ?? '',
-    telefoneContato: e.telefoneContato ?? '',
     data: e.data,
+    horaInicio: horaReal(e.horaInicio),
+    horaFim: horaReal(e.horaFim),
+    tipo: e.tipo && e.tipo !== 'Evento' ? e.tipo : '',
+    tipoEvento: e.tipoEvento ?? '',
+    tipoContrato: e.tipoContrato ?? '',
+    valor: e.valor > 1 ? e.valor.toFixed(2).replace('.', ',') : '',
+    numeroPessoas: e.numeroPessoas ? String(e.numeroPessoas) : '',
+    responsavel: e.responsavel ?? '',
+    telefoneContato: e.telefoneContato ?? '',
+    formaPagamento: e.formaPagamento ?? '',
+    valorSinal: e.valorSinal ? e.valorSinal.toFixed(2).replace('.', ',') : '',
+    dataVencimentoSaldo: e.dataVencimentoSaldo ?? '',
+    condicoesParceria: e.condicoesParceria ?? '',
     observacoes: e.observacoes ?? '',
+    horaInicioMontagem: e.horaInicioMontagem ?? '',
+    cpf: e.cpf ?? '',
+    rg: e.rg ?? '',
+    dataNascimento: e.dataNascimento ?? '',
+    email: e.email ?? '',
+    endereco: enderecoDraft(e.endereco),
+    pessoaJuridica: e.pessoaJuridica ?? false,
+    razaoSocial: e.razaoSocial ?? '',
+    nomeFantasia: e.nomeFantasia ?? '',
+    cnpj: e.cnpj ?? '',
+    enderecoEmpresa: enderecoDraft(e.enderecoEmpresa),
   }
 }
 
-export default function NovoEventoModal({ espacoPadrao, fichaOrigem, preEvento, onClose, onSave }: NovoEventoModalProps) {
+export default function NovoEventoModal({ espacoPadrao, fichaOrigem, preEvento, manterPlanoDePagamento, onClose, onSave }: NovoEventoModalProps) {
   const { espacosNomes } = useEspacos()
   const { syncParcelasDoEvento } = useReceitas()
   const { addContrato } = useContratos()
@@ -588,7 +631,7 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, preEvento, 
     // de parcelas customizado não deve parecer um erro de salvamento do evento.
     try {
       const parcelasValidas = (parcelas ?? []).filter(p => p.label.trim() && p.data && p.valor && parseCurrencyBR(p.valor) > 0)
-      if (evento.formaPagamento === 'Parcelado' && parcelasValidas.length > 0) {
+      if (!manterPlanoDePagamento && evento.formaPagamento === 'Parcelado' && parcelasValidas.length > 0) {
         await syncParcelasDoEvento({
           eventoId: evento.id,
           cliente: evento.cliente,
@@ -661,8 +704,11 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, preEvento, 
           {preEvento && (
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5">
               <p className="text-xs text-app-text">
-                Confirmando o pré-evento de <span className="font-medium">{preEvento.cliente}</span>. Complete os dados abaixo — ao salvar, ele vira
-                evento confirmado, gera o plano de pagamento e você pode gerar o contrato em seguida.
+                Convertendo o pré-evento de <span className="font-medium">{preEvento.cliente}</span> em evento confirmado. Complete os dados
+                (dá para usar a ficha do cliente nos botões de leitura abaixo) — ao salvar, você pode gerar o contrato em seguida.
+                {manterPlanoDePagamento
+                  ? ' Este pré-evento já tem parcelas lançadas: o plano de pagamento atual é mantido como está (ajuste em Plano de Pagamento).'
+                  : ' O plano de pagamento é gerado ao salvar.'}
               </p>
             </div>
           )}
