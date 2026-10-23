@@ -341,6 +341,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
           <div className="flex items-center justify-between px-5 py-4">
             <div>
               <p className="text-sm font-bold text-app-text">{current.cliente}</p>
+              {evento.nomeEvento && <p className="text-xs font-medium text-app-text2">{evento.nomeEvento}</p>}
               <div className="flex items-center gap-2 mt-0.5">
                 <p className="text-xs text-app-muted">{current.tipo} · {current.espaco}</p>
                 {current.tipoEvento && (
@@ -505,6 +506,8 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                 Informações do Evento
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                {/* Editável por qualquer perfil que edita o evento (operação inclusive). */}
+                {field('Nome do evento', current.nomeEvento ?? '', 'nomeEvento')}
                 {field('Data', formatDate(current.data), 'data', 'date')}
                 {field('Horário', `${current.horaInicio} – ${current.horaFim}`, 'horaInicio')}
                 {field('Tipo de Evento', current.tipo, 'tipo')}
