@@ -208,6 +208,11 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
   }
 
   async function handleSave() {
+    // O banco guarda hora como "time": vazio ou fora do formato derruba o salvamento.
+    if (!/^\d{2}:\d{2}/.test(draft.horaInicio ?? '') || !/^\d{2}:\d{2}/.test(draft.horaFim ?? '')) {
+      showToast('Informe o horário de início e de término do evento.')
+      return
+    }
     setSaving(true)
     try {
       await onUpdate(draft)
@@ -523,7 +528,24 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                 {field('Cliente', current.cliente, 'cliente')}
                 {field('Nome do evento', current.nomeEvento ?? '', 'nomeEvento')}
                 {field('Data', formatDate(current.data), 'data', 'date')}
-                {field('Horário', `${current.horaInicio} – ${current.horaFim}`, 'horaInicio')}
+                {/* Início e término separados, com campo de hora — antes era um texto
+                    livre só com o início, sem como mudar o horário de término. */}
+                {editing ? (
+                  <div>
+                    <p className="text-xs text-app-subtle mb-0.5">Horário</p>
+                    <div className="flex items-center gap-1.5">
+                      <input type="time" value={(draft.horaInicio ?? '').slice(0, 5)} aria-label="Início"
+                        onChange={e => setDraft(d => ({ ...d, horaInicio: e.target.value }))}
+                        className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-sm text-app-text focus:border-[#25D366] focus:outline-none" />
+                      <span className="text-xs text-app-subtle">até</span>
+                      <input type="time" value={(draft.horaFim ?? '').slice(0, 5)} aria-label="Término"
+                        onChange={e => setDraft(d => ({ ...d, horaFim: e.target.value }))}
+                        className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2 py-1.5 text-sm text-app-text focus:border-[#25D366] focus:outline-none" />
+                    </div>
+                  </div>
+                ) : (
+                  field('Horário', `${current.horaInicio.slice(0, 5)} – ${current.horaFim.slice(0, 5)}`, 'horaInicio')
+                )}
                 {field('Tipo de Evento', current.tipo, 'tipo')}
                 {field('Espaço', current.espaco, 'espaco')}
                 <div>
