@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Pencil, Plus, Save, Trash2, X } from 'lucide-react'
-import { formatCurrency, formatDate, hojeISO, isDataFutura, parseCurrencyBR } from '@/lib/utils'
+import { formatCurrency, formatDate, hojeISO, isDataFutura, mensagemDeErro, parseCurrencyBR } from '@/lib/utils'
 import FileAttachButton from '@/components/shared/FileAttachButton'
 import FileList from '@/components/shared/FileList'
 import { DIVISAO_SOCIOS } from '@/lib/socios-config'
@@ -95,6 +95,9 @@ export function EditarParcelaModal({ parcela, onClose, onSalvar }: {
   const [valorRecebido, setValorRecebido] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [saving, setSaving] = useState(false)
+  // Erro ao salvar (ex.: parcela em mês já fechado) — antes ficava sem nenhum
+  // aviso: a janela só continuava aberta e parecia que "não salvava".
+  const [erroSalvar, setErroSalvar] = useState<string | null>(null)
   const [filesVersion, setFilesVersion] = useState(0)
 
   function set<K extends keyof EditarParcelaForm>(k: K, v: EditarParcelaForm[K]) {
@@ -127,6 +130,7 @@ export function EditarParcelaModal({ parcela, onClose, onSalvar }: {
 
   async function handleSalvar() {
     setSubmitted(true)
+    setErroSalvar(null)
     if (hasErrors) return
     setSaving(true)
     try {
@@ -148,6 +152,8 @@ export function EditarParcelaModal({ parcela, onClose, onSalvar }: {
         socioRepasse: form.metodoPagamento === 'Repasse Sócio' ? form.socioRepasse : undefined,
       })
       onClose()
+    } catch (err) {
+      setErroSalvar(mensagemDeErro(err, 'Não foi possível salvar a parcela. Tente novamente.'))
     } finally {
       setSaving(false)
     }
@@ -309,6 +315,12 @@ export function EditarParcelaModal({ parcela, onClose, onSalvar }: {
               <FileList module="receitas" entityId={parcela.id} entityName={form.parcelaLabel || parcela.descricao} compact />
             </div>
           </div>
+
+          {erroSalvar && (
+            <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5">
+              <p className="text-xs text-red-400">{erroSalvar}</p>
+            </div>
+          )}
 
           {submitted && hasErrors && (
             <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5">
