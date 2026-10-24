@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAtividades } from '@/contexts/AtividadesContext'
 import { useFechamentos } from '@/contexts/FechamentosContext'
-import { dataEfetivaReceita, periodoFechado, mensagemPeriodoFechado } from '@/lib/fechamento-lock'
+import { dataEfetivaReceita, periodoFechado, mensagemPeriodoFechado, bloqueioPorFechamento } from '@/lib/fechamento-lock'
 import { hojeISO } from '@/lib/utils'
 import type { OrigemLancamento } from '@/types'
 
@@ -260,7 +260,7 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
   useEffect(() => { load() }, [load])
 
   async function addReceita(input: NovaReceitaInput): Promise<Receita> {
-    const bloqueio = periodoFechado(fechamentos, input.espaco, dataEfetivaReceita(input))
+    const bloqueio = bloqueioPorFechamento(fechamentos, null, { espaco: input.espaco, pago: input.status === 'pago', data: dataEfetivaReceita(input) })
     if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
 
     const supabase = createClient()
@@ -424,7 +424,11 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
   async function updateReceita(id: string, patch: BaixaReceitaInput) {
     const existente = receitas.find(r => r.id === id)
     if (existente) {
-      const bloqueio = periodoFechado(fechamentos, existente.espaco, dataEfetivaReceita(existente))
+      const bloqueio = bloqueioPorFechamento(fechamentos, { espaco: existente.espaco, pago: existente.status === 'pago', data: dataEfetivaReceita(existente) }, {
+        espaco: existente.espaco,
+        pago: patch.status === 'pago',
+        data: dataEfetivaReceita({ status: patch.status, data: patch.data ?? existente.data, dataRecebimento: patch.dataRecebimento }),
+      })
       if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
     }
 
@@ -491,7 +495,11 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
   async function editarReceita(id: string, patch: EditarReceitaInput) {
     const existente = receitas.find(r => r.id === id)
     if (existente) {
-      const bloqueio = periodoFechado(fechamentos, existente.espaco, dataEfetivaReceita(existente))
+      const bloqueio = bloqueioPorFechamento(fechamentos, { espaco: existente.espaco, pago: existente.status === 'pago', data: dataEfetivaReceita(existente) }, {
+        espaco: patch.espaco ?? existente.espaco,
+        pago: patch.status === 'pago',
+        data: dataEfetivaReceita({ status: patch.status, data: patch.data, dataRecebimento: patch.dataRecebimento }),
+      })
       if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
     }
 
@@ -535,7 +543,7 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
   async function deleteReceita(id: string) {
     const alvo = receitas.find(r => r.id === id)
     if (alvo) {
-      const bloqueio = periodoFechado(fechamentos, alvo.espaco, dataEfetivaReceita(alvo))
+      const bloqueio = bloqueioPorFechamento(fechamentos, { espaco: alvo.espaco, pago: alvo.status === 'pago', data: dataEfetivaReceita(alvo) }, null)
       if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
     }
     const supabase = createClient()

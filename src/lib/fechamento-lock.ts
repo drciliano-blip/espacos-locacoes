@@ -26,6 +26,25 @@ export function periodoFechado(fechamentos: Fechamento[], espaco: string | undef
   return fechamentos.find(f => f.espaco === espaco && data >= f.dataInicio && data <= f.dataFim)
 }
 
+// Só lançamento PAGO pesa num fechamento (fechamento-calc.ts soma apenas
+// 'pago'); pendente vale R$ 0,00 em qualquer período. Então a trava só barra
+// quando a mudança TIRA dinheiro reconhecido de um período fechado (`antes`
+// pago lá) ou PÕE dinheiro num período fechado (`depois` pago lá). Dar baixa
+// hoje numa parcela que venceu num mês já fechado não mexe nesse mês — o
+// dinheiro entra no período do pagamento — e não pode ser barrado.
+export interface EstadoLancamento { espaco: string | undefined; pago: boolean; data: string }
+export function bloqueioPorFechamento(fechamentos: Fechamento[], antes: EstadoLancamento | null, depois: EstadoLancamento | null): Fechamento | undefined {
+  if (antes?.pago) {
+    const f = periodoFechado(fechamentos, antes.espaco, antes.data)
+    if (f) return f
+  }
+  if (depois?.pago) {
+    const f = periodoFechado(fechamentos, depois.espaco, depois.data)
+    if (f) return f
+  }
+  return undefined
+}
+
 export function mensagemPeriodoFechado(f: Fechamento): string {
   return `Este lançamento está dentro de um período já fechado em ${f.espaco} (${formatDate(f.dataInicio)} a ${formatDate(f.dataFim)}). Reabra o fechamento em Financeiro para editar.`
 }

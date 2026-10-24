@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAtividades } from '@/contexts/AtividadesContext'
 import { useFechamentos } from '@/contexts/FechamentosContext'
-import { dataEfetivaConta, periodoFechado, mensagemPeriodoFechado } from '@/lib/fechamento-lock'
+import { dataEfetivaConta, mensagemPeriodoFechado, bloqueioPorFechamento } from '@/lib/fechamento-lock'
 import { getFiles, deleteFile } from '@/lib/file-storage'
 import { hojeISO } from '@/lib/utils'
 import type { ContaPagar, CategoriaContaPagar, StatusContaPagar } from '@/types'
@@ -137,7 +137,7 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
   useEffect(() => { load() }, [load])
 
   async function addConta(c: ContaPagar) {
-    const bloqueio = periodoFechado(fechamentos, c.espaco, dataEfetivaConta(c))
+    const bloqueio = bloqueioPorFechamento(fechamentos, null, { espaco: c.espaco, pago: c.status === 'pago', data: dataEfetivaConta(c) })
     if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
 
     const supabase = createClient()
@@ -187,7 +187,7 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
   async function updateConta(c: ContaPagar) {
     const existente = contas.find(x => x.id === c.id)
     if (existente) {
-      const bloqueio = periodoFechado(fechamentos, existente.espaco, dataEfetivaConta(existente))
+      const bloqueio = bloqueioPorFechamento(fechamentos, { espaco: existente.espaco, pago: existente.status === 'pago', data: dataEfetivaConta(existente) }, { espaco: c.espaco, pago: c.status === 'pago', data: dataEfetivaConta(c) })
       if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
     }
 
@@ -236,7 +236,7 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
   async function deleteConta(id: string) {
     const alvo = contas.find(c => c.id === id)
     if (alvo) {
-      const bloqueio = periodoFechado(fechamentos, alvo.espaco, dataEfetivaConta(alvo))
+      const bloqueio = bloqueioPorFechamento(fechamentos, { espaco: alvo.espaco, pago: alvo.status === 'pago', data: dataEfetivaConta(alvo) }, null)
       if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
     }
     const supabase = createClient()
@@ -280,7 +280,7 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
         dataPagamento: undefined, horaPagamento: undefined, comprovanteInstituicao: undefined, comprovanteIdentificador: undefined,
         dataVencimento: somarMeses(base.dataVencimento, i),
       }
-      const bloqueio = periodoFechado(fechamentos, c.espaco, dataEfetivaConta(c))
+      const bloqueio = bloqueioPorFechamento(fechamentos, null, { espaco: c.espaco, pago: c.status === 'pago', data: dataEfetivaConta(c) })
       if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
       return {
         id: c.id, descricao: c.descricao, espaco_id: espacoId, categoria: c.categoria, subcategoria: c.subcategoria,
@@ -305,12 +305,11 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
     return novas.length
   }
 
-  // Esta conta e as próximas da série que ainda dá pra mexer: não pagas e
-  // fora de período fechado.
+  // Esta conta e as próximas da série que ainda dá pra mexer: as não pagas.
   function proximasDaSerie(c: ContaPagar): ContaPagar[] {
     if (!c.serieId) return [c]
-    return contas.filter(x => x.serieId === c.serieId && (x.serieNumero ?? 0) >= (c.serieNumero ?? 0) && x.status !== 'pago'
-      && !periodoFechado(fechamentos, x.espaco, dataEfetivaConta(x)))
+    // Pendente não pesa em fechamento nenhum — só as já pagas ficam de fora.
+    return contas.filter(x => x.serieId === c.serieId && (x.serieNumero ?? 0) >= (c.serieNumero ?? 0) && x.status !== 'pago')
   }
 
   async function updateSerieAPartirDe(c: ContaPagar) {
@@ -349,7 +348,7 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
   async function darBaixa(id: string, dataPagamento: string, horaPagamento?: string, comprovanteInstituicao?: string, comprovanteIdentificador?: string) {
     const existente = contas.find(c => c.id === id)
     if (existente) {
-      const bloqueio = periodoFechado(fechamentos, existente.espaco, dataEfetivaConta(existente))
+      const bloqueio = bloqueioPorFechamento(fechamentos, { espaco: existente.espaco, pago: existente.status === 'pago', data: dataEfetivaConta(existente) }, { espaco: existente.espaco, pago: true, data: dataPagamento })
       if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
     }
 
@@ -381,7 +380,7 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
   async function corrigirDataPagamento(id: string, dataPagamento?: string, horaPagamento?: string, comprovanteInstituicao?: string, comprovanteIdentificador?: string) {
     const existente = contas.find(c => c.id === id)
     if (existente) {
-      const bloqueio = periodoFechado(fechamentos, existente.espaco, dataEfetivaConta(existente))
+      const bloqueio = bloqueioPorFechamento(fechamentos, { espaco: existente.espaco, pago: existente.status === 'pago', data: dataEfetivaConta(existente) }, { espaco: existente.espaco, pago: true, data: dataPagamento ?? dataEfetivaConta(existente) })
       if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
     }
 
