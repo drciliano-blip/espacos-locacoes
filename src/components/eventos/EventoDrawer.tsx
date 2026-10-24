@@ -136,6 +136,10 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
     [receitas, evento.id],
   )
   const temParcelas = receitas.some(r => r.eventoId === evento.id)
+  // Com plano de pagamento, o valor do evento é sempre a soma do plano (exceto
+  // parceria, onde o "Valor Envolvido" é estimado e digitado à parte).
+  const somaPlano = Math.round(parcelas.reduce((s, p) => s + p.valor, 0) * 100) / 100
+  const valorSegueOPlano = parcelas.length > 0 && evento.tipoContrato !== 'parceria'
 
   const totalRecebidoEvento = useMemo(
     () => receitas.filter(r => r.eventoId === evento.id && r.status === 'pago').reduce((s, r) => s + r.valor, 0),
@@ -215,7 +219,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
     }
     setSaving(true)
     try {
-      await onUpdate(draft)
+      await onUpdate(valorSegueOPlano && draft.tipoContrato !== 'parceria' ? { ...draft, valor: somaPlano } : draft)
       setEditing(false)
     } catch (err) {
       showToast(err instanceof Error ? `Não foi possível salvar: ${err.message}` : 'Não foi possível salvar as alterações. Tente novamente.')
@@ -800,7 +804,9 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
           onSave={async ev => {
             // Com parcelas já lançadas (às vezes pagas), só grava os dados — nunca
             // regenera o plano por cima delas.
-            if (temParcelas) await onUpdate({ ...ev, status: 'confirmado' })
+            // O valor vem do plano mantido — não do campo do formulário, que
+            // abriu com o valor antigo e o gravava por cima (caso BAILE DA MASSA REAL).
+            if (temParcelas) await onUpdate({ ...ev, status: 'confirmado', valor: valorSegueOPlano && ev.tipoContrato !== 'parceria' ? somaPlano : ev.valor })
             else await confirmarPreEvento(ev)
             setPreConfirmado(true)
           }}
