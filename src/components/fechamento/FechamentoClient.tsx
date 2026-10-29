@@ -33,6 +33,7 @@ import NovaRetiradaSocioModal from '@/components/relatorios/NovaRetiradaSocioMod
 import EditarRetiradaSocioModal from '@/components/relatorios/EditarRetiradaSocioModal'
 import LancamentoSocioListModal, { type LancamentoSocioRow, origemRetiradaLabel } from '@/components/relatorios/LancamentoSocioListModal'
 import FecharPeriodoModal from './FecharPeriodoModal'
+import { diaSeguinteISO, ultimoDiaDoMesISO, problemasDoPeriodo } from '@/lib/fechamento-lock'
 import FechamentoHistoricoModal from './FechamentoHistoricoModal'
 import Toast from '@/components/shared/Toast'
 
@@ -132,8 +133,9 @@ export default function FechamentoClient() {
     }
   }
 
-  // Período padrão = o período em aberto (dia seguinte ao fim do último
-  // fechamento do espaço ativo, até hoje) — só aplica automaticamente
+  // Período padrão = o próximo mês a fechar (dia seguinte ao fim do último
+  // fechamento do espaço ativo até o último dia desse mês — nunca "até hoje",
+  // que levava o dia do fechamento junto) — só aplica automaticamente
   // enquanto o usuário não tiver mexido no filtro manualmente, e só quando
   // já existe pelo menos um fechamento pra esse espaço (sem fechamento
   // nenhum, mantém o padrão de sempre). Espera os fechamentos carregarem
@@ -143,13 +145,8 @@ export default function FechamentoClient() {
     const fechamentosDoEspaco = fechamentos.filter(f => f.espaco === espacoUnico)
     if (fechamentosDoEspaco.length === 0) return
     const ultimo = fechamentosDoEspaco.reduce((max, f) => f.dataFim > max.dataFim ? f : max)
-    const pad = (n: number) => String(n).padStart(2, '0')
-    const diaSeguinte = new Date(ultimo.dataFim)
-    diaSeguinte.setDate(diaSeguinte.getDate() + 1)
-    const inicioStr = `${diaSeguinte.getFullYear()}-${pad(diaSeguinte.getMonth() + 1)}-${pad(diaSeguinte.getDate())}`
-    const hoje = new Date()
-    const hojeStr = `${hoje.getFullYear()}-${pad(hoje.getMonth() + 1)}-${pad(hoje.getDate())}`
-    setFilters({ periodo: 'mensal', dataInicio: inicioStr, dataFim: inicioStr > hojeStr ? inicioStr : hojeStr })
+    const inicioStr = diaSeguinteISO(ultimo.dataFim)
+    setFilters({ periodo: 'mensal', dataInicio: inicioStr, dataFim: ultimoDiaDoMesISO(inicioStr) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fechamentos, fechamentosLoading, espacoUnico, filtroTocado])
 
@@ -1149,6 +1146,8 @@ export default function FechamentoClient() {
           resultadoOperacional={fechamento.resultado}
           disponivelParaDistribuicao={fechamento.disponivelParaDistribuicao}
           repasseSocios={repasseSociosDoEspacoAtivo}
+          problemas={problemasDoPeriodo(fechamentos, espacoUnico, filters.dataInicio, filters.dataFim)}
+          onChangePeriodo={(dataInicio, dataFim) => { setFiltroTocado(true); setFilters(f => ({ ...f, dataInicio, dataFim })) }}
           onClose={() => setFecharPeriodoOpen(false)}
           onConfirm={handleFecharPeriodo}
         />

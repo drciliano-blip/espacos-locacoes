@@ -1,7 +1,7 @@
 import type { Receita } from '@/contexts/ReceitasContext'
 import type { Fechamento } from '@/contexts/FechamentosContext'
 import type { ContaPagar } from '@/types'
-import { formatDate } from '@/lib/utils'
+import { formatDate, hojeISO } from '@/lib/utils'
 
 // Data usada pra encaixar um lançamento num período: se já foi pago/recebido,
 // é a data real do pagamento/recebimento — não o vencimento original. Uma
@@ -47,4 +47,55 @@ export function bloqueioPorFechamento(fechamentos: Fechamento[], antes: EstadoLa
 
 export function mensagemPeriodoFechado(f: Fechamento): string {
   return `Este lançamento está dentro de um período já fechado em ${f.espaco} (${formatDate(f.dataInicio)} a ${formatDate(f.dataFim)}). Reabra o fechamento em Financeiro para editar.`
+}
+
+// ── Período de um novo fechamento ──────────────────────────────────────────
+// Contas com 'YYYY-MM-DD' sempre no calendário local: new Date('2026-08-31')
+// é meia-noite UTC = 30/08 21h em Brasília, e o "dia seguinte" saía 31/08 —
+// o período novo começava um dia antes e sobrepunha o anterior.
+const pad = (n: number) => String(n).padStart(2, '0')
+const isoLocal = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+function deISO(iso: string): Date {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+export function diaSeguinteISO(iso: string): string {
+  const d = deISO(iso)
+  d.setDate(d.getDate() + 1)
+  return isoLocal(d)
+}
+export function ultimoDiaDoMesISO(iso: string): string {
+  const d = deISO(iso)
+  return isoLocal(new Date(d.getFullYear(), d.getMonth() + 1, 0))
+}
+export function ehMesCheio(dataInicio: string, dataFim: string): boolean {
+  return !!dataInicio && dataInicio.slice(8) === '01' && dataFim === ultimoDiaDoMesISO(dataInicio)
+}
+
+// Pode fechar o mês cheio ou um período escolhido, mas sempre um período que
+// JÁ terminou: fechar agosto no dia 01/09 com o período indo "até hoje" levava
+// o dia 01/09 junto pra agosto. Bloqueios impedem o fechamento; avisos só
+// pedem atenção.
+export function problemasDoPeriodo(
+  fechamentos: Fechamento[], espaco: string, dataInicio: string, dataFim: string,
+): { bloqueios: string[]; avisos: string[] } {
+  const bloqueios: string[] = []
+  const avisos: string[] = []
+  if (!dataInicio || !dataFim || dataInicio > dataFim) {
+    bloqueios.push('Período inválido: escolha a data inicial e a final (a inicial antes da final).')
+    return { bloqueios, avisos }
+  }
+  if (dataFim >= hojeISO()) {
+    bloqueios.push(`O período vai até ${formatDate(dataFim)}, que ainda não terminou — os lançamentos desse dia entrariam neste fechamento. Escolha uma data final até ontem, ou feche a partir de ${formatDate(diaSeguinteISO(dataFim))}.`)
+  }
+  const doEspaco = fechamentos.filter(f => f.espaco === espaco)
+  const sobreposto = doEspaco.find(f => dataInicio <= f.dataFim && dataFim >= f.dataInicio)
+  if (sobreposto) {
+    bloqueios.push(`Esse período se sobrepõe ao fechamento já feito de ${formatDate(sobreposto.dataInicio)} a ${formatDate(sobreposto.dataFim)} — os mesmos lançamentos contariam duas vezes.`)
+  }
+  const anterior = doEspaco.filter(f => f.dataFim < dataInicio).sort((a, b) => b.dataFim.localeCompare(a.dataFim))[0]
+  if (anterior && diaSeguinteISO(anterior.dataFim) !== dataInicio) {
+    avisos.push(`O último fechamento terminou em ${formatDate(anterior.dataFim)} e este começa em ${formatDate(dataInicio)} — os dias entre eles ficam sem fechamento.`)
+  }
+  return { bloqueios, avisos }
 }

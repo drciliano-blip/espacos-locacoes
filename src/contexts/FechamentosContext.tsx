@@ -144,6 +144,10 @@ export function FechamentosProvider({ children }: { children: ReactNode }) {
     const supabase = createClient()
     const { data: espacoRow } = await supabase.from('espacos').select('id').eq('nome', input.espaco).single()
     if (!espacoRow) throw new Error(`Espaço "${input.espaco}" não encontrado.`)
+    // Mesma checagem do modal (problemasDoPeriodo), aqui como última barreira:
+    // período sobreposto faria os mesmos lançamentos contarem duas vezes.
+    const sobreposto = fechamentos.find(f => f.espaco === input.espaco && input.dataInicio <= f.dataFim && input.dataFim >= f.dataInicio)
+    if (sobreposto) throw new Error(`Já existe fechamento de ${input.espaco} de ${formatDate(sobreposto.dataInicio)} a ${formatDate(sobreposto.dataFim)}, que se sobrepõe a este período.`)
     const { data: { user } } = await supabase.auth.getUser()
 
     let fechadoPorNome: string | null = null
