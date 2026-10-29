@@ -58,9 +58,20 @@ export default function MinutasEspacoSection({ espacoId, espacoNome }: Props) {
     }
   }
 
-  async function handleRemover(id: string) {
-    await deleteFile(id)
-    setArquivos(prev => prev.filter(f => f.id !== id))
+  // Admin e operação podem apagar (RLS: qualquer perfil menos sócio). Confere
+  // no banco depois, porque o delete bloqueado pelo RLS não devolve erro.
+  async function handleRemover(arquivo: StoredFile, label: string) {
+    if (!window.confirm(`Apagar a ${label} "${arquivo.name}"? Sem minuta anexada, os contratos de ${espacoNome} passam a usar o modelo genérico.`)) return
+    try {
+      await deleteFile(arquivo.id)
+      const restantes = await getFiles({ module: 'espacos', entityId: espacoId })
+      setArquivos(restantes)
+      showToast(restantes.some(f => f.id === arquivo.id)
+        ? 'Não foi possível apagar a minuta — seu perfil não tem permissão.'
+        : 'Minuta apagada.')
+    } catch (err) {
+      showToast(err instanceof Error ? `Falha ao apagar: ${err.message}` : 'Falha ao apagar a minuta. Tente novamente.')
+    }
   }
 
   return (
@@ -83,7 +94,7 @@ export default function MinutasEspacoSection({ espacoId, espacoNome }: Props) {
             loading={loading}
             enviando={enviando === categoria}
             onUpload={file => handleUpload(categoria, file)}
-            onRemover={handleRemover}
+            onRemover={arquivo => handleRemover(arquivo, label)}
           />
         ))}
       </div>
@@ -99,7 +110,7 @@ interface MinutaRowProps {
   loading: boolean
   enviando: boolean
   onUpload: (file: File | null) => void
-  onRemover: (id: string) => void
+  onRemover: (arquivo: StoredFile) => void
 }
 
 // Botão + ref.click() num input escondido — mesmo padrão do FileAttachButton,
@@ -122,7 +133,7 @@ function MinutaRow({ categoria, label, atual, loading, enviando, onUpload, onRem
             <button onClick={() => viewFile(atual.id)} title="Ver" className="flex h-7 w-7 items-center justify-center rounded-md text-app-subtle hover:bg-app-surface2 hover:text-app-text transition-colors">
               <Eye className="h-3.5 w-3.5" />
             </button>
-            <button onClick={() => onRemover(atual.id)} title="Remover" className="flex h-7 w-7 items-center justify-center rounded-md text-app-subtle hover:bg-red-500/10 hover:text-red-500 transition-colors">
+            <button onClick={() => onRemover(atual)} title="Apagar minuta" className="flex h-7 w-7 items-center justify-center rounded-md text-app-subtle hover:bg-red-500/10 hover:text-red-500 transition-colors">
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           </>
