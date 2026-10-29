@@ -10,8 +10,11 @@ interface Props {
   espacoNome: string
 }
 
-const TIPOS: { categoria: 'minuta_locacao' | 'minuta_parceria'; label: string }[] = [
-  { categoria: 'minuta_locacao', label: 'Minuta de Locação' },
+// Locação tem duas versões: sem staff (a padrão, categoria histórica
+// 'minuta_locacao') e com staff do espaço. Ao gerar o contrato escolhe-se qual.
+const TIPOS: { categoria: 'minuta_locacao' | 'minuta_locacao_staff' | 'minuta_parceria'; label: string }[] = [
+  { categoria: 'minuta_locacao', label: 'Minuta de Locação — sem staff' },
+  { categoria: 'minuta_locacao_staff', label: 'Minuta de Locação — com staff' },
   { categoria: 'minuta_parceria', label: 'Minuta de Parceria' },
 ]
 

@@ -159,28 +159,34 @@ export default function GerarContratoModal({ origem, onClose }: Props) {
   const [baixandoDoc, setBaixandoDoc] = useState(false)
   const [anexando, setAnexando] = useState(false)
   const [anexado, setAnexado] = useState(false)
-  const [minutaReal, setMinutaReal] = useState<StoredFile | null>(null)
+  const [minutas, setMinutas] = useState<StoredFile[]>([])
   const [carregandoMinuta, setCarregandoMinuta] = useState(true)
+  // Locação tem versão sem staff ('minuta_locacao') e com staff do espaço
+  // ('minuta_locacao_staff'). Se o espaço só tem uma delas, usa essa.
+  const [versaoStaff, setVersaoStaff] = useState<'sem' | 'com'>('sem')
 
   useEffect(() => {
     let ativo = true
     setCarregandoMinuta(true)
-    setMinutaReal(null)
+    setMinutas([])
     if (!espacoConfig?.id) {
       setCarregandoMinuta(false)
       return
     }
     getFiles({ module: 'espacos', entityId: espacoConfig.id }).then(arquivos => {
       if (!ativo) return
-      const categoria = `minuta_${tipoMinuta}`
-      const encontrada = arquivos
-        .filter(f => f.categoria === categoria)
-        .sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt))[0]
-      setMinutaReal(encontrada ?? null)
+      setMinutas(arquivos.filter(f => f.categoria?.startsWith('minuta_')))
       setCarregandoMinuta(false)
     })
     return () => { ativo = false }
-  }, [espacoConfig?.id, tipoMinuta])
+  }, [espacoConfig?.id])
+
+  const maisRecente = (categoria: string) => minutas
+    .filter(f => f.categoria === categoria)
+    .sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt))[0]
+  const minutaSemStaff = maisRecente(tipoMinuta === 'locacao' ? 'minuta_locacao' : 'minuta_parceria')
+  const minutaComStaff = tipoMinuta === 'locacao' ? maisRecente('minuta_locacao_staff') : undefined
+  const minutaReal = (versaoStaff === 'com' ? minutaComStaff ?? minutaSemStaff : minutaSemStaff ?? minutaComStaff) ?? null
 
   function trocarTipoMinuta(novoTipo: TipoMinuta) {
     setTipoMinuta(novoTipo)
@@ -316,6 +322,22 @@ export default function GerarContratoModal({ origem, onClose }: Props) {
                   <option value="parceria">Parceria (% sobre faturamento)</option>
                 </select>
               </div>
+
+              {!carregandoMinuta && minutaSemStaff && minutaComStaff && (
+                <div>
+                  <label className="text-xs text-app-subtle mb-0.5 block">Versão da minuta</label>
+                  <select
+                    value={versaoStaff}
+                    onChange={e => setVersaoStaff(e.target.value as 'sem' | 'com')}
+                    className="w-full cursor-pointer rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
+                    onFocus={e => { e.currentTarget.style.borderColor = GREEN }}
+                    onBlur={e => { e.currentTarget.style.borderColor = '' }}
+                  >
+                    <option value="sem">Sem staff</option>
+                    <option value="com">Com staff do espaço</option>
+                  </select>
+                </div>
+              )}
 
               {!carregandoMinuta && (
                 minutaReal ? (
