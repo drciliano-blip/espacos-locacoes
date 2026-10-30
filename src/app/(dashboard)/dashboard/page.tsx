@@ -92,7 +92,7 @@ export default function DashboardPage() {
   // Aporte societário e outras entradas manuais não contam como faturamento —
   // só receita de evento entra na "Receita do Mês".
   const receitaMes = pagamentosFiltrados
-    .filter((p) => p.status === 'pago' && p.data.startsWith(mesAtual) && isReceitaOperacional(p))
+    .filter((p) => p.status === 'pago' && (p.dataCompetencia ?? p.data).startsWith(mesAtual) && isReceitaOperacional(p))
     .reduce((s, p) => s + p.valor, 0)
 
   const pendente = pagamentosFiltrados

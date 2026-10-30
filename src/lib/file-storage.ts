@@ -110,6 +110,7 @@ export async function saveFile(
 export async function getFiles(filters?: {
   module?: StoredFile['module']
   entityId?: string
+  entityIds?: string[]
   espaco?: string
   categoria?: string
 }): Promise<StoredFile[]> {
@@ -117,6 +118,7 @@ export async function getFiles(filters?: {
   let query = supabase.from('files').select('*')
   if (filters?.module)    query = query.eq('module', filters.module)
   if (filters?.entityId)  query = query.eq('entity_id', filters.entityId)
+  if (filters?.entityIds) query = query.in('entity_id', filters.entityIds)
   if (filters?.espaco)    query = query.eq('espaco', filters.espaco)
   if (filters?.categoria) query = query.eq('categoria', filters.categoria)
 

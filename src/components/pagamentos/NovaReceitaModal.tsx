@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import CampoCompetencia from '@/components/shared/CampoCompetencia'
 import { X, Save, DollarSign, Paperclip, Camera, Handshake } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { parseCurrencyBR, hojeISO, isDataFutura } from '@/lib/utils'
@@ -59,12 +60,13 @@ interface Draft {
   metodoPagamento: string
   observacoes: string
   socioResponsavel: string
+  dataCompetencia: string
 }
 
 function emptyDraft(categoriaId: string, espaco: string, cliente: string, tipoEntrada: TipoEntrada): Draft {
   return {
     tipoEntrada, categoriaId, espaco, cliente, descricao: '', data: '', dataRecebimento: '',
-    valor: '', status: 'pendente', metodoPagamento: '', observacoes: '', socioResponsavel: '',
+    valor: '', status: 'pendente', metodoPagamento: '', observacoes: '', socioResponsavel: '', dataCompetencia: '',
   }
 }
 
@@ -170,6 +172,7 @@ export default function NovaReceitaModal({
         descricao: draft.descricao.trim(),
         data: draft.data,
         dataRecebimento: draft.dataRecebimento || undefined,
+        dataCompetencia: draft.dataCompetencia || undefined,
         valor: parseCurrencyBR(draft.valor),
         status: draft.status,
         metodoPagamento: draft.metodoPagamento || undefined,
@@ -483,6 +486,9 @@ export default function NovaReceitaModal({
                   )}
                 </div>
               </div>
+
+              <CampoCompetencia value={draft.dataCompetencia} onChange={v => set('dataCompetencia', v)} />
+
 
               <div>
                 <label className="text-xs text-app-subtle mb-0.5 block">Método de pagamento</label>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import CampoCompetencia from '@/components/shared/CampoCompetencia'
 import { X, Save, Pencil, Paperclip, Camera, Trash2, Handshake } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
 import { parseCurrencyBR, formatCurrency, hojeISO, isDataFutura } from '@/lib/utils'
@@ -41,6 +42,7 @@ export default function EditarEntradaModal({ receita, categorias, onClose, onSav
   const [descricao, setDescricao] = useState(receita.descricao)
   const [data, setData] = useState(receita.data)
   const [dataRecebimento, setDataRecebimento] = useState(receita.dataRecebimento ?? '')
+  const [dataCompetencia, setDataCompetencia] = useState(receita.dataCompetencia ?? '')
   const [valor, setValor] = useState(String(receita.valor))
   const [status, setStatus] = useState<Receita['status']>(receita.status)
   const [metodoPagamento, setMetodoPagamento] = useState(receita.metodoPagamento ?? '')
@@ -88,6 +90,7 @@ export default function EditarEntradaModal({ receita, categorias, onClose, onSav
         descricao: descricao.trim(),
         data,
         dataRecebimento: isAporte ? data : (dataRecebimento || undefined),
+        dataCompetencia: isAporte ? undefined : (dataCompetencia || null),
         valor: parseCurrencyBR(valor),
         status: isAporte ? 'pago' : status,
         metodoPagamento: isAporte ? undefined : (metodoPagamento || undefined),
@@ -276,6 +279,9 @@ export default function EditarEntradaModal({ receita, categorias, onClose, onSav
                   )}
                 </div>
               </div>
+              <CampoCompetencia value={dataCompetencia} onChange={setDataCompetencia} />
+
+
               <div>
                 <label className="text-xs text-app-subtle mb-0.5 block">Método de pagamento</label>
                 <select

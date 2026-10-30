@@ -663,6 +663,8 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                 onSync={handleSyncPlano}
                 onBaixa={handleBaixa}
                 onValorEventoChange={handleValorEventoChange}
+                eventoId={evento.id}
+                dataEvento={evento.data}
               />
             )}
 

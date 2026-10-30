@@ -1,10 +1,12 @@
 'use client'
 
-import { useState } from 'react'
-import { Pencil, Plus, Save, Trash2, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { CalendarClock, Paperclip, Pencil, Plus, Save, Trash2, X } from 'lucide-react'
 import { formatCurrency, formatDate, hojeISO, isDataFutura, mensagemDeErro, parseCurrencyBR } from '@/lib/utils'
 import FileAttachButton from '@/components/shared/FileAttachButton'
 import FileList from '@/components/shared/FileList'
+import CampoCompetencia, { mesCompetenciaLabel } from '@/components/shared/CampoCompetencia'
+import { getFiles, viewFile, type StoredFile } from '@/lib/file-storage'
 import { DIVISAO_SOCIOS } from '@/lib/socios-config'
 import type { Receita, ParcelaPlano, BaixaReceitaInput } from '@/contexts/ReceitasContext'
 
@@ -39,6 +41,10 @@ interface Props {
   // manda no valor "oficial" do evento, atualizado sozinho a cada "Salvar
   // plano" — nunca precisa bater com um valor travado em outro lugar.
   onValorEventoChange: (novoValor: number) => Promise<void>
+  // Pra mostrar os comprovantes do sinal anexados ao evento (aba Documentos)
+  // junto do plano, e o atalho "Mês do evento".
+  eventoId?: string
+  dataEvento?: string
 }
 
 function toDraft(parcelas: Receita[]): DraftParcela[] {
@@ -67,6 +73,7 @@ interface EditarParcelaForm {
   observacoes: string
   parcelaLabel: string
   socioRepasse: string
+  dataCompetencia: string
 }
 
 function formFromParcela(p: Receita): EditarParcelaForm {
@@ -80,11 +87,14 @@ function formFromParcela(p: Receita): EditarParcelaForm {
     observacoes: p.observacoes ?? '',
     parcelaLabel: p.parcelaLabel ?? p.descricao,
     socioRepasse: p.socioResponsavel ?? '',
+    dataCompetencia: p.dataCompetencia ?? '',
   }
 }
 
-export function EditarParcelaModal({ parcela, onClose, onSalvar }: {
+export function EditarParcelaModal({ parcela, dataEvento, onClose, onSalvar }: {
   parcela: Receita
+  // Data do evento: atalho "Mês do evento" no "Contabilizar em outro mês".
+  dataEvento?: string
   onClose: () => void
   onSalvar: (patch: BaixaReceitaInput) => Promise<void>
 }) {
@@ -150,6 +160,7 @@ export function EditarParcelaModal({ parcela, onClose, onSalvar }: {
         comprovanteIdentificador: parcela.comprovanteIdentificador,
         parcelaLabel: parcialAtivo ? `${labelBase || 'Parcela'} (parcial)` : (form.parcelaLabel.trim() || undefined),
         socioRepasse: form.metodoPagamento === 'Repasse Sócio' ? form.socioRepasse : undefined,
+        dataCompetencia: form.dataCompetencia || null,
       })
       onClose()
     } catch (err) {
@@ -300,6 +311,8 @@ export function EditarParcelaModal({ parcela, onClose, onSalvar }: {
             />
           </div>
 
+          <CampoCompetencia value={form.dataCompetencia} onChange={v => set('dataCompetencia', v)} dataEvento={dataEvento} />
+
           <div>
             <label className="text-xs text-app-subtle mb-1 block">Comprovante</label>
             <FileAttachButton
@@ -355,8 +368,24 @@ export function EditarParcelaModal({ parcela, onClose, onSalvar }: {
   )
 }
 
-export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEditarPlano, onSync, onBaixa, onValorEventoChange }: Props) {
+export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEditarPlano, onSync, onBaixa, onValorEventoChange, eventoId, dataEvento }: Props) {
   const [editando, setEditando] = useState(false)
+  // Comprovantes à vista, sem abrir cada parcela: os anexados em cada parcela
+  // (module 'receitas') e os do sinal anexados no evento (aba Documentos).
+  const [comprovantes, setComprovantes] = useState<StoredFile[]>([])
+  const [versaoComprovantes, setVersaoComprovantes] = useState(0)
+  const idsParcelas = parcelas.map(p => p.id).sort().join(',')
+  useEffect(() => {
+    let ativo = true
+    const ids = idsParcelas ? idsParcelas.split(',') : []
+    Promise.all([
+      ids.length ? getFiles({ module: 'receitas', entityIds: ids }) : Promise.resolve([]),
+      eventoId ? getFiles({ module: 'agenda', entityId: eventoId, categoria: 'comprovante_sinal' }) : Promise.resolve([]),
+    ]).then(([daParcela, doEvento]) => { if (ativo) setComprovantes([...daParcela, ...doEvento]) })
+      .catch(() => { /* lista de apoio: sem ela o plano continua funcionando */ })
+    return () => { ativo = false }
+  }, [idsParcelas, eventoId, versaoComprovantes])
+  const comprovantesDoEvento = comprovantes.filter(f => f.module === 'agenda')
   const [draft, setDraft] = useState<DraftParcela[]>(() => toDraft(parcelas))
   const [saving, setSaving] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -468,8 +497,21 @@ export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEdita
                 <p className="text-sm font-medium text-app-text truncate">{p.parcelaLabel ?? p.descricao}</p>
                 <p className="text-xs text-app-subtle mt-0.5">
                   Vencimento {formatDate(p.data)}
-                  {p.dataRecebimento && ` · Pago em ${formatDate(p.dataRecebimento)}`}
+                  {p.dataRecebimento && <> · <span className="font-medium text-emerald-600">Pago em {formatDate(p.dataRecebimento)}</span></>}
+                  {p.metodoPagamento && ` · ${p.metodoPagamento}`}
                 </p>
+                {p.dataCompetencia && (
+                  <p className="flex items-center gap-1 text-xs text-sky-600 mt-0.5">
+                    <CalendarClock className="h-3 w-3" />
+                    Contabilizado em {mesCompetenciaLabel(p.dataCompetencia)}
+                  </p>
+                )}
+                {comprovantes.filter(f => f.module === 'receitas' && f.entityId === p.id).map(f => (
+                  <ComprovanteLink key={f.id} arquivo={f} />
+                ))}
+                {p.status === 'pago' && !comprovantes.some(f => f.module === 'receitas' && f.entityId === p.id) && (
+                  <p className="text-xs text-app-subtle mt-0.5">Sem comprovante anexado</p>
+                )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusStyles[p.status]}`}>
@@ -487,7 +529,16 @@ export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEdita
             </div>
           ))}
         </div>
-      ) : (
+      ) : null}
+
+      {!editando && comprovantesDoEvento.length > 0 && (
+        <div className="rounded-lg border border-app-border2/50 bg-app-surface2/40 px-3 py-2.5">
+          <p className="text-xs font-medium text-app-text2">Comprovantes anexados ao evento (aba Documentos)</p>
+          {comprovantesDoEvento.map(f => <ComprovanteLink key={f.id} arquivo={f} />)}
+        </div>
+      )}
+
+      {editando && (
         <div className="space-y-2">
           {draft.map(p => (
             <div key={p.numero} className="flex items-center gap-2 rounded-lg border border-app-border2/50 bg-app-surface2/40 p-2.5">
@@ -568,10 +619,22 @@ export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEdita
       {parcelaEditando && (
         <EditarParcelaModal
           parcela={parcelaEditando}
-          onClose={() => setParcelaEditando(null)}
+          dataEvento={dataEvento}
+          onClose={() => { setParcelaEditando(null); setVersaoComprovantes(v => v + 1) }}
           onSalvar={patch => onBaixa(parcelaEditando.id, patch)}
         />
       )}
     </div>
+  )
+}
+
+function ComprovanteLink({ arquivo }: { arquivo: StoredFile }) {
+  return (
+    <button type="button" onClick={() => viewFile(arquivo.id)} title="Abrir comprovante"
+      className="mt-1 flex max-w-full items-center gap-1 text-xs text-sky-600 hover:underline">
+      <Paperclip className="h-3 w-3 shrink-0" />
+      <span className="truncate">Comprovante: {arquivo.name}</span>
+      <span className="shrink-0 text-app-subtle">· anexado em {formatDate(arquivo.uploadedAt.slice(0, 10))}</span>
+    </button>
   )
 }

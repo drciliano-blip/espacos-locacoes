@@ -28,6 +28,9 @@ export interface Receita {
   descricao: string
   data: string
   dataRecebimento?: string
+  // Mês (dia 1º) em que o recebimento é contabilizado, quando diferente do
+  // mês do pagamento. Ver dataEfetivaReceita.
+  dataCompetencia?: string
   valor: number
   status: 'pago' | 'pendente' | 'atrasado'
   metodoPagamento?: string
@@ -82,6 +85,7 @@ interface ReceitaRow {
   descricao: string
   data: string
   data_recebimento: string | null
+  data_competencia: string | null
   valor: number | string
   status: string
   metodo_pagamento: string | null
@@ -108,6 +112,7 @@ function fromRow(row: ReceitaRow): Receita {
     descricao: row.descricao,
     data: row.data,
     dataRecebimento: row.data_recebimento ?? undefined,
+    dataCompetencia: row.data_competencia ?? undefined,
     valor: Number(row.valor),
     status: row.status as Receita['status'],
     metodoPagamento: row.metodo_pagamento ?? undefined,
@@ -131,6 +136,7 @@ export interface NovaReceitaInput {
   descricao: string
   data: string
   dataRecebimento?: string
+  dataCompetencia?: string
   valor: number
   status: Receita['status']
   metodoPagamento?: string
@@ -165,6 +171,7 @@ interface ParcelaExistente {
   status: string
   data: string
   data_recebimento: string | null
+  data_competencia: string | null
   valor: number
   parcela_label: string | null
   descricao: string
@@ -189,6 +196,8 @@ export interface BaixaReceitaInput {
   valor?: number
   data?: string
   dataRecebimento?: string
+  // undefined = mantém o que está gravado; null = volta a contar no mês do pagamento.
+  dataCompetencia?: string | null
   horaRecebimento?: string
   metodoPagamento?: string
   observacoes?: string
@@ -214,6 +223,7 @@ export interface EditarReceitaInput {
   descricao: string
   data: string
   dataRecebimento?: string
+  dataCompetencia?: string | null
   valor: number
   status: Receita['status']
   metodoPagamento?: string
@@ -282,6 +292,7 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
         descricao: input.descricao,
         data: input.data,
         data_recebimento: input.dataRecebimento ?? null,
+        data_competencia: input.dataCompetencia ?? null,
         valor: input.valor,
         status: input.status,
         metodo_pagamento: input.metodoPagamento ?? null,
@@ -325,7 +336,7 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
 
     const { data: existingRows } = await supabase
       .from('receitas')
-      .select('id, parcela_numero, status, data, data_recebimento, valor, parcela_label, descricao')
+      .select('id, parcela_numero, status, data, data_recebimento, data_competencia, valor, parcela_label, descricao')
       .eq('evento_id', input.eventoId)
       .eq('categoria_id', categoriaRow.id)
 
@@ -358,7 +369,7 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
       // vencimento), senão dava pra empurrar valor pra dentro de um mês
       // fechado sem o sistema perceber.
       const datasChecagem = [
-        dataEfetivaReceita({ status: match.status as Receita['status'], data: match.data, dataRecebimento: match.data_recebimento ?? undefined }),
+        dataEfetivaReceita({ status: match.status as Receita['status'], data: match.data, dataRecebimento: match.data_recebimento ?? undefined, dataCompetencia: match.data_competencia }),
         parcela.data,
       ]
       for (const dataChecagem of datasChecagem) {
@@ -378,6 +389,7 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
         status: row.status as Receita['status'],
         data: row.data,
         dataRecebimento: row.data_recebimento ?? undefined,
+        dataCompetencia: row.data_competencia,
       })
       const bloqueio = periodoFechado(fechamentos, input.espaco, dataChecagem)
       if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
@@ -427,7 +439,10 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
       const bloqueio = bloqueioPorFechamento(fechamentos, { espaco: existente.espaco, pago: existente.status === 'pago', data: dataEfetivaReceita(existente) }, {
         espaco: existente.espaco,
         pago: patch.status === 'pago',
-        data: dataEfetivaReceita({ status: patch.status, data: patch.data ?? existente.data, dataRecebimento: patch.dataRecebimento }),
+        data: dataEfetivaReceita({
+          status: patch.status, data: patch.data ?? existente.data, dataRecebimento: patch.dataRecebimento,
+          dataCompetencia: patch.dataCompetencia !== undefined ? patch.dataCompetencia : existente.dataCompetencia,
+        }),
       })
       if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
     }
@@ -445,6 +460,7 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
       comprovante_identificador: patch.comprovanteIdentificador ?? null,
       parcela_label: patch.parcelaLabel ?? null,
       socio_responsavel: patch.socioRepasse ?? null,
+      ...(patch.dataCompetencia !== undefined ? { data_competencia: patch.dataCompetencia } : {}),
     }
     const parcial = !!patch.valorRestante && patch.valorRestante > 0
     // A descrição da parcela segue o padrão do Plano de Pagamento ("Label — Cliente");
@@ -458,7 +474,7 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
     setReceitas(prev => prev.map(r => (r.id === id ? atualizada : r)))
 
     if (parcial) {
-      const raw = data as unknown as { categoria_id: string; evento_id: string | null; espaco_id: string | null; cliente: string | null; tipo_entrada: string; data: string }
+      const raw = data as unknown as { categoria_id: string; evento_id: string | null; espaco_id: string | null; cliente: string | null; tipo_entrada: string; data: string; data_competencia: string | null }
       let proximoNumero: number | null = null
       if (raw.evento_id) {
         const { data: ultima } = await supabase.from('receitas').select('parcela_numero')
@@ -480,6 +496,8 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
         parcela_numero: proximoNumero,
         parcela_label: labelRestante,
         tipo_entrada: raw.tipo_entrada,
+        // O restante é da mesma parcela: conta no mesmo mês escolhido.
+        data_competencia: raw.data_competencia,
         origem: 'manual',
       }).select(SELECT).single()
       if (erroNova) throw new Error(`Pagamento parcial registrado, mas não foi possível criar a parcela do restante: ${erroNova.message}`)
@@ -498,7 +516,10 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
       const bloqueio = bloqueioPorFechamento(fechamentos, { espaco: existente.espaco, pago: existente.status === 'pago', data: dataEfetivaReceita(existente) }, {
         espaco: patch.espaco ?? existente.espaco,
         pago: patch.status === 'pago',
-        data: dataEfetivaReceita({ status: patch.status, data: patch.data, dataRecebimento: patch.dataRecebimento }),
+        data: dataEfetivaReceita({
+          status: patch.status, data: patch.data, dataRecebimento: patch.dataRecebimento,
+          dataCompetencia: patch.dataCompetencia !== undefined ? patch.dataCompetencia : existente.dataCompetencia,
+        }),
       })
       if (bloqueio) throw new Error(mensagemPeriodoFechado(bloqueio))
     }
@@ -525,6 +546,7 @@ export function ReceitasProvider({ children }: { children: ReactNode }) {
         observacoes: patch.observacoes ?? null,
         tipo_entrada: patch.tipoEntrada,
         socio_responsavel: patch.socioResponsavel ?? null,
+        ...(patch.dataCompetencia !== undefined ? { data_competencia: patch.dataCompetencia } : {}),
       })
       .eq('id', id)
       .select(SELECT)

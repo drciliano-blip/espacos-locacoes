@@ -12,7 +12,11 @@ import { formatDate, hojeISO } from '@/lib/utils'
 // importa de dentro dos contexts) pra ReceitasContext/ContasPagarContext
 // poderem usar a mesma regra na hora de checar a trava de período fechado,
 // sem criar import circular entre eles e fechamento-calc.ts.
-export function dataEfetivaReceita(r: Pick<Receita, 'status' | 'data' | 'dataRecebimento'>): string {
+// Recebimento com mês de competência escolhido (dataCompetencia, dia 1º)
+// conta nesse mês, não no do pagamento — ex.: sinal pago em outubro de um
+// evento de dezembro, que os sócios querem contabilizar em dezembro.
+export function dataEfetivaReceita(r: Pick<Receita, 'status' | 'data' | 'dataRecebimento'> & { dataCompetencia?: string | null }): string {
+  if (r.dataCompetencia) return r.dataCompetencia
   return r.status === 'pago' && r.dataRecebimento ? r.dataRecebimento : r.data
 }
 export function dataEfetivaConta(c: Pick<ContaPagar, 'status' | 'dataVencimento' | 'dataPagamento'>): string {

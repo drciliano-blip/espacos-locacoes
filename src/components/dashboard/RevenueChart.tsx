@@ -42,7 +42,7 @@ export default function RevenueChart() {
     const porMes: Record<string, number> = {}
     for (const r of receitas) {
       if (r.status !== 'pago' || !isReceitaOperacional(r)) continue
-      const ym = r.data.substring(0, 7)
+      const ym = (r.dataCompetencia ?? r.data).substring(0, 7)
       porMes[ym] = (porMes[ym] ?? 0) + r.valor
     }
     return meses.map(m => ({ mes: m.mes, receita: porMes[m.yearMonth] ?? 0 }))
