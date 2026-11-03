@@ -195,11 +195,15 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
     const parcela = receitas.find(r => r.id === id)
     if (!parcela) return
     await aplicarBaixaComRepasseAutomatico(parcela, patch, updateReceita, addRepasse, repasses)
-    // Valor de uma parcela mudou pelo lápis: o valor do evento (topo do
-    // painel) segue a soma do plano, igual ao "Salvar plano". Pagamento
-    // parcial não muda a soma (pago + restante = valor original).
-    if (patch.valor !== undefined && !patch.valorRestante) {
-      const novoTotal = Math.round((parcelas.filter(p => p.id !== id).reduce((s, p) => s + p.valor, 0) + patch.valor) * 100) / 100
+    // Toda baixa/edição de parcela alinha o valor do evento (topo do painel)
+    // com a soma do plano, igual ao "Salvar plano" — não só quando o valor da
+    // parcela muda: evento que ficou com valor antigo (ex.: R$ 1,00 de
+    // pré-reserva) se corrige na primeira baixa. Pagamento parcial não muda a
+    // soma (pago + restante = valor original). Parceria tem valor estimado à
+    // parte e fica de fora.
+    if (valorSegueOPlano && (parcela.parcelaNumero != null)) {
+      const valorDestaParcela = (patch.valor ?? parcela.valor) + (patch.valorRestante ?? 0)
+      const novoTotal = Math.round((parcelas.filter(p => p.id !== id).reduce((s, p) => s + p.valor, 0) + valorDestaParcela) * 100) / 100
       if (Math.round(novoTotal * 100) !== Math.round(evento.valor * 100)) await onUpdate({ ...evento, valor: novoTotal })
     }
   }
