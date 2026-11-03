@@ -10,6 +10,7 @@ import ReceitasEventoSection from '@/components/eventos/ReceitasEventoSection'
 import Toast from '@/components/shared/Toast'
 import { useContratos } from '@/contexts/ContratosContext'
 import { useCurrentUser } from '@/contexts/UserContext'
+import { veValoresAReceber } from '@/lib/auth'
 import { useEspacoAtivo, MSG_ESPACO_ESPECIFICO_NECESSARIO } from '@/contexts/EspacoAtivoContext'
 import type { StatusEvento, Espaco } from '@/types'
 
@@ -51,7 +52,7 @@ export default function EventosPage() {
     <div className="max-w-6xl mx-auto space-y-4">
       {/* Tabs */}
       <div className="flex border-b border-app-border overflow-x-auto">
-        {TABS.map(({ key, label, Icon }) => (
+        {TABS.filter(t => t.key !== 'receitas' || veValoresAReceber(role)).map(({ key, label, Icon }) => (
           <button
             key={key}
             onClick={() => setTab(key)}
@@ -141,7 +142,7 @@ export default function EventosPage() {
       )}
 
       {tab === 'documentos' && <DocumentosSection />}
-      {tab === 'receitas' && <ReceitasEventoSection />}
+      {tab === 'receitas' && veValoresAReceber(role) && <ReceitasEventoSection />}
 
       <Toast message={toastMsg} />
     </div>

@@ -19,6 +19,7 @@ import Toast from '@/components/shared/Toast'
 import { useEventos } from '@/contexts/EventosContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
 import { useCurrentUser } from '@/contexts/UserContext'
+import { veValoresAReceber } from '@/lib/auth'
 import { useEspacoAtivo, MSG_ESPACO_ESPECIFICO_NECESSARIO } from '@/contexts/EspacoAtivoContext'
 import SeletorEspacoBotoes from '@/components/layout/SeletorEspacoBotoes'
 import { eventoAtivo } from '@/types'
@@ -145,16 +146,28 @@ export default function AgendaPage() {
         ['Filtro aplicado', tituloFiltro],
         ['Espaço', espacosLabel],
         [],
-        ['Data', 'Nome do Evento', 'Valor Total', 'Status', 'Valor Recebido', 'Valor a Receber', 'Contato Responsável'],
-        ...relacaoExibida.map(r => [
-          formatDate(r.evento.data), r.evento.cliente, r.evento.valor,
-          statusLabelEvento[r.evento.status] ?? r.evento.status, r.valorRecebido, r.valorAReceber, contatoLabel(r.evento),
+        // Recebido / a receber só pra quem vê valores a receber (ver veValoresAReceber).
+        ...(veValoresAReceber(role) ? [
+          ['Data', 'Nome do Evento', 'Valor Total', 'Status', 'Valor Recebido', 'Valor a Receber', 'Contato Responsável'],
+          ...relacaoExibida.map(r => [
+            formatDate(r.evento.data), r.evento.cliente, r.evento.valor,
+            statusLabelEvento[r.evento.status] ?? r.evento.status, r.valorRecebido, r.valorAReceber, contatoLabel(r.evento),
+          ]),
+          [],
+          ['Quantidade total de eventos', totaisExibidos.quantidade],
+          ['Valor total contratado', totaisExibidos.valorTotalContratado],
+          ['Total recebido', totaisExibidos.totalRecebido],
+          ['Total a receber', totaisExibidos.totalAReceber],
+        ] : [
+          ['Data', 'Nome do Evento', 'Valor Total', 'Status', 'Contato Responsável'],
+          ...relacaoExibida.map(r => [
+            formatDate(r.evento.data), r.evento.cliente, r.evento.valor,
+            statusLabelEvento[r.evento.status] ?? r.evento.status, contatoLabel(r.evento),
+          ]),
+          [],
+          ['Quantidade total de eventos', totaisExibidos.quantidade],
+          ['Valor total contratado', totaisExibidos.valorTotalContratado],
         ]),
-        [],
-        ['Quantidade total de eventos', totaisExibidos.quantidade],
-        ['Valor total contratado', totaisExibidos.valorTotalContratado],
-        ['Total recebido', totaisExibidos.totalRecebido],
-        ['Total a receber', totaisExibidos.totalAReceber],
       ],
     }
     const sufixo = selectedDate

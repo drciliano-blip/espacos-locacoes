@@ -10,6 +10,8 @@ import { useEspacos } from '@/contexts/EspacosContext'
 import { useEspacoAtivo } from '@/contexts/EspacoAtivoContext'
 import { useEventos } from '@/contexts/EventosContext'
 import { useReceitas, isReceitaOperacional, statusEfetivoReceita, receitaEmAtraso } from '@/contexts/ReceitasContext'
+import { useCurrentUser } from '@/contexts/UserContext'
+import { veValoresAReceber } from '@/lib/auth'
 import type { TipoEvento } from '@/types'
 import { eventoAtivo } from '@/types'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
@@ -43,6 +45,8 @@ const statusLabel: Record<string, string> = {
 type EspacoFiltro = string | 'Todos'
 
 export default function DashboardPage() {
+  const { role } = useCurrentUser()
+  const mostraAReceber = veValoresAReceber(role)
   const { espacosConfig, espacosNomes } = useEspacos()
   const { eventos } = useEventos()
   const { receitas: pagamentos } = useReceitas()
@@ -318,7 +322,7 @@ export default function DashboardPage() {
       ) : (
         <>
           {/* KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className={`grid grid-cols-1 sm:grid-cols-2 ${mostraAReceber ? 'xl:grid-cols-4' : ''} gap-4`}>
             <KPICard
               title="Receita do Mês"
               value={formatCurrency(receitaMes)}
@@ -333,6 +337,7 @@ export default function DashboardPage() {
               icon={CalendarCheck}
               color="blue"
             />
+            {mostraAReceber && <>
             <KPICard
               title="A Receber"
               value={formatCurrency(pendente)}
@@ -347,6 +352,7 @@ export default function DashboardPage() {
               icon={AlertCircle}
               color="red"
             />
+            </>}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

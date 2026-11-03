@@ -5,6 +5,7 @@ import { X, Save, Edit3, Users, DollarSign, User, Calendar, ClipboardCheck, Pape
 import type { Evento, StatusVistoria, TipoEvento, Contrato, TipoMinuta } from '@/types'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useCurrentUser } from '@/contexts/UserContext'
+import { veValoresAReceber } from '@/lib/auth'
 import { useReceitas, type BaixaReceitaInput } from '@/contexts/ReceitasContext'
 import { useRepasses } from '@/contexts/RepassesContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
@@ -659,7 +660,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
                 Parceria, sobre o "Valor Envolvido" (estimado), pra dar baixa nos
                 pagamentos igual à Locação; Condições da Parceria continua sendo o
                 texto livre com as regras do acordo, isso aqui é só o financeiro. */}
-            {!editing && (
+            {!editing && veValoresAReceber(role) && (
               <PlanoPagamentoSection
                 valorEvento={evento.valor}
                 parcelas={parcelas}

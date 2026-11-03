@@ -29,3 +29,10 @@ export function paginaInicial(role: NivelAcesso): string {
 export function canAccess(role: NivelAcesso, page: string): boolean {
   return ROLE_PERMISSIONS[role]?.includes(page) ?? false
 }
+
+// Valores a receber, em atraso e recebidos por evento são informação da
+// administração: operação cadastra eventos e contratos, mas não vê a situação
+// financeira dos clientes. Sócio (leitura) e financeiro continuam vendo.
+export function veValoresAReceber(role: NivelAcesso): boolean {
+  return role === 'admin' || role === 'financeiro' || role === 'socio'
+}

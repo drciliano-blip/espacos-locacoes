@@ -8,8 +8,17 @@ import { useReceitas, receitaEmAtraso } from '@/contexts/ReceitasContext'
 import { useEventos } from '@/contexts/EventosContext'
 import { eventoAtivo } from '@/types'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { useCurrentUser } from '@/contexts/UserContext'
+import { veValoresAReceber } from '@/lib/auth'
 
+// Só mostra pra quem vê valores a receber/em atraso (ver veValoresAReceber).
 export default function NotificationBell() {
+  const { role } = useCurrentUser()
+  if (!veValoresAReceber(role)) return null
+  return <Sino />
+}
+
+function Sino() {
   const { contas } = useContasPagar()
   const { receitas } = useReceitas()
   const { eventos } = useEventos()
