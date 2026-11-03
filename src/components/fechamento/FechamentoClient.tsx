@@ -412,10 +412,16 @@ export default function FechamentoClient() {
       const dentroDaJanela = (data: string) =>
         data > ultimoFechamento!.dataFim && (!filters.dataFim || data <= filters.dataFim)
 
+      // Espaço nunca fechado: conta acumulada de sempre, mas só ATÉ o fim do
+      // período — senão o primeiro fechamento (ex.: outubro, feito em 03/11)
+      // levava junto o que entrou/saiu em novembro.
+      const depoisDoFim = (data: string) => !!filters.dataFim && data > filters.dataFim
       const lucro = ultimoFechamento
         ? receitas.filter(r => isReceitaOperacional(r) && r.espaco === e.nome && r.status === 'pago' && dentroDaJanela(dataEfetivaReceita(r))).reduce((s, r) => s + r.valor, 0)
           - contasPagar.filter(c => isDespesaOperacional(c) && c.espaco === e.nome && c.status === 'pago' && dentroDaJanela(dataEfetivaConta(c))).reduce((s, c) => s + c.valor, 0)
-        : fechamento.disponivelPorEspaco.find(d => d.nome === e.nome)?.disponivel ?? 0
+        : (fechamento.disponivelPorEspaco.find(d => d.nome === e.nome)?.disponivel ?? 0)
+          - receitas.filter(r => isReceitaOperacional(r) && r.espaco === e.nome && r.status === 'pago' && depoisDoFim(dataEfetivaReceita(r))).reduce((s, r) => s + r.valor, 0)
+          + contasPagar.filter(c => isDespesaOperacional(c) && c.espaco === e.nome && c.status === 'pago' && depoisDoFim(dataEfetivaConta(c))).reduce((s, c) => s + c.valor, 0)
 
       const ajusteObra = AJUSTE_RESERVA_OBRA[e.nome]
       for (const s of DIVISAO_SOCIOS[e.nome] ?? []) {
@@ -438,10 +444,10 @@ export default function FechamentoClient() {
         }
         const retirado = contasPagar
           .filter(c => c.status === 'pago' && c.categoria === 'retirada_socio' && c.espaco === e.nome && c.fornecedor && nomeCanonicoSocio(c.fornecedor) === s.nome
-            && (!ultimoFechamento || dentroDaJanela(dataEfetivaConta(c))))
+            && (ultimoFechamento ? dentroDaJanela(dataEfetivaConta(c)) : !depoisDoFim(dataEfetivaConta(c))))
           .reduce((sum, c) => sum + c.valor, 0)
         const jaRepassado = repasses
-          .filter(r => r.espaco === e.nome && r.socioNome === s.nome && (!ultimoFechamento || dentroDaJanela(r.data)))
+          .filter(r => r.espaco === e.nome && r.socioNome === s.nome && (ultimoFechamento ? dentroDaJanela(r.data) : !depoisDoFim(r.data)))
           .reduce((sum, r) => sum + r.valor, 0)
         rows.push({
           espaco: e.nome, socio: s.nome, percentual: s.percentual, lucro, pendenteHerdado, valorDevido, ajusteReservaObra, retirado, jaRepassado,
