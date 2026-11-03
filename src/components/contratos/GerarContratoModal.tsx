@@ -153,6 +153,8 @@ export default function GerarContratoModal({ origem, onClose }: Props) {
     () => valoresIniciais(origem, modelo.variaveis, dadosLegais, espaco)
   )
   const [gerando, setGerando] = useState(false)
+  // Caracteres já recebidos da IA — só pra mostrar que está andando.
+  const [progresso, setProgresso] = useState(0)
   const [erro, setErro] = useState<string | null>(null)
   const [contractText, setContractText] = useState<string | null>(null)
   const [copiado, setCopiado] = useState(false)
@@ -209,17 +211,45 @@ export default function GerarContratoModal({ origem, onClose }: Props) {
           usaMinutaReal ? { fileId: minutaReal!.id, variaveis } : { templateText: modelo.texto, variaveis }
         ),
       })
-      const data = await res.json()
-      if (!res.ok || data.error) {
-        setErro(data.error ?? 'Erro ao gerar contrato.')
+      // Erros de antes da geração (minuta não encontrada etc.) vêm em JSON.
+      if (!res.ok || (res.headers.get('content-type') ?? '').includes('application/json')) {
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok || data.error) {
+          setErro(data.error ?? 'Erro ao gerar contrato.')
+          return
+        }
+        setContractText(data.contractText)
+        anexarAoSistema(data.contractText)
         return
       }
-      setContractText(data.contractText)
-      anexarAoSistema(data.contractText)
+      // Minuta real: o texto chega aos poucos (contrato de 5 a 11 páginas leva
+      // perto de 1 minuto) — mostra o andamento e só gera o PDF no fim.
+      const reader = res.body!.getReader()
+      const decoder = new TextDecoder()
+      let texto = ''
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        texto += decoder.decode(value, { stream: true })
+        setProgresso(texto.length)
+      }
+      texto += decoder.decode()
+      const i = texto.indexOf('\u0000ERRO:')
+      if (i >= 0) {
+        setErro(texto.slice(i + '\u0000ERRO:'.length) || 'Erro ao gerar contrato.')
+        return
+      }
+      if (!texto.trim()) {
+        setErro('A IA não retornou nenhum texto.')
+        return
+      }
+      setContractText(texto)
+      anexarAoSistema(texto)
     } catch {
       setErro('Falha ao conectar com a IA.')
     } finally {
       setGerando(false)
+      setProgresso(0)
     }
   }
 
@@ -412,7 +442,9 @@ export default function GerarContratoModal({ origem, onClose }: Props) {
                 onMouseLeave={e => { e.currentTarget.style.backgroundColor = GREEN }}
               >
                 <Sparkles className={`h-4 w-4 ${gerando ? 'animate-pulse' : ''}`} />
-                {gerando ? 'Gerando com IA…' : 'Gerar PDF'}
+                {gerando
+                  ? (progresso > 0 ? `Gerando com IA… ~${Math.max(1, Math.round(progresso / 3500))} pág. (leva cerca de 1 min)` : 'Gerando com IA… (leva cerca de 1 min)')
+                  : 'Gerar PDF'}
               </button>
             </>
           )}

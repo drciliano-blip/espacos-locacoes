@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 
+// Contrato completo pode passar de 4096 tokens e de 1 minuto.
+export const maxDuration = 300
+
 export async function POST(request: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
@@ -31,7 +34,7 @@ ${variaveisTexto}`
     const client = new Anthropic({ apiKey })
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
+      max_tokens: 16000,
       output_config: { effort: 'low' },
       messages: [{ role: 'user', content: prompt }],
     })
