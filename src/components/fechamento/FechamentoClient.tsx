@@ -18,7 +18,7 @@ import { useFundos } from '@/contexts/FundosContext'
 import { useRepasses } from '@/contexts/RepassesContext'
 import { useFechamentos, type Fechamento } from '@/contexts/FechamentosContext'
 import { useCurrentUser } from '@/contexts/UserContext'
-import { DIVISAO_SOCIOS, nomeCanonicoSocio, AJUSTE_RESERVA_OBRA } from '@/lib/socios-config'
+import { DIVISAO_SOCIOS, nomeCanonicoSocio, AJUSTE_RESERVA_OBRA, ESPACOS_SEM_RESERVA_COLETIVA } from '@/lib/socios-config'
 import { formatCurrency, formatDate, mensagemDeErro, parseCurrencyBR } from '@/lib/utils'
 import { downloadWorkbook, type ExportSheet } from '@/lib/xlsx-export'
 import { useEventos } from '@/contexts/EventosContext'
@@ -416,9 +416,25 @@ export default function FechamentoClient() {
       // período — senão o primeiro fechamento (ex.: outubro, feito em 03/11)
       // levava junto o que entrou/saiu em novembro.
       const depoisDoFim = (data: string) => !!filters.dataFim && data > filters.dataFim
+      // Espaço com reserva coletiva: o primeiro fechamento desconta o saldo das
+      // reservas/Fundo de Caixa (posição acumulada). Daí em diante a janela
+      // precisa descontar só a VARIAÇÃO das reservas nela — senão a despesa
+      // paga com dinheiro já reservado (ex.: aluguel saindo da reserva "IPTU +
+      // Aluguel") era descontada dos sócios duas vezes: ao reservar e ao pagar.
+      const comReserva = !ESPACOS_SEM_RESERVA_COLETIVA.includes(e.nome)
+      const fundosDoEspaco = fundos.filter(f => f.espaco === e.nome)
+      const variacaoFundo = (fundoIds: Set<string>) => movimentacoes
+        .filter(m => fundoIds.has(m.fundoId) && dentroDaJanela(m.data))
+        .reduce((s, m) => s + (m.tipo === 'entrada' ? m.valor : -m.valor), 0)
+      const variacaoReservasNaJanela = !ultimoFechamento || !comReserva ? 0
+        : contasPagar.filter(c => c.categoria === 'fundo_caixa' && c.espaco === e.nome && c.status === 'pago' && dentroDaJanela(dataEfetivaConta(c))).reduce((s, c) => s + c.valor, 0)
+          - receitas.filter(r => r.tipoEntrada === 'retorno_fundo_caixa' && r.espaco === e.nome && r.status === 'pago' && dentroDaJanela(dataEfetivaReceita(r))).reduce((s, r) => s + r.valor, 0)
+          + variacaoFundo(new Set(fundosDoEspaco.map(f => f.id)))
+
       const lucro = ultimoFechamento
         ? receitas.filter(r => isReceitaOperacional(r) && r.espaco === e.nome && r.status === 'pago' && dentroDaJanela(dataEfetivaReceita(r))).reduce((s, r) => s + r.valor, 0)
           - contasPagar.filter(c => isDespesaOperacional(c) && c.espaco === e.nome && c.status === 'pago' && dentroDaJanela(dataEfetivaConta(c))).reduce((s, c) => s + c.valor, 0)
+          - variacaoReservasNaJanela
         : (fechamento.disponivelPorEspaco.find(d => d.nome === e.nome)?.disponivel ?? 0)
           - receitas.filter(r => isReceitaOperacional(r) && r.espaco === e.nome && r.status === 'pago' && depoisDoFim(dataEfetivaReceita(r))).reduce((s, r) => s + r.valor, 0)
           + contasPagar.filter(c => isDespesaOperacional(c) && c.espaco === e.nome && c.status === 'pago' && depoisDoFim(dataEfetivaConta(c))).reduce((s, c) => s + c.valor, 0)
@@ -436,9 +452,15 @@ export default function FechamentoClient() {
         if (ajusteObra && ajusteObra.socioIsento === s.nome) {
           const fundoObra = fundos.find(f => f.espaco === e.nome && f.nome.trim().toUpperCase() === ajusteObra.fundoNome)
           if (fundoObra) {
+            // Mesma lógica do lucro: o saldo inteiro só no primeiro fechamento;
+            // depois, só a variação da reserva na janela. Antes o saldo voltava
+            // a ser devolvido em todo fechamento (a Trupe recebia o ajuste de
+            // novo a cada mês).
             const movsObra = movimentacoes.filter(m => m.fundoId === fundoObra.id)
-            const saldoFundoObra = movsObra.filter(m => m.tipo === 'entrada').reduce((s2, m) => s2 + m.valor, 0)
-              - movsObra.filter(m => m.tipo === 'saida').reduce((s2, m) => s2 + m.valor, 0)
+            const saldoFundoObra = ultimoFechamento
+              ? variacaoFundo(new Set([fundoObra.id]))
+              : movsObra.filter(m => m.tipo === 'entrada').reduce((s2, m) => s2 + m.valor, 0)
+                - movsObra.filter(m => m.tipo === 'saida').reduce((s2, m) => s2 + m.valor, 0)
             ajusteReservaObra = saldoFundoObra * (s.percentual / 100)
           }
         }
