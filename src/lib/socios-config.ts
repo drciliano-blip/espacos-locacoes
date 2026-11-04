@@ -92,6 +92,14 @@ export const AJUSTE_RESERVA_OBRA: Record<string, { fundoNome: string; socioIsent
 // só o desconto COLETIVO some pra esses espaços.
 export const ESPACOS_SEM_RESERVA_COLETIVA: string[] = ['Usine', 'House Pacaembu']
 
+// Espaços em que, no PRIMEIRO fechamento, as retiradas antigas dos sócios são
+// consideradas acertadas entre eles: o que sobrou (Disponível do Espaço menos
+// TODAS as retiradas até o fim do período) é dividido só pelo percentual,
+// sem cobrar de cada sócio a diferença histórica do que ele retirou. É como a
+// planilha de fechamento do cliente é feita. Dali em diante, cada sócio
+// desconta só as próprias retiradas de cada período.
+export const ESPACOS_RATEIO_COLETIVO_NO_1O_FECHAMENTO: string[] = ['Complexo Jussara']
+
 // Investimentos societários pontuais (ex: compra de participação) — só um
 // registro informativo pro Quadro Societário. Nunca é receita, nunca entra no
 // Fechamento da Obra nem no Resultado Operacional.

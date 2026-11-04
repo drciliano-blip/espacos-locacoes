@@ -18,7 +18,7 @@ import { useFundos } from '@/contexts/FundosContext'
 import { useRepasses } from '@/contexts/RepassesContext'
 import { useFechamentos, type Fechamento } from '@/contexts/FechamentosContext'
 import { useCurrentUser } from '@/contexts/UserContext'
-import { DIVISAO_SOCIOS, nomeCanonicoSocio, AJUSTE_RESERVA_OBRA, ESPACOS_SEM_RESERVA_COLETIVA } from '@/lib/socios-config'
+import { DIVISAO_SOCIOS, nomeCanonicoSocio, AJUSTE_RESERVA_OBRA, ESPACOS_SEM_RESERVA_COLETIVA, ESPACOS_RATEIO_COLETIVO_NO_1O_FECHAMENTO } from '@/lib/socios-config'
 import { formatCurrency, formatDate, mensagemDeErro, parseCurrencyBR } from '@/lib/utils'
 import { downloadWorkbook, type ExportSheet } from '@/lib/xlsx-export'
 import { useEventos } from '@/contexts/EventosContext'
@@ -454,10 +454,20 @@ export default function FechamentoClient() {
           - receitas.filter(r => isReceitaOperacional(r) && r.espaco === e.nome && r.status === 'pago' && depoisDoFim(dataEfetivaReceita(r))).reduce((s, r) => s + r.valor, 0)
           + contasPagar.filter(c => isDespesaOperacional(c) && c.espaco === e.nome && c.status === 'pago' && depoisDoFim(dataEfetivaConta(c))).reduce((s, c) => s + c.valor, 0)
 
+      // Primeiro fechamento com rateio coletivo (ver
+      // ESPACOS_RATEIO_COLETIVO_NO_1O_FECHAMENTO): todas as retiradas até o
+      // fim do período saem do bolo antes de dividir, e nenhuma é cobrada
+      // individualmente.
+      const rateioColetivo = !ultimoFechamento && ESPACOS_RATEIO_COLETIVO_NO_1O_FECHAMENTO.includes(e.nome)
+      const retiradasColetivas = !rateioColetivo ? 0
+        : contasPagar.filter(c => c.status === 'pago' && c.categoria === 'retirada_socio' && c.espaco === e.nome && !depoisDoFim(dataEfetivaConta(c)))
+          .reduce((s, c) => s + c.valor, 0)
+      const lucroADividir = lucro - retiradasColetivas
+
       const ajusteObra = AJUSTE_RESERVA_OBRA[e.nome]
       for (const s of DIVISAO_SOCIOS[e.nome] ?? []) {
         const pendenteHerdado = ultimoFechamento?.repasseSocios.find(r => r.socio === s.nome)?.valorPendente ?? 0
-        const valorDevido = pendenteHerdado + lucro * (s.percentual / 100)
+        const valorDevido = pendenteHerdado + lucroADividir * (s.percentual / 100)
         // Trupe Labels tem 0% de participação na obra: a reserva "Obra
         // Jussara" já foi descontada do `lucro` acima (é genérica, por
         // espaço), então devolve aqui o percentual dela sobre o valor
@@ -479,7 +489,7 @@ export default function FechamentoClient() {
             ajusteReservaObra = saldoFundoObra * (s.percentual / 100)
           }
         }
-        const retirado = contasPagar
+        const retirado = rateioColetivo ? 0 : contasPagar
           .filter(c => c.status === 'pago' && c.categoria === 'retirada_socio' && c.espaco === e.nome && c.fornecedor && nomeCanonicoSocio(c.fornecedor) === s.nome
             && (ultimoFechamento ? dentroDaJanela(dataEfetivaConta(c)) : !depoisDoFim(dataEfetivaConta(c))))
           .reduce((sum, c) => sum + c.valor, 0)
@@ -487,7 +497,7 @@ export default function FechamentoClient() {
           .filter(r => r.espaco === e.nome && r.socioNome === s.nome && (ultimoFechamento ? dentroDaJanela(r.data) : !depoisDoFim(r.data)))
           .reduce((sum, r) => sum + r.valor, 0)
         rows.push({
-          espaco: e.nome, socio: s.nome, percentual: s.percentual, lucro, pendenteHerdado, valorDevido, ajusteReservaObra, retirado, jaRepassado,
+          espaco: e.nome, socio: s.nome, percentual: s.percentual, lucro: lucroADividir, pendenteHerdado, valorDevido, ajusteReservaObra, retirado, jaRepassado,
           valorPendente: valorDevido + ajusteReservaObra - retirado - jaRepassado,
           pendenteFechado: snapshotDoPeriodo?.repasseSocios.find(r => r.socio === s.nome)?.valorPendente,
         })
