@@ -200,8 +200,14 @@ export default function FechamentoClient() {
   const resumoPorSocio = useMemo(() => {
     const porSocio = nomesSociosDisponiveis.map(nome => {
       const totalAportes = aportesSocioEscopo.filter(r => r.status === 'pago' && r.socioResponsavel && nomeCanonicoSocio(r.socioResponsavel) === nome).reduce((s, r) => s + r.valor, 0)
-      const totalRetiradas = retiradasSocioEscopo.filter(c => c.status === 'pago' && c.fornecedor && nomeCanonicoSocio(c.fornecedor) === nome).reduce((s, c) => s + c.valor, 0)
-      return { nome, totalAportes, totalRetiradas }
+      const retiradasDoSocio = retiradasSocioEscopo.filter(c => c.status === 'pago' && c.fornecedor && nomeCanonicoSocio(c.fornecedor) === nome)
+      const totalRetiradas = retiradasDoSocio.reduce((s, c) => s + c.valor, 0)
+      // Só as do período em tela — o total acima é desde sempre e, sozinho,
+      // num relatório mensal parecia ser a retirada do mês.
+      const retiradasNoPeriodo = retiradasDoSocio
+        .filter(c => { const d = dataEfetivaConta(c); return (!filters.dataInicio || d >= filters.dataInicio) && (!filters.dataFim || d <= filters.dataFim) })
+        .reduce((s, c) => s + c.valor, 0)
+      return { nome, totalAportes, totalRetiradas, retiradasNoPeriodo }
     })
     // Toda conta/receita paga classificada como Retirada/Aporte Sócio deve
     // constar em algum lugar aqui — se o campo Sócio não bater com nenhum dos
@@ -216,7 +222,7 @@ export default function FechamentoClient() {
       .filter(r => r.status === 'pago' && (!r.socioResponsavel || !nomesSociosDisponiveis.includes(nomeCanonicoSocio(r.socioResponsavel))))
       .reduce((s, r) => s + r.valor, 0)
     return { porSocio, totalRetiradasNaoIdentificadas, totalAportesNaoIdentificados }
-  }, [nomesSociosDisponiveis, aportesSocioEscopo, retiradasSocioEscopo])
+  }, [nomesSociosDisponiveis, aportesSocioEscopo, retiradasSocioEscopo, filters.dataInicio, filters.dataFim])
 
   // Linhas do drill-down (Ver Aportes/Ver Retiradas) — sempre organizadas por
   // data (receitas/contas já vêm ordenadas por data desc do contexto), só do(s)
@@ -393,9 +399,18 @@ export default function FechamentoClient() {
   // fechado continua com a conta acumulada de sempre, sem nenhuma mudança de
   // comportamento.
   const repasseSociosRows = useMemo(() => {
-    const rows: { espaco: string; socio: string; percentual: number; lucro: number; pendenteHerdado: number; valorDevido: number; ajusteReservaObra: number; retirado: number; jaRepassado: number; valorPendente: number }[] = []
+    const rows: { espaco: string; socio: string; percentual: number; lucro: number; pendenteHerdado: number; valorDevido: number; ajusteReservaObra: number; retirado: number; jaRepassado: number; valorPendente: number; pendenteFechado?: number }[] = []
     for (const e of espacos) {
-      const fechamentosDoEspaco = fechamentos.filter(f => f.espaco === e.nome)
+      // Só conta como "último fechamento" o que terminou ANTES do fim do
+      // período em tela. Sem isso, ao abrir um período que já foi fechado
+      // (ex.: outubro, depois de "Fechar Período" de outubro), a janela
+      // começava DEPOIS do próprio outubro: Retirado e Já Repassado saíam
+      // zerados e o valor devido inteiro aparecia como "Pendente Anterior" —
+      // o sócio via as retiradas nos cards e zero na tabela, sem entender.
+      const fechamentosDoEspaco = fechamentos.filter(f => f.espaco === e.nome && (!filters.dataFim || f.dataFim < filters.dataFim))
+      // Fechamento salvo exatamente deste período (se houver), só pra avisar
+      // quando o recálculo de agora não bate mais com o que foi fechado.
+      const snapshotDoPeriodo = fechamentos.find(f => f.espaco === e.nome && f.dataInicio === filters.dataInicio && f.dataFim === filters.dataFim)
       const ultimoFechamento = fechamentosDoEspaco.length
         ? fechamentosDoEspaco.reduce((max, f) => f.dataFim > max.dataFim ? f : max)
         : undefined
@@ -474,11 +489,26 @@ export default function FechamentoClient() {
         rows.push({
           espaco: e.nome, socio: s.nome, percentual: s.percentual, lucro, pendenteHerdado, valorDevido, ajusteReservaObra, retirado, jaRepassado,
           valorPendente: valorDevido + ajusteReservaObra - retirado - jaRepassado,
+          pendenteFechado: snapshotDoPeriodo?.repasseSocios.find(r => r.socio === s.nome)?.valorPendente,
         })
       }
     }
     return rows
-  }, [espacos, fechamento, contasPagar, repasses, fundos, movimentacoes, fechamentos, receitas, filters.dataFim])
+  }, [espacos, fechamento, contasPagar, repasses, fundos, movimentacoes, fechamentos, receitas, filters.dataInicio, filters.dataFim])
+
+  // Linhas cujo recálculo de agora diverge do que ficou salvo no fechamento
+  // deste mesmo período (lançamento criado/editado/excluído depois de fechar).
+  const divergenciasFechamento = useMemo(
+    () => repasseSociosRows.filter(r => r.pendenteFechado !== undefined && Math.abs(r.pendenteFechado - r.valorPendente) > 0.01),
+    [repasseSociosRows],
+  )
+
+  // Espaços em tela cuja retirada é descontada só por sócio (nunca no
+  // "Já retirado" coletivo) — pra explicar o R$ 0,00 daquele card.
+  const espacosRetiradaIndividual = useMemo(
+    () => espacos.filter(e => ESPACOS_SEM_RESERVA_COLETIVA.includes(e.nome) && (!selectedSpaces?.length || selectedSpaces.includes(e.nome))).map(e => e.nome),
+    [espacos, selectedSpaces],
+  )
 
   // Fechamento formal do período — sempre do espaço ativo global (nunca um
   // seletor próprio aqui, mesmo padrão já usado na integração do Google
@@ -1000,6 +1030,11 @@ export default function FechamentoClient() {
           <div className="rounded-lg border border-app-border2/60 bg-app-bg p-3">
             <p className="text-app-subtle">(−) Já retirado pelos sócios</p>
             <p className="font-semibold text-fuchsia-600">{formatCurrency(fechamento.retiradaDeduzida)}</p>
+            {espacosRetiradaIndividual.length > 0 && (
+              <p className="mt-1 text-[10px] text-app-subtle">
+                Não inclui {espacosRetiradaIndividual.join(' e ')}: lá a retirada é descontada de cada sócio, na coluna Retirado da tabela abaixo.
+              </p>
+            )}
           </div>
           <div className="rounded-lg border border-[#25D366]/25 bg-[#25D366]/5 p-3">
             <p className="text-app-subtle">= Disponível para Distribuição</p>
@@ -1036,7 +1071,7 @@ export default function FechamentoClient() {
           )}
         </div>
 
-        <p className="text-xs text-app-subtle">Valores acumulados desde o início. Retiradas somam lançamentos manuais e Contas Pagas classificadas como Retirada Sócio, sem duplicidade.</p>
+        <p className="text-xs text-app-subtle">&quot;Total&quot; soma desde o início; &quot;No período&quot; só o período filtrado acima. Retiradas somam lançamentos manuais e Contas Pagas classificadas como Retirada Sócio, sem duplicidade.</p>
 
         {/* Resumo por sócio — nome, total de aportes, total de retiradas. Sem
             "saldo" de propósito: aporte e retirada não se compensam. */}
@@ -1047,6 +1082,7 @@ export default function FechamentoClient() {
               nome={s.nome}
               totalAportes={s.totalAportes}
               totalRetiradas={s.totalRetiradas}
+              retiradasNoPeriodo={s.retiradasNoPeriodo}
               onVerAportes={() => setDrillDown({ tipo: 'aportes', titulo: `Aportes — ${s.nome}`, nomes: [s.nome] })}
               onVerRetiradas={() => setDrillDown({ tipo: 'retiradas', titulo: `Retiradas — ${s.nome}`, nomes: [s.nome] })}
             />
@@ -1101,8 +1137,19 @@ export default function FechamentoClient() {
             repassado (RepassesContext) — mostra quanto ainda falta entregar
             a cada sócio, não só a participação bruta. */}
         <p className="text-xs text-app-subtle">
-          Espaços que já tiveram algum &quot;Fechar Período&quot; em Financeiro: Valor Devido, Retirado e Já Repassado somam só o que aconteceu entre o último fechamento e o fim do período filtrado acima — o Pendente daquele fechamento entra automaticamente como saldo do novo período.
+          Espaços que já tiveram algum &quot;Fechar Período&quot; anterior: Valor Devido, Retirado e Já Repassado somam só o que aconteceu entre aquele fechamento e o fim do período filtrado acima — o Pendente dele entra como &quot;Pendente Anterior&quot;. Retirado e Já Repassado são só os do período; o total desde o início está nos cards acima.
         </p>
+        {divergenciasFechamento.length > 0 && (
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700">
+            <p className="font-semibold">Este período já foi fechado, mas o cálculo de agora não bate com o que ficou salvo:</p>
+            <ul className="mt-1 list-disc pl-5">
+              {divergenciasFechamento.map(r => (
+                <li key={`${r.espaco}-${r.socio}`}>{r.espaco} · {r.socio}: pendente salvo no fechamento {formatCurrency(r.pendenteFechado ?? 0)}, agora {formatCurrency(r.valorPendente)}</li>
+              ))}
+            </ul>
+            <p className="mt-1">Algum lançamento do período foi criado, editado ou excluído depois do fechamento. O próximo período continua partindo do valor salvo — se o correto é o de agora, reabra e feche o período de novo.</p>
+          </div>
+        )}
         {repasseSociosRows.length > 0 && (
           <div className="overflow-x-auto rounded-lg border border-app-border2/60">
             <table className="w-full text-xs border-collapse">
@@ -1448,10 +1495,11 @@ function ResumoStatAcionavel({ label, valor, cor, onVisualizar, onExportExcel, o
   )
 }
 
-function SocioResumoCard({ nome, totalAportes, totalRetiradas, onVerAportes, onVerRetiradas }: {
+function SocioResumoCard({ nome, totalAportes, totalRetiradas, retiradasNoPeriodo, onVerAportes, onVerRetiradas }: {
   nome: string
   totalAportes: number
   totalRetiradas: number
+  retiradasNoPeriodo: number
   onVerAportes: () => void
   onVerRetiradas: () => void
 }) {
@@ -1462,12 +1510,13 @@ function SocioResumoCard({ nome, totalAportes, totalRetiradas, onVerAportes, onV
           card de "Saldo" aqui, de propósito. */}
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div>
-          <p className="text-app-subtle">Total de Aportes</p>
+          <p className="text-app-subtle">Total de Aportes <span className="text-[10px]">(desde o início)</span></p>
           <p className="font-semibold text-violet-600">{formatCurrency(totalAportes)}</p>
         </div>
         <div>
-          <p className="text-app-subtle">Total de Retiradas</p>
+          <p className="text-app-subtle">Total de Retiradas <span className="text-[10px]">(desde o início)</span></p>
           <p className="font-semibold text-fuchsia-600">{formatCurrency(totalRetiradas)}</p>
+          <p className="mt-1 text-app-subtle">No período: <span className="font-medium text-fuchsia-600">{formatCurrency(retiradasNoPeriodo)}</span></p>
         </div>
       </div>
       <div className="flex gap-2">
