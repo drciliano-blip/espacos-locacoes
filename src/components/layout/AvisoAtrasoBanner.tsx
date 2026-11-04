@@ -60,7 +60,7 @@ function Faixa() {
   return (
     <>
       {!oculta && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-red-500/30 bg-red-500/10 px-6 py-2.5">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-red-500/30 bg-red-500/10 px-6 py-2.5 print:hidden">
           <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" />
           <div className="flex-1 min-w-[200px] text-sm text-red-600">
             {parcelas.length > 0 && (

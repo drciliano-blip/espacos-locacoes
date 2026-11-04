@@ -273,7 +273,7 @@ export default function CobrancaClientesModal({ itens, onClose }: { itens: Parce
     // Celular: tela cheia, rolando inteira. Computador: janela centralizada
     // com a lista rolando por dentro. `min-w-0` impede o conteúdo de
     // alargar a janela além da tela (era o que a cortava à esquerda).
-    <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-black/40 backdrop-blur-sm sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-black/40 backdrop-blur-sm sm:p-4 print:hidden" onClick={onClose}>
       <div className="w-full min-w-0 max-w-5xl h-dvh sm:h-auto sm:max-h-[90vh] overflow-y-auto sm:overflow-hidden sm:rounded-2xl border-app-border sm:border bg-app-surface shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
         {/* Cabeçalho */}
         <div className="sticky top-0 z-10 sm:static flex items-start justify-between gap-4 px-3 sm:px-5 py-3 sm:py-4 border-b border-app-border bg-app-surface">
