@@ -415,7 +415,7 @@ export default function FechamentoClient() {
     //   dele foi pago dentro do período (pagamentos abatem primeiro o saldo
     //   anterior, como numa conta corrente).
     // O A Receber (valorPendente) é exatamente o mesmo de antes.
-    const rows: { espaco: string; socio: string; percentual: number; lucro: number; pendenteHerdado: number; quitadoAnterior: number; valorDevido: number; ajusteReservaObra: number; retirado: number; jaRepassado: number; valorPendente: number; pendenteFechado?: number }[] = []
+    const rows: { espaco: string; socio: string; percentual: number; lucro: number; pendenteHerdado: number; quitadoAnterior: number; quitadoComRetirada: number; valorDevido: number; ajusteReservaObra: number; retirado: number; jaRepassado: number; valorPendente: number; pendenteFechado?: number }[] = []
     for (const e of espacos) {
       // Só conta como "último fechamento" o que terminou ANTES do fim do
       // período em tela. Sem isso, ao abrir um período que já foi fechado
@@ -520,7 +520,7 @@ export default function FechamentoClient() {
         const jaRepassado = repassadoTotal - (quitadoAnterior - quitadoComRetirada)
         const valorDevido = cotaDoPeriodo + ajusteReservaObra
         rows.push({
-          espaco: e.nome, socio: s.nome, percentual: s.percentual, lucro: lucroADividir, pendenteHerdado, quitadoAnterior, valorDevido, ajusteReservaObra, retirado, jaRepassado,
+          espaco: e.nome, socio: s.nome, percentual: s.percentual, lucro: lucroADividir, pendenteHerdado, quitadoAnterior, quitadoComRetirada, valorDevido, ajusteReservaObra, retirado, jaRepassado,
           valorPendente: pendenteHerdado - quitadoAnterior + valorDevido - retirado - jaRepassado,
           pendenteFechado: snapshotDoPeriodo?.repasseSocios.find(r => r.socio === s.nome)?.valorPendente,
         })
@@ -1116,7 +1116,10 @@ export default function FechamentoClient() {
               nome={s.nome}
               totalAportes={s.totalAportes}
               totalRetiradas={s.totalRetiradas}
-              retiradasNoPeriodo={s.retiradasNoPeriodo}
+              // Retirada que pagou saldo de mês anterior (ex.: Zig, PIX de
+              // 07/10 ref. setembro) não é retirada deste mês — aparece à parte.
+              retiradasNoPeriodo={Math.max(0, s.retiradasNoPeriodo - repasseSociosRows.filter(r => r.socio === s.nome).reduce((t, r) => t + r.quitadoComRetirada, 0))}
+              pagoSaldoAnterior={repasseSociosRows.filter(r => r.socio === s.nome).reduce((t, r) => t + r.quitadoComRetirada, 0)}
               onVerAportes={() => setDrillDown({ tipo: 'aportes', titulo: `Aportes — ${s.nome}`, nomes: [s.nome] })}
               onVerRetiradas={() => setDrillDown({ tipo: 'retiradas', titulo: `Retiradas — ${s.nome}`, nomes: [s.nome] })}
             />
@@ -1530,11 +1533,12 @@ function ResumoStatAcionavel({ label, valor, cor, onVisualizar, onExportExcel, o
   )
 }
 
-function SocioResumoCard({ nome, totalAportes, totalRetiradas, retiradasNoPeriodo, onVerAportes, onVerRetiradas }: {
+function SocioResumoCard({ nome, totalAportes, totalRetiradas, retiradasNoPeriodo, pagoSaldoAnterior, onVerAportes, onVerRetiradas }: {
   nome: string
   totalAportes: number
   totalRetiradas: number
   retiradasNoPeriodo: number
+  pagoSaldoAnterior: number
   onVerAportes: () => void
   onVerRetiradas: () => void
 }) {
@@ -1551,7 +1555,10 @@ function SocioResumoCard({ nome, totalAportes, totalRetiradas, retiradasNoPeriod
         <div>
           <p className="text-app-subtle">Total de Retiradas <span className="text-[10px]">(desde o início)</span></p>
           <p className="font-semibold text-fuchsia-600">{formatCurrency(totalRetiradas)}</p>
-          <p className="mt-1 text-app-subtle">No período: <span className="font-medium text-fuchsia-600">{formatCurrency(retiradasNoPeriodo)}</span></p>
+          <p className="mt-1 text-app-subtle">Retirado neste mês: <span className="font-medium text-fuchsia-600">{formatCurrency(retiradasNoPeriodo)}</span></p>
+          {pagoSaldoAnterior > 0.005 && (
+            <p className="mt-0.5 text-app-subtle">Pagamento de saldo anterior: <span className="font-medium text-app-text2">{formatCurrency(pagoSaldoAnterior)}</span></p>
+          )}
         </div>
       </div>
       <div className="flex gap-2">
