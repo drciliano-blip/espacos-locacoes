@@ -25,6 +25,7 @@ import { useEventos } from '@/contexts/EventosContext'
 import { CATEGORIA_CONTA_LABEL, SUBCATEGORIA_LABEL } from '@/components/relatorios/LancamentosTables'
 import ExportarRelatorioButton from '@/components/relatorios/ExportarRelatorioButton'
 import FullTable from '@/components/shared/FullTable'
+import RelatorioFechamentoSimples from './RelatorioFechamentoSimples'
 import FundoCard from './FundoCard'
 import NovoFundoModal from './NovoFundoModal'
 import NovaReceitaModal from '@/components/pagamentos/NovaReceitaModal'
@@ -40,10 +41,6 @@ import Toast from '@/components/shared/Toast'
 function getDefaultFilters(): RelatorioFilters {
   const { inicio, fim } = getPeriodRange('anual')
   return { periodo: 'anual', dataInicio: inicio, dataFim: fim }
-}
-
-const PERIODO_LABELS: Record<string, string> = {
-  semanal: 'Semanal', mensal: 'Mensal', trimestral: 'Trimestral', semestral: 'Semestral', anual: 'Anual',
 }
 
 function rowFromReceita(r: Receita, dataEvento?: string): LancamentoSocioRow {
@@ -161,7 +158,6 @@ export default function FechamentoClient() {
     [espacosConfig, selectedSpaces],
   )
   const espacosLabel = espacoUnico ?? (selectedSpaces?.length ? selectedSpaces.join(', ') : 'Todos os espaços')
-  const periodoLabel = PERIODO_LABELS[filters.periodo] ?? filters.periodo
 
   const fechamento = useMemo(
     () => calcularFechamento(receitas, contasPagar, { selectedSpaces, dataInicio: filters.dataInicio, dataFim: filters.dataFim }, espacos, fundos, movimentacoes),
@@ -778,18 +774,8 @@ export default function FechamentoClient() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">
-      {/* Cabeçalho impresso — escondido na tela, só aparece no PDF exportado */}
-      <div className="hidden print:block mb-6 border-b pb-4">
-        <p className="text-xs text-gray-500 mb-1">Espaços &amp; Locações</p>
-        <h1 className="text-xl font-bold text-gray-900">Financeiro — {periodoLabel}</h1>
-        <p className="text-sm text-gray-600 mt-1">{espacosLabel}</p>
-        <p className="text-xs text-gray-400 mt-0.5">
-          Período (Resultado Operacional): {filters.dataInicio} → {filters.dataFim} &nbsp;·&nbsp; Gerado em{' '}
-          {new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-        </p>
-      </div>
-
-      <div className={printScope ? 'print:hidden space-y-5' : 'space-y-5'}>
+      {/* A tela nunca vai pro PDF — o PDF é o RelatorioFechamentoSimples abaixo. */}
+      <div className="print:hidden space-y-5">
         {/* Exportar Relatório — primeiro item da aba, exporta tudo que está
             disponível no Financeiro respeitando o filtro de espaço/período
             ativo (PDF via impressão do relatório completo abaixo; Excel com
@@ -1399,72 +1385,27 @@ export default function FechamentoClient() {
 
       </div>
 
-      {/* Relatório completo — só aparece na impressão/PDF, nunca na tela.
-          Cada tabela usa exatamente a mesma lista do "Visualizar" do card
-          equivalente, garantindo que o PDF bate com o que está na tela.
-          Só sai quando não há um "Exportar" de card específico em andamento
-          (printScope null) — senão sairia duplicado junto da lista restrita. */}
+      {/* PDF de "Exportar Relatório": relatório simples para o cliente (ver
+          RelatorioFechamentoSimples). Só sai quando não há um "Exportar" de
+          card específico em andamento (printScope null). */}
       {!printScope && (
-        <div className="hidden print:block space-y-4">
-          <FullTable
-            titulo="Receitas Operacionais" headers={['Data', 'Data do Evento', 'Descrição', 'Categoria', 'Espaço', 'Cliente', 'Valor', 'Status', 'Observações']}
-            rows={fechamento.entradasOperacionais.map(r => {
-              const de = dataEventoDaReceita(r)
-              return [r.data.split('-').reverse().join('/'), de ? de.split('-').reverse().join('/') : '—', r.descricao, r.categoriaNome, r.espaco ?? '—', r.cliente ?? '—', formatCurrency(r.valor), r.status, r.observacoes ?? '—']
+        <div className="hidden print:block">
+          <RelatorioFechamentoSimples
+            espacosLabel={espacosLabel}
+            dataInicio={filters.dataInicio}
+            dataFim={filters.dataFim}
+            totalReceitas={fechamento.totalEntradas}
+            totalDespesas={fechamento.totalSaidas}
+            resultado={fechamento.resultado}
+            socios={repasseSociosRows}
+            receitas={fechamento.entradasOperacionais}
+            despesas={fechamento.despesasOperacionais}
+            retiradas={retiradasSocioEscopo.filter(c => {
+              const d = dataEfetivaConta(c)
+              return (!filters.dataInicio || d >= filters.dataInicio) && (!filters.dataFim || d <= filters.dataFim)
             })}
-            totalLabel="Total" totalValor={formatCurrency(fechamento.totalEntradas)}
-          />
-          <FullTable
-            titulo="Despesas Operacionais" headers={['Data Vencimento', 'Descrição', 'Fornecedor', 'Categoria', 'Espaço', 'Valor', 'Status', 'Observações']}
-            rows={fechamento.despesasOperacionais.map(c => [c.dataVencimento.split('-').reverse().join('/'), c.descricao, c.fornecedor ?? '—', CATEGORIA_CONTA_LABEL[c.categoria] ?? c.categoria, c.espaco, formatCurrency(c.valor), c.status, c.observacoes ?? '—'])}
-            totalLabel="Total" totalValor={formatCurrency(fechamento.totalSaidas)}
-          />
-          <FullTable
-            titulo="Aporte Societário — Obra" headers={['Data', 'Sócio', 'Espaço', 'Descrição', 'Valor', 'Status']}
-            rows={aportesObraEscopo.map(r => [r.data.split('-').reverse().join('/'), r.socioResponsavel ?? '—', r.espaco ?? '—', r.descricao, formatCurrency(r.valor), r.status])}
-            totalLabel="Total acumulado" totalValor={formatCurrency(totalAportesObra)}
-          />
-          <FullTable
-            titulo="Despesas de Obra" headers={['Data Vencimento', 'Descrição', 'Fornecedor', 'Espaço', 'Valor', 'Status']}
-            rows={despesasObraEscopo.map(c => [c.dataVencimento.split('-').reverse().join('/'), c.descricao, c.fornecedor ?? '—', c.espaco, formatCurrency(c.valor), c.status])}
-            totalLabel="Total acumulado" totalValor={formatCurrency(totalDespesasObra)}
-          />
-          <FullTable
-            titulo="Fundo de Caixa" headers={['Tipo', 'Data', 'Descrição', 'Espaço', 'Valor', 'Status']}
-            rows={[
-              ...transferenciasFundoAllTime.map(c => ['Transferência', c.dataVencimento.split('-').reverse().join('/'), c.descricao, c.espaco, formatCurrency(c.valor), c.status]),
-              ...retornosFundoAllTime.map(r => ['Retorno', r.data.split('-').reverse().join('/'), r.descricao, r.espaco ?? '—', formatCurrency(r.valor), r.status]),
-            ]}
-            totalLabel="Saldo atual" totalValor={formatCurrency(fechamento.saldoFundoAtual)}
-          />
-          {fundosEmEscopo.length > 0 && (
-            <FullTable
-              titulo="Reservas Genéricas" headers={['Fundo', 'Espaço', 'Tipo', 'Data', 'Descrição', 'Valor']}
-              rows={fundosEmEscopo.flatMap(f => movimentacoes.filter(m => m.fundoId === f.id).map(m => [
-                f.nome, f.espaco ?? 'Empresa toda', m.tipo === 'entrada' ? 'Entrada' : 'Saída', m.data.split('-').reverse().join('/'), m.descricao ?? '—', formatCurrency(m.valor),
-              ]))}
-              totalLabel="Saldo atual" totalValor={formatCurrency(fechamento.totalReservasGenericas)}
-            />
-          )}
-          <FullTable
-            titulo="Aportes de Sócios" headers={['Data', 'Sócio', 'Espaço', 'Descrição', 'Valor', 'Status']}
-            rows={aportesSocioEscopo.map(r => [r.data.split('-').reverse().join('/'), r.socioResponsavel ?? '—', r.espaco ?? '—', r.descricao, formatCurrency(r.valor), r.status])}
-            totalLabel="Total acumulado" totalValor={formatCurrency(resumoPorSocio.porSocio.reduce((s, p) => s + p.totalAportes, 0))}
-          />
-          <FullTable
-            titulo="Retiradas de Sócios" headers={['Data', 'Sócio', 'Espaço', 'Descrição', 'Valor', 'Status', 'Origem']}
-            rows={retiradasSocioEscopo.map(c => [c.dataPagamento ?? c.dataVencimento, c.fornecedor ?? '—', c.espaco, c.descricao, formatCurrency(c.valor), c.status, origemRetiradaLabel(c)])}
-            totalLabel="Total acumulado" totalValor={formatCurrency(fechamento.totalRetiradasSocioAcumulado)}
-          />
-          <FullTable
-            titulo="Disponível para Distribuição — por Sócio" headers={['Espaço', 'Sócio', '%', 'Lucro do mês', 'Parte do mês', 'Retirado no mês', 'Repassado no mês', 'Saldo anterior', 'Pago do saldo anterior', 'A receber']}
-            rows={repasseSociosRows.map(r => [r.espaco, r.socio, `${r.percentual}%`, formatCurrency(r.lucro), formatCurrency(r.valorDevido), formatCurrency(r.retirado), formatCurrency(r.jaRepassado), formatCurrency(r.pendenteHerdado), formatCurrency(r.quitadoAnterior), formatCurrency(r.valorPendente)])}
-            totalLabel="Disponível total" totalValor={formatCurrency(fechamento.disponivelParaDistribuicao)}
-          />
-          <FullTable
-            titulo="Repasses Individuais" headers={['Data', 'Sócio', 'Espaço', 'Valor', 'Observações']}
-            rows={repassesEmEscopo.map(r => [r.data.split('-').reverse().join('/'), r.socioNome, r.espaco, formatCurrency(r.valor), r.observacoes ?? '—'])}
-            totalLabel="Total repassado" totalValor={formatCurrency(repassesEmEscopo.reduce((s, r) => s + r.valor, 0))}
+            repasses={repassesEmEscopo}
+            nomeCanonicoSocio={nomeCanonicoSocio}
           />
         </div>
       )}
