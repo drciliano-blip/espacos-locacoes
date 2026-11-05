@@ -56,6 +56,7 @@ interface ContaPagarRow {
   serie_id: string | null
   serie_numero: number | null
   serie_total: number | null
+  repasse_id: string | null
 }
 
 function fromRow(row: ContaPagarRow): ContaPagar {
@@ -82,6 +83,7 @@ function fromRow(row: ContaPagarRow): ContaPagar {
     serieId: row.serie_id ?? undefined,
     serieNumero: row.serie_numero ?? undefined,
     serieTotal: row.serie_total ?? undefined,
+    repasseId: row.repasse_id ?? undefined,
   }
 }
 

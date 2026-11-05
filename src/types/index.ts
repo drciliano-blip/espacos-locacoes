@@ -174,6 +174,9 @@ export interface ContaPagar {
   serieId?: string
   serieNumero?: number
   serieTotal?: number
+  // Retirada que só materializa um repasse já registrado (repasses_socios) —
+  // não é descontada de novo do sócio no fechamento.
+  repasseId?: string
 }
 
 // Feature 2: Usuário do sistema

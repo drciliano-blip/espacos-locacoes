@@ -189,6 +189,12 @@ export default function FechamentoClient() {
     if (selectedSpaces?.length && !selectedSpaces.includes(c.espaco)) return false
     return true
   }), [contasPagar, selectedSpaces])
+  // Retiradas que contam contra o sócio: tira as que só materializam um
+  // repasse já registrado num fechamento anterior (repasseId) — senão o mesmo
+  // valor era descontado duas vezes (ex.: Usine/Gruppo, repasse de 30/09 e
+  // Conta Paga de 23/10 "Retirada gruppo — referente a setembro"). A conta
+  // continua listada em "Retiradas de Sócios", com a origem indicando o vínculo.
+  const retiradasContaveisEscopo = useMemo(() => retiradasSocioEscopo.filter(c => !c.repasseId), [retiradasSocioEscopo])
 
   // Total de Aportes/Retiradas por sócio — soma TODOS os lançamentos pagos
   // (não só o último) dentro do escopo acima. Nunca substitui o histórico —
@@ -200,7 +206,7 @@ export default function FechamentoClient() {
   const resumoPorSocio = useMemo(() => {
     const porSocio = nomesSociosDisponiveis.map(nome => {
       const totalAportes = aportesSocioEscopo.filter(r => r.status === 'pago' && r.socioResponsavel && nomeCanonicoSocio(r.socioResponsavel) === nome).reduce((s, r) => s + r.valor, 0)
-      const retiradasDoSocio = retiradasSocioEscopo.filter(c => c.status === 'pago' && c.fornecedor && nomeCanonicoSocio(c.fornecedor) === nome)
+      const retiradasDoSocio = retiradasContaveisEscopo.filter(c => c.status === 'pago' && c.fornecedor && nomeCanonicoSocio(c.fornecedor) === nome)
       const totalRetiradas = retiradasDoSocio.reduce((s, c) => s + c.valor, 0)
       // Só as do período em tela — o total acima é desde sempre e, sozinho,
       // num relatório mensal parecia ser a retirada do mês.
@@ -215,14 +221,14 @@ export default function FechamentoClient() {
     // aqui em vez de simplesmente desaparecer da soma (ou, pior, ser dividida
     // automaticamente entre os sócios sem confirmação — ex: histórico só
     // registrado como "GCR" antes do sócio virar Camilo/Alex individuais).
-    const totalRetiradasNaoIdentificadas = retiradasSocioEscopo
+    const totalRetiradasNaoIdentificadas = retiradasContaveisEscopo
       .filter(c => c.status === 'pago' && (!c.fornecedor || !nomesSociosDisponiveis.includes(nomeCanonicoSocio(c.fornecedor))))
       .reduce((s, c) => s + c.valor, 0)
     const totalAportesNaoIdentificados = aportesSocioEscopo
       .filter(r => r.status === 'pago' && (!r.socioResponsavel || !nomesSociosDisponiveis.includes(nomeCanonicoSocio(r.socioResponsavel))))
       .reduce((s, r) => s + r.valor, 0)
     return { porSocio, totalRetiradasNaoIdentificadas, totalAportesNaoIdentificados }
-  }, [nomesSociosDisponiveis, aportesSocioEscopo, retiradasSocioEscopo, filters.dataInicio, filters.dataFim])
+  }, [nomesSociosDisponiveis, aportesSocioEscopo, retiradasContaveisEscopo, filters.dataInicio, filters.dataFim])
 
   // Linhas do drill-down (Ver Aportes/Ver Retiradas) — sempre organizadas por
   // data (receitas/contas já vêm ordenadas por data desc do contexto), só do(s)
@@ -460,7 +466,7 @@ export default function FechamentoClient() {
       // individualmente.
       const rateioColetivo = !ultimoFechamento && ESPACOS_RATEIO_COLETIVO_NO_1O_FECHAMENTO.includes(e.nome)
       const retiradasColetivas = !rateioColetivo ? 0
-        : contasPagar.filter(c => c.status === 'pago' && c.categoria === 'retirada_socio' && c.espaco === e.nome && !depoisDoFim(dataEfetivaConta(c)))
+        : contasPagar.filter(c => c.status === 'pago' && c.categoria === 'retirada_socio' && !c.repasseId && c.espaco === e.nome && !depoisDoFim(dataEfetivaConta(c)))
           .reduce((s, c) => s + c.valor, 0)
       const lucroADividir = lucro - retiradasColetivas
 
@@ -490,7 +496,7 @@ export default function FechamentoClient() {
           }
         }
         const retirado = rateioColetivo ? 0 : contasPagar
-          .filter(c => c.status === 'pago' && c.categoria === 'retirada_socio' && c.espaco === e.nome && c.fornecedor && nomeCanonicoSocio(c.fornecedor) === s.nome
+          .filter(c => c.status === 'pago' && c.categoria === 'retirada_socio' && !c.repasseId && c.espaco === e.nome && c.fornecedor && nomeCanonicoSocio(c.fornecedor) === s.nome
             && (ultimoFechamento ? dentroDaJanela(dataEfetivaConta(c)) : !depoisDoFim(dataEfetivaConta(c))))
           .reduce((sum, c) => sum + c.valor, 0)
         const jaRepassado = repasses

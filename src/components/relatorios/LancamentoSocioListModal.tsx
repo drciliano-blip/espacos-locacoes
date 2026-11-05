@@ -24,10 +24,13 @@ export interface LancamentoSocioRow {
   // Só preenchido pra retiradas — mostra se veio do "+ Retirada" (Financeiro
   // → Sócios) ou de uma conta lançada/paga em Contas a Pagar. Ajuda a
   // conferir de onde veio um valor quando o total do sócio parecer estranho.
-  origem?: 'Retirada Manual' | 'Conta Paga' | 'Origem não identificada'
+  origem?: 'Retirada Manual' | 'Conta Paga' | 'Origem não identificada' | 'Quita repasse já registrado'
 }
 
-export function origemRetiradaLabel(c: { origemLancamento?: 'retirada_manual' | 'contas_a_pagar' }): 'Retirada Manual' | 'Conta Paga' | 'Origem não identificada' {
+export function origemRetiradaLabel(c: { origemLancamento?: 'retirada_manual' | 'contas_a_pagar'; repasseId?: string }): 'Retirada Manual' | 'Conta Paga' | 'Origem não identificada' | 'Quita repasse já registrado' {
+  // Vinculada a um repasse de fechamento anterior: o sócio já teve esse valor
+  // descontado lá, então aqui ela não conta de novo.
+  if (c.repasseId) return 'Quita repasse já registrado'
   if (c.origemLancamento === 'retirada_manual') return 'Retirada Manual'
   if (c.origemLancamento === 'contas_a_pagar') return 'Conta Paga'
   return 'Origem não identificada'
