@@ -220,6 +220,10 @@ export function ContasPagarProvider({ children }: { children: ReactNode }) {
         evento_id: c.eventoId ?? null,
         origem_lancamento: c.origemLancamento ?? null,
         origem: c.origem ?? null,
+        // Só grava o vínculo com repasse quando quem chama trouxe o campo
+        // (objeto vindo de fromRow/espalhado da conta). Formulários que montam
+        // a conta do zero não têm a chave e, assim, nunca apagam o vínculo.
+        ...('repasseId' in c ? { repasse_id: c.repasseId ?? null } : {}),
       })
       .eq('id', c.id)
       .select(SELECT)

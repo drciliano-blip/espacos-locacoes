@@ -3,7 +3,10 @@
 import { useRef, useState } from 'react'
 import { X, Save, Landmark, Paperclip, Camera, Trash2 } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
-import { parseCurrencyBR, formatCurrency } from '@/lib/utils'
+import { parseCurrencyBR, formatCurrency, formatDate } from '@/lib/utils'
+import { useRepasses } from '@/contexts/RepassesContext'
+import { useContasPagar } from '@/contexts/ContasPagarContext'
+import { nomeCanonicoSocio } from '@/lib/socios-config'
 import { saveFile } from '@/lib/file-storage'
 import { DIVISAO_SOCIOS } from '@/lib/socios-config'
 import type { ContaPagar } from '@/types'
@@ -29,6 +32,13 @@ export default function EditarRetiradaSocioModal({ conta, onClose, onSave, onExc
   const [data, setData] = useState(conta.dataPagamento ?? conta.dataVencimento)
   const [descricao, setDescricao] = useState(conta.descricao)
   const [observacoes, setObservacoes] = useState(conta.observacoes ?? '')
+  // Retirada que só materializa um repasse já registrado (ex.: lucro do mês
+  // usado para pagar o aluguel de um evento — "Lucro de Sócio" na parcela —
+  // e depois o PIX sai do banco e é lançado aqui). Vinculada, ela continua
+  // registrada mas não é descontada de novo do sócio.
+  const [repasseId, setRepasseId] = useState(conta.repasseId ?? '')
+  const { repasses } = useRepasses()
+  const { contas } = useContasPagar()
   const [novoComprovante, setNovoComprovante] = useState<File | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const cameraRef = useRef<HTMLInputElement>(null)
@@ -39,6 +49,15 @@ export default function EditarRetiradaSocioModal({ conta, onClose, onSave, onExc
   const [erro, setErro] = useState<string | null>(null)
 
   const sociosDoEspaco = espaco ? (DIVISAO_SOCIOS[espaco] ?? []).map(s => s.nome) : []
+
+  const repassesDoSocio = repasses
+    .filter(r => r.espaco === espaco && socio && nomeCanonicoSocio(r.socioNome) === nomeCanonicoSocio(socio))
+    .sort((a, b) => b.data.localeCompare(a.data))
+  // Repasse que já está ligado a OUTRA retirada — avisa, para não ligar dois
+  // PIX ao mesmo repasse.
+  const vinculadoEmOutra = (id: string) => contas.some(c => c.id !== conta.id && c.repasseId === id)
+  const valorNum = parseCurrencyBR(valor)
+  const sugestao = !repasseId ? repassesDoSocio.find(r => Math.abs(r.valor - valorNum) < 0.01 && !vinculadoEmOutra(r.id)) : undefined
 
   const errors = {
     espaco: !espaco,
@@ -64,6 +83,7 @@ export default function EditarRetiradaSocioModal({ conta, onClose, onSave, onExc
         dataPagamento: data,
         fornecedor: socio,
         observacoes: observacoes.trim() || undefined,
+        repasseId: repasseId && repassesDoSocio.some(r => r.id === repasseId) ? repasseId : undefined,
       })
       if (novoComprovante) {
         try {
@@ -168,6 +188,36 @@ export default function EditarRetiradaSocioModal({ conta, onClose, onSave, onExc
               className={`w-full rounded-lg border ${submitted && errors.descricao ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
             />
           </div>
+
+          {repassesDoSocio.length > 0 && (
+            <div className="rounded-lg border border-app-border2/60 bg-app-surface2/40 p-2.5">
+              <label className="text-xs text-app-subtle mb-0.5 block">Este pagamento quita um repasse já registrado?</label>
+              <select
+                value={repasseId}
+                onChange={e => setRepasseId(e.target.value)}
+                className="w-full cursor-pointer rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
+              >
+                <option value="">Não — é uma retirada normal</option>
+                {repassesDoSocio.map(r => (
+                  <option key={r.id} value={r.id}>
+                    {formatDate(r.data)} · {formatCurrency(r.valor)}{r.observacoes ? ` · ${r.observacoes.replace(/\s+/g, ' ').slice(0, 60)}` : ''}{vinculadoEmOutra(r.id) ? ' (já ligado a outra retirada)' : ''}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-app-subtle mt-1">
+                Use quando o valor já foi descontado do sócio por um repasse (ex.: lucro usado para pagar o aluguel de um evento). Ligada ao repasse, esta retirada continua registrada, mas não é descontada de novo.
+              </p>
+              {sugestao && (
+                <button type="button" onClick={() => setRepasseId(sugestao.id)}
+                  className="mt-1.5 text-xs font-medium text-[#128C7E] hover:underline">
+                  Existe um repasse de mesmo valor em {formatDate(sugestao.data)} — ligar a ele?
+                </button>
+              )}
+              {repasseId && vinculadoEmOutra(repasseId) && (
+                <p className="text-xs text-amber-600 mt-1">Atenção: este repasse já está ligado a outra retirada.</p>
+              )}
+            </div>
+          )}
 
           <div>
             <label className="text-xs text-app-subtle mb-0.5 block">Observações</label>
