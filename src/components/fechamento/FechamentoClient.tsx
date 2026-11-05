@@ -405,7 +405,17 @@ export default function FechamentoClient() {
   // fechado continua com a conta acumulada de sempre, sem nenhuma mudança de
   // comportamento.
   const repasseSociosRows = useMemo(() => {
-    const rows: { espaco: string; socio: string; percentual: number; lucro: number; pendenteHerdado: number; valorDevido: number; ajusteReservaObra: number; retirado: number; jaRepassado: number; valorPendente: number; pendenteFechado?: number }[] = []
+    // Cada linha separa o que é do MÊS do que é de meses anteriores — o
+    // cliente lia o pagamento do saldo de setembro (ex.: PIX do Zig em 07/10)
+    // como "retirada de outubro" e o Valor Devido somando os dois meses como
+    // erro de cálculo. Agora:
+    //   valorDevido  = só a parte do sócio no lucro do período
+    //   retirado / jaRepassado = só o que foi pago por conta do período
+    //   pendenteHerdado = saldo em aberto de antes; quitadoAnterior = quanto
+    //   dele foi pago dentro do período (pagamentos abatem primeiro o saldo
+    //   anterior, como numa conta corrente).
+    // O A Receber (valorPendente) é exatamente o mesmo de antes.
+    const rows: { espaco: string; socio: string; percentual: number; lucro: number; pendenteHerdado: number; quitadoAnterior: number; valorDevido: number; ajusteReservaObra: number; retirado: number; jaRepassado: number; valorPendente: number; pendenteFechado?: number }[] = []
     for (const e of espacos) {
       // Só conta como "último fechamento" o que terminou ANTES do fim do
       // período em tela. Sem isso, ao abrir um período que já foi fechado
@@ -473,7 +483,7 @@ export default function FechamentoClient() {
       const ajusteObra = AJUSTE_RESERVA_OBRA[e.nome]
       for (const s of DIVISAO_SOCIOS[e.nome] ?? []) {
         const pendenteHerdado = ultimoFechamento?.repasseSocios.find(r => r.socio === s.nome)?.valorPendente ?? 0
-        const valorDevido = pendenteHerdado + lucroADividir * (s.percentual / 100)
+        const cotaDoPeriodo = lucroADividir * (s.percentual / 100)
         // Trupe Labels tem 0% de participação na obra: a reserva "Obra
         // Jussara" já foi descontada do `lucro` acima (é genérica, por
         // espaço), então devolve aqui o percentual dela sobre o valor
@@ -495,16 +505,23 @@ export default function FechamentoClient() {
             ajusteReservaObra = saldoFundoObra * (s.percentual / 100)
           }
         }
-        const retirado = rateioColetivo ? 0 : contasPagar
+        const retiradoTotal = rateioColetivo ? 0 : contasPagar
           .filter(c => c.status === 'pago' && c.categoria === 'retirada_socio' && !c.repasseId && c.espaco === e.nome && c.fornecedor && nomeCanonicoSocio(c.fornecedor) === s.nome
             && (ultimoFechamento ? dentroDaJanela(dataEfetivaConta(c)) : !depoisDoFim(dataEfetivaConta(c))))
           .reduce((sum, c) => sum + c.valor, 0)
-        const jaRepassado = repasses
+        const repassadoTotal = repasses
           .filter(r => r.espaco === e.nome && r.socioNome === s.nome && (ultimoFechamento ? dentroDaJanela(r.data) : !depoisDoFim(r.data)))
           .reduce((sum, r) => sum + r.valor, 0)
+        // Pagamentos abatem primeiro o saldo positivo de antes (retiradas
+        // primeiro, depois repasses); só o que sobra conta como pago do mês.
+        const quitadoAnterior = Math.min(Math.max(pendenteHerdado, 0), retiradoTotal + repassadoTotal)
+        const quitadoComRetirada = Math.min(retiradoTotal, quitadoAnterior)
+        const retirado = retiradoTotal - quitadoComRetirada
+        const jaRepassado = repassadoTotal - (quitadoAnterior - quitadoComRetirada)
+        const valorDevido = cotaDoPeriodo + ajusteReservaObra
         rows.push({
-          espaco: e.nome, socio: s.nome, percentual: s.percentual, lucro: lucroADividir, pendenteHerdado, valorDevido, ajusteReservaObra, retirado, jaRepassado,
-          valorPendente: valorDevido + ajusteReservaObra - retirado - jaRepassado,
+          espaco: e.nome, socio: s.nome, percentual: s.percentual, lucro: lucroADividir, pendenteHerdado, quitadoAnterior, valorDevido, ajusteReservaObra, retirado, jaRepassado,
+          valorPendente: pendenteHerdado - quitadoAnterior + valorDevido - retirado - jaRepassado,
           pendenteFechado: snapshotDoPeriodo?.repasseSocios.find(r => r.socio === s.nome)?.valorPendente,
         })
       }
@@ -582,7 +599,8 @@ export default function FechamentoClient() {
       disponivelDoEspaco: fechamento.disponivelDoEspaco,
       disponivelParaDistribuicao: fechamento.disponivelParaDistribuicao,
       repasseSocios: repasseSociosDoEspacoAtivo.map(r => ({
-        socio: r.socio, percentual: r.percentual, valorDevido: r.valorDevido, retirado: r.retirado, jaRepassado: r.jaRepassado, valorPendente: r.valorPendente,
+        socio: r.socio, percentual: r.percentual, pendenteAnterior: r.pendenteHerdado, quitadoAnterior: r.quitadoAnterior,
+        valorDevido: r.valorDevido, retirado: r.retirado, jaRepassado: r.jaRepassado, valorPendente: r.valorPendente,
       })),
       detalhes,
     })
@@ -613,8 +631,8 @@ export default function FechamentoClient() {
           ['= Disponível do Espaço', f.disponivelDoEspaco],
           ['= Disponível para Distribuição', f.disponivelParaDistribuicao],
           [],
-          ['Sócio', 'Percentual', 'Valor Devido', 'Retirado', 'Já Repassado', 'Pendente'],
-          ...f.repasseSocios.map(r => [r.socio, `${r.percentual}%`, r.valorDevido, r.retirado, r.jaRepassado, r.valorPendente]),
+          ['Sócio', 'Percentual', 'Parte do mês', 'Retirado no mês', 'Repassado no mês', 'Saldo anterior', 'Pago do saldo anterior', 'A receber'],
+          ...f.repasseSocios.map(r => [r.socio, `${r.percentual}%`, r.valorDevido, r.retirado, r.jaRepassado, r.pendenteAnterior ?? '', r.quitadoAnterior ?? '', r.valorPendente]),
         ],
       }],
       `fechamento-${f.espaco.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${f.dataInicio}-a-${f.dataFim}.xlsx`,
@@ -739,8 +757,8 @@ export default function FechamentoClient() {
     const repasseSheet: ExportSheet = {
       name: 'Disponível p Distribuição',
       rows: [
-        ['Espaço', 'Sócio', 'Percentual (%)', 'Disponível do Espaço', 'Pendente Anterior', 'Valor Devido', 'Retirado', 'Já Repassado', 'Valor Pendente'],
-        ...repasseSociosRows.map(r => [r.espaco, r.socio, r.percentual, r.lucro, r.pendenteHerdado, r.valorDevido, r.retirado, r.jaRepassado, r.valorPendente]),
+        ['Espaço', 'Sócio', '%', 'Lucro do mês', 'Parte do mês', 'Retirado no mês', 'Repassado no mês', 'Saldo anterior', 'Pago do saldo anterior', 'A receber'],
+        ...repasseSociosRows.map(r => [r.espaco, r.socio, r.percentual, r.lucro, r.valorDevido, r.retirado, r.jaRepassado, r.pendenteHerdado, r.quitadoAnterior, r.valorPendente]),
       ],
     }
 
@@ -1153,7 +1171,7 @@ export default function FechamentoClient() {
             repassado (RepassesContext) — mostra quanto ainda falta entregar
             a cada sócio, não só a participação bruta. */}
         <p className="text-xs text-app-subtle">
-          Espaços que já tiveram algum &quot;Fechar Período&quot; anterior: Valor Devido, Retirado e Já Repassado somam só o que aconteceu entre aquele fechamento e o fim do período filtrado acima — o Pendente dele entra como &quot;Pendente Anterior&quot;. Retirado e Já Repassado são só os do período; o total desde o início está nos cards acima.
+          <strong>Parte do mês</strong> = lucro do mês × % do sócio. <strong>Retirado / Repassado no mês</strong> = o que ele já recebeu por conta deste mês. <strong>Saldo anterior</strong> = o que tinha ficado em aberto de meses anteriores; <strong>Pago do saldo anterior</strong> = quanto desse saldo foi pago agora (pagamento de mês passado nunca aparece como retirada deste mês). <strong>A receber</strong> = Parte do mês − Retirado − Repassado + Saldo anterior − Pago do saldo anterior.
         </p>
         {divergenciasFechamento.length > 0 && (
           <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700">
@@ -1171,7 +1189,7 @@ export default function FechamentoClient() {
             <table className="w-full text-xs border-collapse">
               <thead>
                 <tr className="border-b border-app-border bg-app-surface2">
-                  {['Espaço', 'Sócio', '%', 'Disponível do Espaço', 'Pendente Anterior', 'Valor Devido', 'Retirado', 'Já Repassado', 'Pendente', ...(podeLancar ? [''] : [])].map((h, i) => (
+                  {['Espaço', 'Sócio', '%', 'Lucro do mês', 'Parte do mês', 'Retirado no mês', 'Repassado no mês', 'Saldo anterior', 'Pago do saldo anterior', 'A receber', ...(podeLancar ? [''] : [])].map((h, i) => (
                     <th key={h || `acao-${i}`} className="px-2 py-2 text-left font-medium text-app-subtle uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -1183,8 +1201,7 @@ export default function FechamentoClient() {
                     <td className="px-2 py-2 text-app-text2 whitespace-nowrap">{r.socio}</td>
                     <td className="px-2 py-2 text-app-text2 whitespace-nowrap">{r.percentual}%</td>
                     <td className="px-2 py-2 text-app-text2 whitespace-nowrap">{formatCurrency(r.lucro)}</td>
-                    <td className="px-2 py-2 text-app-text2 whitespace-nowrap">{formatCurrency(r.pendenteHerdado)}</td>
-                    <td className="px-2 py-2 text-app-text2 whitespace-nowrap">{formatCurrency(r.valorDevido)}</td>
+                    <td className="px-2 py-2 text-app-text whitespace-nowrap">{formatCurrency(r.valorDevido)}</td>
                     <td className="px-2 py-2 text-fuchsia-600 whitespace-nowrap">{formatCurrency(r.retirado)}</td>
                     <td className="px-2 py-2 whitespace-nowrap">
                       {r.jaRepassado > 0 ? (
@@ -1198,6 +1215,8 @@ export default function FechamentoClient() {
                         <span className="text-app-text2">{formatCurrency(r.jaRepassado)}</span>
                       )}
                     </td>
+                    <td className="px-2 py-2 text-app-text2 whitespace-nowrap">{formatCurrency(r.pendenteHerdado)}</td>
+                    <td className="px-2 py-2 text-app-text2 whitespace-nowrap">{formatCurrency(r.quitadoAnterior)}</td>
                     <td className={`px-2 py-2 font-semibold whitespace-nowrap ${r.valorPendente > 0.01 ? 'text-amber-500' : 'text-[#128C7E]'}`}>{formatCurrency(r.valorPendente)}</td>
                     {podeLancar && (
                       <td className="px-2 py-2 print-hidden whitespace-nowrap">
@@ -1435,8 +1454,8 @@ export default function FechamentoClient() {
             totalLabel="Total acumulado" totalValor={formatCurrency(fechamento.totalRetiradasSocioAcumulado)}
           />
           <FullTable
-            titulo="Disponível para Distribuição — por Sócio" headers={['Espaço', 'Sócio', '%', 'Disponível do Espaço', 'Pendente Anterior', 'Valor Devido', 'Retirado', 'Já Repassado', 'Pendente']}
-            rows={repasseSociosRows.map(r => [r.espaco, r.socio, `${r.percentual}%`, formatCurrency(r.lucro), formatCurrency(r.pendenteHerdado), formatCurrency(r.valorDevido), formatCurrency(r.retirado), formatCurrency(r.jaRepassado), formatCurrency(r.valorPendente)])}
+            titulo="Disponível para Distribuição — por Sócio" headers={['Espaço', 'Sócio', '%', 'Lucro do mês', 'Parte do mês', 'Retirado no mês', 'Repassado no mês', 'Saldo anterior', 'Pago do saldo anterior', 'A receber']}
+            rows={repasseSociosRows.map(r => [r.espaco, r.socio, `${r.percentual}%`, formatCurrency(r.lucro), formatCurrency(r.valorDevido), formatCurrency(r.retirado), formatCurrency(r.jaRepassado), formatCurrency(r.pendenteHerdado), formatCurrency(r.quitadoAnterior), formatCurrency(r.valorPendente)])}
             totalLabel="Disponível total" totalValor={formatCurrency(fechamento.disponivelParaDistribuicao)}
           />
           <FullTable

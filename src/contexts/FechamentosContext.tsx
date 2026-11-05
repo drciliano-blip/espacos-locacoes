@@ -9,6 +9,10 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 export interface RepasseSocioSnapshot {
   socio: string
   percentual: number
+  // Ausentes em fechamentos salvos antes de 05/11/2026 — nesses, valorDevido
+  // e retirado ainda incluem o saldo de meses anteriores.
+  pendenteAnterior?: number
+  quitadoAnterior?: number
   valorDevido: number
   retirado: number
   jaRepassado: number

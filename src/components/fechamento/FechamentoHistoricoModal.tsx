@@ -118,10 +118,12 @@ export default function FechamentoHistoricoModal({ fechamento: f, onClose }: Pro
                     <tr className="border-b border-app-border bg-app-surface2">
                       <th className="px-2 py-1.5 text-left font-medium text-app-subtle">Sócio</th>
                       <th className="px-2 py-1.5 text-right font-medium text-app-subtle">%</th>
-                      <th className="px-2 py-1.5 text-right font-medium text-app-subtle">Valor Devido</th>
-                      <th className="px-2 py-1.5 text-right font-medium text-app-subtle">Retirado</th>
-                      <th className="px-2 py-1.5 text-right font-medium text-app-subtle">Já Repassado</th>
-                      <th className="px-2 py-1.5 text-right font-medium text-app-subtle">Pendente</th>
+                      <th className="px-2 py-1.5 text-right font-medium text-app-subtle">Parte do mês</th>
+                      <th className="px-2 py-1.5 text-right font-medium text-app-subtle">Retirado no mês</th>
+                      <th className="px-2 py-1.5 text-right font-medium text-app-subtle">Repassado no mês</th>
+                      <th className="px-2 py-1.5 text-right font-medium text-app-subtle">Saldo anterior</th>
+                      <th className="px-2 py-1.5 text-right font-medium text-app-subtle">Pago do saldo anterior</th>
+                      <th className="px-2 py-1.5 text-right font-medium text-app-subtle">A receber</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-app-border/50">
@@ -132,6 +134,8 @@ export default function FechamentoHistoricoModal({ fechamento: f, onClose }: Pro
                         <td className="px-2 py-1.5 text-right text-app-text2">{formatCurrency(r.valorDevido)}</td>
                         <td className="px-2 py-1.5 text-right text-fuchsia-600">{formatCurrency(r.retirado)}</td>
                         <td className="px-2 py-1.5 text-right text-app-text2">{formatCurrency(r.jaRepassado)}</td>
+                        <td className="px-2 py-1.5 text-right text-app-text2">{r.pendenteAnterior === undefined ? '—' : formatCurrency(r.pendenteAnterior)}</td>
+                        <td className="px-2 py-1.5 text-right text-app-text2">{r.quitadoAnterior === undefined ? '—' : formatCurrency(r.quitadoAnterior)}</td>
                         <td className={`px-2 py-1.5 text-right font-semibold ${r.valorPendente > 0.01 ? 'text-amber-500' : 'text-[#128C7E]'}`}>{formatCurrency(r.valorPendente)}</td>
                       </tr>
                     ))}
