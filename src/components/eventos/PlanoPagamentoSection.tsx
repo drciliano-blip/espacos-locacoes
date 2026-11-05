@@ -8,6 +8,9 @@ import FileList from '@/components/shared/FileList'
 import CampoCompetencia, { mesCompetenciaLabel } from '@/components/shared/CampoCompetencia'
 import { getFiles, viewFile, type StoredFile } from '@/lib/file-storage'
 import { DIVISAO_SOCIOS } from '@/lib/socios-config'
+import { METODO_LUCRO_SOCIO, mesReferenciaLabel } from '@/lib/repasse-socio'
+import { useFechamentos } from '@/contexts/FechamentosContext'
+import { periodoFechado, ultimoDiaDoMesISO } from '@/lib/fechamento-lock'
 import type { Receita, ParcelaPlano, BaixaReceitaInput } from '@/contexts/ReceitasContext'
 
 const GREEN = '#25D366'
@@ -19,7 +22,17 @@ const statusStyles: Record<string, string> = {
   atrasado: 'bg-red-500/10 text-red-400 border-red-500/20',
 }
 const statusLabels: Record<string, string> = { pago: 'Pago', pendente: 'Pendente', atrasado: 'Atrasado' }
-const FORMAS_PAGAMENTO = ['PIX', 'Transferência', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Cheque', 'Repasse Sócio']
+const FORMAS_PAGAMENTO = ['PIX', 'Transferência', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Cheque', 'Repasse Sócio', METODO_LUCRO_SOCIO]
+
+// Todos os pares espaço/sócio — o lucro usado pode ser de outro espaço.
+const OPCOES_LUCRO_SOCIO = Object.entries(DIVISAO_SOCIOS).flatMap(([espaco, socios]) => socios.map(s => ({ espaco, socio: s.nome })))
+
+// Mês anterior ao da data (YYYY-MM) — padrão do "mês de referência": o
+// sócio normalmente usa o lucro do mês que acabou de fechar.
+function mesAnterior(iso: string): string {
+  const [a, m] = (iso || new Date().toISOString().slice(0, 10)).split('-').map(Number)
+  return m === 1 ? `${a - 1}-12` : `${a}-${String(m - 1).padStart(2, '0')}`
+}
 
 interface DraftParcela {
   numero: number
@@ -74,6 +87,9 @@ interface EditarParcelaForm {
   parcelaLabel: string
   socioRepasse: string
   dataCompetencia: string
+  // Forma "Lucro de Sócio": de onde sai o lucro (espaço|sócio) e de que mês.
+  lucroOrigem: string
+  lucroMes: string
 }
 
 function formFromParcela(p: Receita): EditarParcelaForm {
@@ -88,6 +104,8 @@ function formFromParcela(p: Receita): EditarParcelaForm {
     parcelaLabel: p.parcelaLabel ?? p.descricao,
     socioRepasse: p.socioResponsavel ?? '',
     dataCompetencia: p.dataCompetencia ?? '',
+    lucroOrigem: '',
+    lucroMes: mesAnterior(p.dataRecebimento || hojeISO()),
   }
 }
 
@@ -126,6 +144,15 @@ export function EditarParcelaModal({ parcela, dataEvento, onClose, onSalvar }: {
   }
 
   const sociosDoEspaco = DIVISAO_SOCIOS[parcela.espaco ?? ''] ?? []
+  const { fechamentos } = useFechamentos()
+  const usaLucroSocio = form.metodoPagamento === METODO_LUCRO_SOCIO
+  const [lucroEspaco, lucroSocio] = form.lucroOrigem.split('|')
+  // O repasse vai para o último dia do mês de referência. Se esse mês já foi
+  // fechado no espaço de origem, não dá para lançar lá: vai na data do
+  // pagamento e abate o "Saldo anterior" do sócio no próximo fechamento.
+  const fimMesRef = form.lucroMes ? ultimoDiaDoMesISO(`${form.lucroMes}-01`) : ''
+  const mesRefFechado = usaLucroSocio && !!lucroEspaco && !!fimMesRef && !!periodoFechado(fechamentos, lucroEspaco, fimMesRef)
+  const dataRepasseLucro = mesRefFechado ? (form.dataRecebimento || hojeISO()) : fimMesRef
 
   const parcialAtivo = podeParcial && parcial && form.status === 'pago'
   const errors = {
@@ -134,6 +161,7 @@ export function EditarParcelaModal({ parcela, dataEvento, onClose, onSalvar }: {
     dataRecebimento: form.status === 'pago' && !form.dataRecebimento,
     dataRecebimentoFutura: isDataFutura(form.dataRecebimento),
     socioRepasse: form.metodoPagamento === 'Repasse Sócio' && !form.socioRepasse,
+    lucroOrigem: usaLucroSocio && (!form.lucroOrigem || !form.lucroMes),
     valorRecebido: parcialAtivo && (parseCurrencyBR(valorRecebido) <= 0 || parseCurrencyBR(valorRecebido) >= parseCurrencyBR(form.valor)),
   }
   const hasErrors = Object.values(errors).some(Boolean)
@@ -159,7 +187,8 @@ export function EditarParcelaModal({ parcela, dataEvento, onClose, onSalvar }: {
         comprovanteInstituicao: parcela.comprovanteInstituicao,
         comprovanteIdentificador: parcela.comprovanteIdentificador,
         parcelaLabel: parcialAtivo ? `${labelBase || 'Parcela'} (parcial)` : (form.parcelaLabel.trim() || undefined),
-        socioRepasse: form.metodoPagamento === 'Repasse Sócio' ? form.socioRepasse : undefined,
+        socioRepasse: form.metodoPagamento === 'Repasse Sócio' ? form.socioRepasse : usaLucroSocio ? lucroSocio : undefined,
+        lucroSocio: usaLucroSocio ? { espaco: lucroEspaco, socio: lucroSocio, mesReferencia: form.lucroMes, dataRepasse: dataRepasseLucro } : undefined,
         dataCompetencia: form.dataCompetencia || null,
       })
       onClose()
@@ -301,6 +330,43 @@ export function EditarParcelaModal({ parcela, dataEvento, onClose, onSalvar }: {
             </div>
           )}
 
+          {usaLucroSocio && (
+            <div className="space-y-2 rounded-lg border border-app-border2/60 bg-app-surface2/40 p-2.5">
+              <div>
+                <label className="text-xs text-app-subtle mb-0.5 block">
+                  Lucro de qual sócio / espaço<span className="text-red-400 ml-0.5">*</span>
+                </label>
+                <select
+                  value={form.lucroOrigem}
+                  onChange={e => set('lucroOrigem', e.target.value)}
+                  className={`w-full cursor-pointer rounded-lg border ${submitted && errors.lucroOrigem ? 'border-red-500/50' : 'border-app-border2'} bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none`}
+                >
+                  <option value="">— Selecione —</option>
+                  {OPCOES_LUCRO_SOCIO.map(o => <option key={`${o.espaco}|${o.socio}`} value={`${o.espaco}|${o.socio}`}>{o.socio} — lucro do {o.espaco}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-app-subtle mb-0.5 block">
+                  Lucro de qual mês<span className="text-red-400 ml-0.5">*</span>
+                </label>
+                <input
+                  type="month"
+                  value={form.lucroMes}
+                  onChange={e => set('lucroMes', e.target.value)}
+                  className="w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none"
+                />
+              </div>
+              {lucroEspaco && form.lucroMes && (
+                <p className="text-xs text-app-subtle">
+                  Ao salvar como pago, registra um repasse de {formatCurrency(parseCurrencyBR(form.valor) || 0)} para {lucroSocio} no {lucroEspaco}
+                  {mesRefFechado
+                    ? <> em {formatDate(dataRepasseLucro)}. {mesReferenciaLabel(form.lucroMes)} do {lucroEspaco} já está fechado: o valor abate o saldo que ficou para {lucroSocio} desse mês, sem aparecer como retirada do mês seguinte.</>
+                    : <> em {formatDate(dataRepasseLucro)}, descontando do que ele tem a receber de {mesReferenciaLabel(form.lucroMes)}. Não aparece como retirada de outro mês.</>}
+                </p>
+              )}
+            </div>
+          )}
+
           <div>
             <label className="text-xs text-app-subtle mb-0.5 block">Observações</label>
             <textarea
@@ -344,7 +410,7 @@ export function EditarParcelaModal({ parcela, dataEvento, onClose, onSalvar }: {
                 ? <p className="text-xs text-red-400">A data de pagamento não pode ser futura — confira o ano digitado.</p>
                 : errors.valorRecebido
                 ? <p className="text-xs text-red-400">No pagamento parcial, o valor recebido precisa ser maior que zero e menor que o valor da parcela.</p>
-                : <p className="text-xs text-red-400">Preencha os campos obrigatórios (valor, vencimento{form.status === 'pago' ? ', data de pagamento' : ''}{form.metodoPagamento === 'Repasse Sócio' ? ', sócio' : ''}).</p>}
+                : <p className="text-xs text-red-400">Preencha os campos obrigatórios (valor, vencimento{form.status === 'pago' ? ', data de pagamento' : ''}{form.metodoPagamento === 'Repasse Sócio' ? ', sócio' : ''}{usaLucroSocio ? ', sócio e mês do lucro' : ''}).</p>}
             </div>
           )}
         </div>

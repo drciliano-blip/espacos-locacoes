@@ -209,6 +209,12 @@ export interface BaixaReceitaInput {
   // já existente e usada até aqui só por aportes/retiradas. Ver
   // src/lib/repasse-socio.ts pra quem consome isso pra gerar o repasse.
   socioRepasse?: string
+  // Parcela paga com a parte do lucro que um sócio tem a receber em OUTRO (ou
+  // no mesmo) espaço — ex.: Zig usa o lucro de outubro da Usine para pagar o
+  // aluguel de um evento dele no Espaço Solon. Gera um repasse para o sócio no
+  // espaço de origem (src/lib/repasse-socio.ts), que zera/abate o que ele tem
+  // a receber lá sem aparecer como retirada do mês.
+  lucroSocio?: { espaco: string; socio: string; mesReferencia: string; dataRepasse: string }
   // Pagamento parcial: o cliente pagou só `valor`; a diferença vira uma nova
   // parcela pendente "(restante)" no mesmo evento, com o mesmo vencimento.
   valorRestante?: number
