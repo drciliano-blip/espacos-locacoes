@@ -16,6 +16,7 @@ import {
   Users,
   Calculator,
   BadgeCheck,
+  ChefHat,
   X,
 } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
@@ -36,6 +37,8 @@ const navItemsBefore = [
 ]
 
 const navItemsAfter = [
+  // Negócio separado dos espaços (ver src/components/buffet/BuffetClient.tsx).
+  { href: '/buffet',   label: 'Buffet EL',  icon: ChefHat, page: 'buffet' },
   { href: '/eventos',  label: 'Eventos e Contratos',  icon: FileText, page: 'eventos' },
   { href: '/usuarios', label: 'Usuários', icon: Users,    page: 'usuarios' },
 ]
