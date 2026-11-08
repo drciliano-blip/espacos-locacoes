@@ -42,3 +42,6 @@ next-env.d.ts
 
 # Screenshots de teste
 *.png
+# …exceto os ícones do app (tela de início)
+!src/app/apple-icon.png
+!public/icons/*.png

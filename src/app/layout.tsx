@@ -8,6 +8,9 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Espaços & Locações",
   description: "Painel Administrativo",
+  // Nome que aparece embaixo do ícone na tela de início do iPhone ("Espaços
+  // & Locações" inteiro é cortado pelo iOS).
+  appleWebApp: { title: "Espaços", capable: true, statusBarStyle: "default" },
 };
 
 export default function RootLayout({

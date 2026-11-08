@@ -62,5 +62,8 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  // Ícones e manifest ficam fora: o celular os busca sem sessão ao "Adicionar
+  // à Tela de Início" e, logado, o controle por página redirecionaria (o
+  // primeiro segmento, ex. "apple-icon.png", não é uma permissão).
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|apple-icon.png|manifest.webmanifest|icons/).*)'],
 }
