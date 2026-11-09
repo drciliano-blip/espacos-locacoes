@@ -1,11 +1,49 @@
 'use client'
 
-import { useState } from 'react'
-import { Library, ChevronDown, ChevronUp, Tag } from 'lucide-react'
-import { MODELOS_CONTRATO } from '@/lib/contract-templates'
+// "Contratos Espaços e Locação" — as minutas oficiais de cada espaço (PDF
+// anexado em Espaços → <espaço> → Documentos, categoria minuta_*). São elas
+// que o "Gerar contrato" usa como base. Os dois modelos genéricos que ficavam
+// aqui saíram da lista em 09/11/2026, a pedido do cliente; continuam só como
+// reserva interna do gerador, para um espaço sem minuta anexada.
+
+import { useEffect, useState } from 'react'
+import { Library, Eye, Download, FileText } from 'lucide-react'
+import { getFiles, viewFile, downloadFile, formatFileSize, type StoredFile } from '@/lib/file-storage'
+import { formatDate, mensagemDeErro } from '@/lib/utils'
+
+const TIPO_LABEL: Record<string, string> = {
+  minuta_locacao: 'Locação — sem staff',
+  minuta_locacao_staff: 'Locação — com staff',
+  minuta_parceria: 'Parceria',
+}
 
 export default function BibliotecaContratos() {
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [minutas, setMinutas] = useState<StoredFile[]>([])
+  const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState<string | null>(null)
+
+  useEffect(() => {
+    let vivo = true
+    getFiles({ module: 'espacos' })
+      .then(arqs => { if (vivo) setMinutas(arqs.filter(f => f.categoria?.startsWith('minuta_'))) })
+      .catch(e => { if (vivo) setErro(mensagemDeErro(e, 'Não foi possível carregar as minutas.')) })
+      .finally(() => { if (vivo) setLoading(false) })
+    return () => { vivo = false }
+  }, [])
+
+  // Só a mais recente de cada espaço/tipo — é a que o gerador usa.
+  const atuais = Object.values(
+    minutas.reduce<Record<string, StoredFile>>((acc, f) => {
+      const k = `${f.entityName}|${f.categoria}`
+      if (!acc[k] || f.uploadedAt > acc[k].uploadedAt) acc[k] = f
+      return acc
+    }, {}),
+  )
+  const porEspaco = atuais.reduce<Record<string, StoredFile[]>>((acc, f) => {
+    (acc[f.entityName] ??= []).push(f)
+    return acc
+  }, {})
+  const espacos = Object.keys(porEspaco).sort((a, b) => a.localeCompare(b, 'pt-BR'))
 
   return (
     <div className="space-y-4">
@@ -14,38 +52,38 @@ export default function BibliotecaContratos() {
           <Library className="h-4 w-4 text-[#25D366]" />
         </div>
         <div>
-          <p className="text-sm font-semibold text-app-text">{MODELOS_CONTRATO.length} modelos cadastrados</p>
-          <p className="text-xs text-app-muted">Escolhidos por tipo de minuta ao gerar um contrato</p>
+          <p className="text-sm font-semibold text-app-text">Contratos Espaços e Locação</p>
+          <p className="text-xs text-app-muted">
+            {loading ? 'Carregando…' : `${atuais.length} minutas oficiais em ${espacos.length} espaços — base usada ao gerar um contrato`}
+          </p>
         </div>
       </div>
 
-      <div className="space-y-2">
-        {MODELOS_CONTRATO.map(modelo => (
-          <div key={modelo.id} className="rounded-lg border border-app-border2/50 bg-app-surface2/40 overflow-hidden">
-            <button
-              onClick={() => setExpandedId(id => id === modelo.id ? null : modelo.id)}
-              className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left hover:bg-app-surface2/30 transition-colors"
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-app-text">{modelo.nome}</p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="flex items-center gap-1 text-xs text-app-subtle">
-                    <Tag className="h-3 w-3" />
-                    {modelo.tipoMinuta === 'locacao' ? 'Locação' : 'Parceria'}
-                  </span>
-                  <span className="text-xs text-app-subtle">· {modelo.variaveis.length} campos variáveis</span>
-                </div>
-              </div>
-              {expandedId === modelo.id ? <ChevronUp className="h-3.5 w-3.5 text-app-subtle shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 text-app-subtle shrink-0" />}
-            </button>
+      {erro && <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600">{erro}</p>}
 
-            {expandedId === modelo.id && (
-              <div className="px-4 pb-4 pt-1 border-t border-app-border/50">
-                <pre className="whitespace-pre-wrap text-xs text-app-text2 bg-app-surface rounded-lg border border-app-border2/50 p-3 max-h-96 overflow-y-auto font-sans">
-                  {modelo.texto}
-                </pre>
-              </div>
-            )}
+      {!loading && espacos.length === 0 && !erro && (
+        <p className="rounded-lg border border-dashed border-app-border2 p-6 text-center text-sm text-app-subtle">
+          Nenhuma minuta anexada. Anexe em Espaços → (espaço) → Documentos.
+        </p>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {espacos.map(espaco => (
+          <div key={espaco} className="rounded-lg border border-app-border2/50 bg-app-surface2/40 p-3 space-y-2">
+            <p className="text-sm font-semibold text-app-text">{espaco}</p>
+            {porEspaco[espaco]
+              .sort((a, b) => (a.categoria ?? '').localeCompare(b.categoria ?? ''))
+              .map(f => (
+                <div key={f.id} className="flex items-center gap-2 rounded-md border border-app-border2/50 bg-app-surface px-2.5 py-2">
+                  <FileText className="h-4 w-4 shrink-0 text-app-subtle" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-app-text">{TIPO_LABEL[f.categoria ?? ''] ?? f.categoria}</p>
+                    <p className="truncate text-[11px] text-app-subtle">{f.name} · {formatFileSize(f.size)} · atualizada em {formatDate(f.uploadedAt.slice(0, 10))}</p>
+                  </div>
+                  <button onClick={() => viewFile(f.id)} title="Ver" className="rounded-md p-1.5 text-app-subtle hover:bg-app-surface2 hover:text-[#128C7E]"><Eye className="h-4 w-4" /></button>
+                  <button onClick={() => downloadFile(f.id)} title="Baixar" className="rounded-md p-1.5 text-app-subtle hover:bg-app-surface2 hover:text-[#128C7E]"><Download className="h-4 w-4" /></button>
+                </div>
+              ))}
           </div>
         ))}
       </div>

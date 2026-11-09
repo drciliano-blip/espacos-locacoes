@@ -1,4 +1,6 @@
-// Biblioteca de Contratos — modelos por tipo de minuta (não mais travados por espaço)
+// Modelos genéricos de reserva do "Gerar contrato" — usados só quando o espaço
+// não tem minuta oficial anexada. Não aparecem mais na aba "Contratos Espaços e
+// Locação" (09/11/2026), que lista as minutas reais de cada espaço.
 
 export type TipoMinuta = 'locacao' | 'parceria'
 

@@ -10,7 +10,7 @@ type SubTab = 'funcionarios' | 'biblioteca' | 'fichas'
 
 const SUB_TABS: { key: SubTab; label: string; Icon: typeof Users }[] = [
   { key: 'funcionarios', label: 'Documentos de Funcionários', Icon: Users },
-  { key: 'biblioteca',   label: 'Biblioteca de Contratos',    Icon: Library },
+  { key: 'biblioteca',   label: 'Contratos Espaços e Locação', Icon: Library },
   { key: 'fichas',       label: 'Fichas recebidas',           Icon: Inbox },
 ]
 
