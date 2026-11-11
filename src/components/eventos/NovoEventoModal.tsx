@@ -554,6 +554,15 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, preEvento, 
     setTextoFicha('')
   }
 
+  // Mesmo dia/mês no ano corrente, se ainda não passou — sugerido no aviso
+  // de data passada, que quase sempre é o ano digitado errado.
+  const dataCorrigidaAnoAtual = (() => {
+    const hoje = new Date().toISOString().split('T')[0]
+    if (!draft.data || draft.data >= hoje) return null
+    const candidata = `${hoje.slice(0, 4)}${draft.data.slice(4)}`
+    return candidata >= hoje ? candidata : null
+  })()
+
   function handleSave() {
     setSubmitted(true)
     setSaveError(null)
@@ -1176,8 +1185,18 @@ export default function NovoEventoModal({ espacoPadrao, fichaOrigem, preEvento, 
             <AlertTriangle className="h-6 w-6 text-amber-500 mx-auto" />
             <p className="text-sm font-semibold text-app-text">Essa data já passou</p>
             <p className="text-xs text-app-muted">
-              O evento está sendo cadastrado para {formatDate(draft.data)}, uma data anterior a hoje. Confirma mesmo assim?
+              O evento está sendo cadastrado para <strong className="text-app-text">{formatDate(draft.data)}</strong>, uma data anterior a hoje. Confirma mesmo assim?
             </p>
+            {dataCorrigidaAnoAtual && (
+              // Erro mais comum: dia/mês certos e o ano errado (ex.: 13/11/2024
+              // em vez de 2026) — confirmar salvava o evento anos atrás.
+              <button
+                onClick={() => { setDraft(d => ({ ...d, data: dataCorrigidaAnoAtual })); setAvisoDataPassadaAberto(false) }}
+                className="w-full rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-500/20 transition-colors"
+              >
+                Corrigir para {formatDate(dataCorrigidaAnoAtual)}
+              </button>
+            )}
             <div className="flex justify-center gap-2">
               <button
                 onClick={() => setAvisoDataPassadaAberto(false)}
