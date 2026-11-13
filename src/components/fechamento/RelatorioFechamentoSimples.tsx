@@ -59,6 +59,15 @@ function tituloPeriodo(inicio: string, fim: string): string {
   return `${br(inicio)} a ${br(fim)}`
 }
 
+// "outubro" quando o período é um mês fechado; senão "o período".
+function nomeDoMes(inicio: string, fim: string): string {
+  const t = tituloPeriodo(inicio, fim)
+  return /^[A-Za-zçÇ]+\/\d{4}$/.test(t) ? MESES[Number(inicio.split('-')[1]) - 1] : 'o período'
+}
+
+// Sem "-R$ 0,00" quando o valor é zero com sinal ou resto de arredondamento.
+const dinheiro = (v: number) => formatCurrency(Math.abs(v) < 0.005 ? 0 : v)
+
 function tipoDespesa(c: ContaPagar): string {
   if (c.categoria === 'financeiro') return 'Impostos e encargos'
   return SUBCATEGORIA_LABEL[c.subcategoria] ?? 'Outros'
@@ -95,9 +104,9 @@ export default function RelatorioFechamentoSimples(p: Props) {
     const resto = restanteAnterior.get(chave) ?? 0
     const usado = Math.min(resto, valor)
     restanteAnterior.set(chave, resto - usado)
-    if (usado < 0.005) return 'Deste mês'
+    if (usado < 0.005) return 'Mês atual'
     if (valor - usado < 0.005) return 'Saldo de meses anteriores'
-    return `${formatCurrency(usado)} de saldo anterior + ${formatCurrency(valor - usado)} deste mês`
+    return `${formatCurrency(usado)} de saldo anterior + ${formatCurrency(valor - usado)} do mês atual`
   }
   const retiradasPagas = p.retiradas.filter(c => c.status === 'pago')
     .sort((a, b) => (a.dataPagamento ?? a.dataVencimento).localeCompare(b.dataPagamento ?? b.dataVencimento))
@@ -114,7 +123,7 @@ export default function RelatorioFechamentoSimples(p: Props) {
   }
   pagamentos.sort((a, b) => a.data.localeCompare(b.data))
 
-  const notasSaldo = p.socios.filter(s => s.quitadoAnterior > 0.005)
+  const nomeMes = nomeDoMes(p.dataInicio, p.dataFim)
 
   return (
     <div className="text-gray-900 text-[11px] leading-snug space-y-6">
@@ -137,44 +146,61 @@ export default function RelatorioFechamentoSimples(p: Props) {
 
       {p.socios.length > 0 && (
         <section className="break-inside-avoid">
-          <h2 className="text-sm font-bold mb-2">2. Divisão entre os sócios</h2>
+          <h2 className="text-sm font-bold mb-2">2. Quanto cada sócio vai receber</h2>
+          {/* Conta corrente por sócio, numa linha só: o que vinha de antes,
+              a parte do mês, tudo o que já foi pago no mês (sem separar
+              "deste mês" de "saldo anterior", que confundia — o Camilo
+              aparecia com "já recebeu 0" tendo recebido R$ 29 mil) e o que
+              falta. Mesmos números da tela: Falta = pendenteHerdado +
+              valorDevido − (retirado + repassado no período). */}
           <table className="w-full border-collapse">
             <thead>
               <tr className="border-b border-gray-900 text-left">
                 {variosEspacos && <th className="py-1 pr-2">Espaço</th>}
                 <th className="py-1 pr-2">Sócio</th>
                 <th className="py-1 pr-2 text-right">%</th>
-                <th className="py-1 pr-2 text-right">Parte do mês</th>
-                <th className="py-1 pr-2 text-right">Já recebeu deste mês</th>
-                <th className="py-1 pr-2 text-right">Saldo de meses anteriores</th>
-                <th className="py-1 text-right">A receber</th>
+                <th className="py-1 pr-2 text-right">Saldo que vinha de antes</th>
+                <th className="py-1 pr-2 text-right">(+) Parte do lucro de {nomeMes}</th>
+                <th className="py-1 pr-2 text-right">(−) Já pago em {nomeMes}</th>
+                <th className="py-1 text-right">= Falta receber</th>
               </tr>
             </thead>
             <tbody>
               {p.socios.map(s => {
-                const saldoAnteriorEmAberto = s.pendenteHerdado - s.quitadoAnterior
+                const pagoNoMes = s.quitadoAnterior + s.retirado + s.jaRepassado
                 return (
                   <tr key={`${s.espaco}-${s.socio}`} className="border-b border-gray-200">
                     {variosEspacos && <td className="py-1 pr-2">{s.espaco}</td>}
                     <td className="py-1 pr-2 font-medium">{s.socio}</td>
                     <td className="py-1 pr-2 text-right">{s.percentual}%</td>
-                    <td className="py-1 pr-2 text-right">{formatCurrency(s.valorDevido)}</td>
-                    <td className="py-1 pr-2 text-right">{formatCurrency(s.retirado + s.jaRepassado)}</td>
-                    <td className="py-1 pr-2 text-right">{formatCurrency(Math.abs(saldoAnteriorEmAberto) < 0.005 ? 0 : saldoAnteriorEmAberto)}</td>
-                    <td className="py-1 text-right font-bold">{formatCurrency(Math.abs(s.valorPendente) < 0.005 ? 0 : s.valorPendente)}</td>
+                    <td className="py-1 pr-2 text-right">{dinheiro(s.pendenteHerdado)}</td>
+                    <td className="py-1 pr-2 text-right">{dinheiro(s.valorDevido)}</td>
+                    <td className="py-1 pr-2 text-right">{dinheiro(pagoNoMes)}</td>
+                    <td className="py-1 text-right font-bold text-[12px]">{dinheiro(s.valorPendente)}</td>
                   </tr>
                 )
               })}
+              <tr className="font-bold">
+                <td className="py-1" colSpan={variosEspacos ? 6 : 5}>Total a pagar aos sócios</td>
+                <td className="py-1 text-right text-[12px]">{dinheiro(p.socios.reduce((t, s) => t + Math.max(0, s.valorPendente), 0))}</td>
+              </tr>
             </tbody>
           </table>
+          <div className="mt-2 rounded border border-gray-900 p-2 space-y-0.5">
+            {p.socios.map(s => (
+              <p key={`r-${s.espaco}-${s.socio}`} className="text-[12px]">
+                <span className="font-bold">{s.socio}{variosEspacos ? ` (${s.espaco})` : ''}:</span>{' '}
+                {s.valorPendente > 0.005
+                  ? <>recebe <span className="font-bold">{dinheiro(s.valorPendente)}</span></>
+                  : s.valorPendente < -0.005
+                    ? <>recebeu {dinheiro(-s.valorPendente)} a mais — esse valor é descontado no próximo mês</>
+                    : <>nada a receber — está quite</>}
+              </p>
+            ))}
+          </div>
           <p className="mt-1 text-[10px] text-gray-500">
-            Parte do mês = lucro do mês ({formatCurrency(p.socios[0].lucro)}) × % do sócio. A receber = Parte do mês − Já recebeu + Saldo de meses anteriores.
+            Parte do lucro = lucro do mês ({formatCurrency(p.socios[0].lucro)}) × % do sócio. Saldo que vinha de antes = o que ficou a receber nos meses anteriores (negativo = o sócio tinha recebido a mais). Já pago = todas as retiradas e repasses do mês, listados no item 5.
           </p>
-          {notasSaldo.map(s => (
-            <p key={`n-${s.espaco}-${s.socio}`} className="text-[10px] text-gray-500">
-              {s.socio}: {formatCurrency(s.quitadoAnterior)} pagos neste mês eram saldo de meses anteriores — não contam como retirada deste mês.
-            </p>
-          ))}
         </section>
       )}
 
