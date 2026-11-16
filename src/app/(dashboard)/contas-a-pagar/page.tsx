@@ -768,6 +768,29 @@ function ContaFormModal({ conta, vencimentoInicial, onClose, onSave }: ContaForm
   const [erro, setErro] = useState<string | null>(null)
   const [colarTextoAberto, setColarTextoAberto] = useState(false)
   const [textoWhatsapp, setTextoWhatsapp] = useState('')
+  const { contas: todasContas } = useContasPagar()
+  // Dados de pagamento lidos do anexo (quando é um comprovante) e o hash do
+  // arquivo — só servem pra avisar de um possível lançamento já existente.
+  const [extraidoPagamento, setExtraidoPagamento] = useState<{ identificador: string | null; dataPagamento: string | null; horaPagamento: string | null } | null>(null)
+  const [hashAnexo, setHashAnexo] = useState<string | null>(null)
+  const [dupArquivo, setDupArquivo] = useState<PossivelDuplicata | null>(null)
+
+  // Aviso (não bloqueia o salvar) quando o que está sendo lançado parece já
+  // existir — só em conta nova; editar uma conta compara com ela mesma.
+  const possivelDuplicata = useMemo<PossivelDuplicata | null>(() => {
+    if (isEdit) return null
+    if (dupArquivo) return dupArquivo
+    return encontrarPossivelDuplicata(todasContas, {
+      valor: form.valor ? parseCurrencyBR(form.valor) : undefined,
+      identificador: extraidoPagamento?.identificador,
+      dataPagamento: extraidoPagamento?.dataPagamento,
+      horaPagamento: extraidoPagamento?.horaPagamento,
+      espaco: form.espaco,
+      fornecedor: form.fornecedor,
+      dataVencimento: form.dataVencimento,
+      incluirMesmoMes: true,
+    })
+  }, [isEdit, dupArquivo, todasContas, form.valor, form.espaco, form.fornecedor, form.dataVencimento, extraidoPagamento])
 
   const subOpts = SUBCATEGORIAS
 
@@ -784,6 +807,14 @@ function ContaFormModal({ conta, vencimentoInicial, onClose, onSave }: ContaForm
       if (!res.ok || data.error) {
         setErro(data.error ?? 'Não foi possível ler o conteúdo com a IA.')
         return
+      }
+
+      if (data.identificadorTransacao || (data.dataPagamento && data.horaPagamento)) {
+        setExtraidoPagamento({
+          identificador: data.identificadorTransacao,
+          dataPagamento: data.dataPagamento ? parseDataBR(data.dataPagamento) || null : null,
+          horaPagamento: data.horaPagamento,
+        })
       }
 
       if (!data.vencimento && !data.valor && !data.fornecedor && !data.descricao) {
@@ -822,7 +853,24 @@ function ContaFormModal({ conta, vencimentoInicial, onClose, onSave }: ContaForm
 
   async function handleAnexoSelecionado(file: File | null) {
     setPendingFile(file)
+    setHashAnexo(null)
+    setDupArquivo(null)
+    setExtraidoPagamento(null)
     if (!file) return
+
+    // Mesmo arquivo já anexado em outra conta → aviso com os dados dela.
+    try {
+      const hash = await hashFile(file)
+      setHashAnexo(hash)
+      if (!isEdit) {
+        const anexos = await getFiles({ module: 'contas' })
+        const igual = anexos.find(f => f.fileHash === hash)
+        const outra = igual ? todasContas.find(c => c.id === igual.entityId) : undefined
+        if (outra) setDupArquivo({ conta: outra, motivo: 'este mesmo arquivo já está anexado nesse lançamento' })
+      }
+    } catch {
+      // verificação é só um aviso — falhar aqui não impede o cadastro
+    }
 
     const ext = file.name.split('.').pop()?.toLowerCase()
     const isPdf = file.type === 'application/pdf' || ext === 'pdf'
@@ -893,6 +941,7 @@ function ContaFormModal({ conta, vencimentoInicial, onClose, onSave }: ContaForm
           entityId:   id,
           entityName: form.descricao,
           espaco:     form.espaco,
+          fileHash:   hashAnexo ?? undefined,
         })
       }
       await onSave(payload, {
@@ -1158,6 +1207,12 @@ function ContaFormModal({ conta, vencimentoInicial, onClose, onSave }: ContaForm
             </div>
           )}
 
+          {possivelDuplicata && (
+            <LancamentoExistenteAviso tom="alerta"
+              titulo="Atenção: possível lançamento já existente. Confira antes de salvar para não lançar em duplicidade."
+              motivo={possivelDuplicata.motivo} conta={possivelDuplicata.conta} />
+          )}
+
           {erro && (
             <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5">
               <p className="text-xs text-red-400">{erro}</p>
@@ -1413,6 +1468,103 @@ function TransferirFundoCaixaModal({ onClose, onSave, onSaved }: {
 
 const COMPROVANTE_DUPLICADO_MSG = 'Este comprovante já foi utilizado para dar baixa em outra conta. Verifique para evitar pagamentos ou lançamentos duplicados.'
 
+// Data+hora de um timestamp do banco (created_at/data_baixa, em UTC) no fuso de
+// Brasília — é o horário que a pessoa viu na tela quando lançou.
+function formatDataHoraBR(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function normalizarTexto(s?: string): string {
+  return (s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+interface PossivelDuplicata { conta: ContaPagar; motivo: string }
+
+// Procura um lançamento que já pareça ser o mesmo pagamento/conta. Do mais
+// forte pro mais fraco: ID da transação do comprovante; valor + data + hora do
+// pagamento; e (só no cadastro de conta nova) mesmo espaço + fornecedor + valor
+// com vencimento no mesmo mês. Quando os dois lados têm o ID real da transação,
+// ele decide sozinho — dois pagamentos distintos podem coincidir em
+// valor/data/hora (ex: dois fornecedores pagos no mesmo minuto).
+function encontrarPossivelDuplicata(todas: ContaPagar[], alvo: {
+  excluirId?: string
+  valor?: number
+  identificador?: string | null
+  dataPagamento?: string | null
+  horaPagamento?: string | null
+  espaco?: string
+  fornecedor?: string
+  dataVencimento?: string
+  incluirMesmoMes?: boolean
+}): PossivelDuplicata | null {
+  const outras = todas.filter(c => c.id !== alvo.excluirId)
+
+  if (alvo.identificador) {
+    const porId = outras.find(c => c.comprovanteIdentificador && c.comprovanteIdentificador === alvo.identificador)
+    if (porId) return { conta: porId, motivo: 'mesmo ID de transação do comprovante' }
+  }
+
+  if (alvo.valor && alvo.dataPagamento && alvo.horaPagamento) {
+    const porDataHora = outras.find(c =>
+      c.status === 'pago' && c.valor === alvo.valor &&
+      c.dataPagamento === alvo.dataPagamento && c.horaPagamento === alvo.horaPagamento &&
+      !(alvo.identificador && c.comprovanteIdentificador))
+    if (porDataHora) return { conta: porDataHora, motivo: 'mesmo valor, data e hora de pagamento' }
+  }
+
+  if (alvo.incluirMesmoMes && alvo.valor && alvo.fornecedor && alvo.espaco && alvo.dataVencimento) {
+    const forn = normalizarTexto(alvo.fornecedor)
+    const mes = alvo.dataVencimento.slice(0, 7)
+    const porMes = outras.find(c =>
+      c.valor === alvo.valor && c.espaco === alvo.espaco && normalizarTexto(c.fornecedor) === forn &&
+      (c.dataVencimento?.slice(0, 7) === mes || c.dataPagamento?.slice(0, 7) === mes))
+    if (porMes) return { conta: porMes, motivo: 'mesmo espaço, fornecedor e valor no mesmo mês' }
+  }
+
+  return null
+}
+
+// Quadro com os dados e todas as datas do lançamento que já existe — pra quem
+// está lançando conseguir achar o registro anterior e decidir se é duplicado.
+function LancamentoExistenteAviso({ titulo, motivo, conta, tom }: {
+  titulo: string
+  motivo?: string
+  conta: ContaPagar
+  tom: 'erro' | 'alerta'
+}) {
+  const cor = tom === 'erro'
+    ? { box: 'bg-red-500/10 border-red-500/30', titulo: 'text-red-500' }
+    : { box: 'bg-amber-500/10 border-amber-500/30', titulo: 'text-amber-600' }
+  const linhas: [string, string | undefined][] = [
+    ['Descrição', conta.descricao],
+    ['Espaço', conta.espaco],
+    ['Fornecedor', conta.fornecedor],
+    ['Valor', formatCurrency(conta.valor)],
+    ['Situação', statusLabel[statusEfetivo(conta)]],
+    ['Vencimento', conta.dataVencimento ? formatDate(conta.dataVencimento) : undefined],
+    ['Pago em', conta.dataPagamento ? `${formatDate(conta.dataPagamento)}${conta.horaPagamento ? ` às ${conta.horaPagamento}` : ''}` : undefined],
+    ['Lançado no sistema em', conta.createdAt ? formatDataHoraBR(conta.createdAt) : undefined],
+    ['Baixa registrada em', conta.dataBaixa ? formatDataHoraBR(conta.dataBaixa) : undefined],
+    ['ID da transação', conta.comprovanteIdentificador],
+  ]
+  return (
+    <div className={`mt-2 rounded-lg border px-3 py-2 ${cor.box}`}>
+      <p className={`text-xs font-semibold ${cor.titulo}`}>{titulo}</p>
+      {motivo && <p className="text-[11px] text-app-subtle mt-0.5">Motivo: {motivo}.</p>}
+      <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px]">
+        {linhas.filter(([, v]) => !!v).map(([rotulo, valor]) => (
+          <div key={rotulo} className="contents">
+            <dt className="text-app-subtle">{rotulo}</dt>
+            <dd className="text-app-text break-all">{valor}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  )
+}
+
 function DarBaixaModal({ conta, onClose, onConfirm }: {
   conta: ContaPagar
   onClose: () => void
@@ -1432,6 +1584,7 @@ function DarBaixaModal({ conta, onClose, onConfirm }: {
   const [extraindoIA, setExtraindoIA] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [duplicado, setDuplicado] = useState(false)
+  const [contaExistente, setContaExistente] = useState<PossivelDuplicata | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const cameraRef = useRef<HTMLInputElement>(null)
 
@@ -1445,6 +1598,7 @@ function DarBaixaModal({ conta, onClose, onConfirm }: {
     setFileHashAtual(null)
     setErro(null)
     setDuplicado(false)
+    setContaExistente(null)
     if (!file) return
 
     setExtraindoIA(true)
@@ -1457,9 +1611,8 @@ function DarBaixaModal({ conta, onClose, onConfirm }: {
       if (arquivoDuplicado) {
         const outraConta = todasContas.find(c => c.id === arquivoDuplicado.entityId)
         setDuplicado(true)
-        setErro(outraConta
-          ? `${COMPROVANTE_DUPLICADO_MSG} (usado em "${outraConta.descricao}"${outraConta.dataPagamento ? ` — ${formatDate(outraConta.dataPagamento)}` : ''})`
-          : `${COMPROVANTE_DUPLICADO_MSG} (lançamento original já foi excluído — avise o suporte se isso persistir)`)
+        if (outraConta) setContaExistente({ conta: outraConta, motivo: 'é o mesmo arquivo de comprovante' })
+        else setErro(`${COMPROVANTE_DUPLICADO_MSG} (lançamento original já foi excluído — avise o suporte se isso persistir)`)
         return
       }
 
@@ -1485,16 +1638,16 @@ function DarBaixaModal({ conta, onClose, onConfirm }: {
       // valor/data/hora (ex: dois fornecedores pagos no mesmo minuto), então
       // valor+data+hora só entra como fallback quando não dá pra comparar
       // pelo ID real.
-      const contaConflitante = todasContas.find(c => {
-        if (c.id === conta.id || c.status !== 'pago' || c.valor !== conta.valor) return false
-        if (data.identificadorTransacao && c.comprovanteIdentificador) {
-          return c.comprovanteIdentificador === data.identificadorTransacao
-        }
-        return !!data.dataPagamento && !!data.horaPagamento && c.dataPagamento === parseDataBR(data.dataPagamento) && c.horaPagamento === data.horaPagamento
+      const conflito = encontrarPossivelDuplicata(todasContas.filter(c => c.status === 'pago'), {
+        excluirId: conta.id,
+        valor: conta.valor,
+        identificador: data.identificadorTransacao,
+        dataPagamento: data.dataPagamento ? parseDataBR(data.dataPagamento) : null,
+        horaPagamento: data.horaPagamento,
       })
-      if (contaConflitante) {
+      if (conflito) {
         setDuplicado(true)
-        setErro(`${COMPROVANTE_DUPLICADO_MSG} (mesmos dados de "${contaConflitante.descricao}"${contaConflitante.dataPagamento ? ` — ${formatDate(contaConflitante.dataPagamento)}` : ''})`)
+        setContaExistente(conflito)
         return
       }
 
@@ -1594,6 +1747,9 @@ function DarBaixaModal({ conta, onClose, onConfirm }: {
             </div>
             {comprovante && !extraindoIA && !duplicado && (
               <p className="text-xs text-app-subtle mt-1">Data e hora acima já vêm do comprovante quando identificadas — confira e corrija se precisar.</p>
+            )}
+            {contaExistente && (
+              <LancamentoExistenteAviso tom="erro" titulo={COMPROVANTE_DUPLICADO_MSG} motivo={contaExistente.motivo} conta={contaExistente.conta} />
             )}
             {erro && (
               <div className={`mt-2 rounded-lg border px-3 py-2 ${duplicado ? 'bg-red-500/10 border-red-500/30' : ''}`}>

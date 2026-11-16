@@ -154,6 +154,9 @@ export interface ContaPagar {
   // Quando o usuário registrou a baixa no sistema — só uso interno/auditoria,
   // nunca exibido como "Pago em" (isso usa dataPagamento/horaPagamento).
   dataBaixa?: string
+  // Quando o lançamento foi criado no sistema — usado no aviso de possível
+  // lançamento duplicado, pra mostrar as datas do que já existe.
+  createdAt?: string
   comprovanteInstituicao?: string
   comprovanteIdentificador?: string
   fornecedor?: string

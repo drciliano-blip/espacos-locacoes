@@ -45,6 +45,7 @@ interface ContaPagarRow {
   data_pagamento: string | null
   hora_pagamento: string | null
   data_baixa: string | null
+  created_at: string | null
   comprovante_instituicao: string | null
   comprovante_identificador: string | null
   fornecedor: string | null
@@ -72,6 +73,7 @@ function fromRow(row: ContaPagarRow): ContaPagar {
     dataPagamento: row.data_pagamento ?? undefined,
     horaPagamento: row.hora_pagamento ?? undefined,
     dataBaixa: row.data_baixa ?? undefined,
+    createdAt: row.created_at ?? undefined,
     comprovanteInstituicao: row.comprovante_instituicao ?? undefined,
     comprovanteIdentificador: row.comprovante_identificador ?? undefined,
     fornecedor: row.fornecedor ?? undefined,
