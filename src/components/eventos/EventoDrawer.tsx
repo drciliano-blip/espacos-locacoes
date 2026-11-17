@@ -356,7 +356,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
   const current = editing ? draft : evento
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-end" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-end" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div
         className="relative h-full w-full max-w-xl overflow-y-auto bg-app-bg border-l border-app-border shadow-2xl"
         onClick={(e) => e.stopPropagation()}
