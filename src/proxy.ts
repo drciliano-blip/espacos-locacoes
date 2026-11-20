@@ -4,7 +4,8 @@ import { createClient } from '@/lib/supabase/proxy'
 import { paginaInicial, ROLE_PERMISSIONS, ROLES_SEM_API } from '@/lib/auth'
 import type { NivelAcesso } from '@/types'
 
-const publicPaths = ['/login', '/ficha-cliente']
+// /orcamento e /anuncie: formulários públicos embutidos no WordPress (Plano 2027).
+const publicPaths = ['/login', '/ficha-cliente', '/orcamento', '/anuncie']
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
