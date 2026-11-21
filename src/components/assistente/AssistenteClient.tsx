@@ -12,7 +12,7 @@ import { Bot, Sparkles, Loader2, FileDown, Copy, Plus, Trash2, RotateCcw, Calend
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, mensagemDeErro } from '@/lib/utils'
 import { carregarTabelas, opcoesDaTabela, sugerirFaixa, type BuffetTabela } from '@/lib/buffet'
-import { TABELAS_ESPACOS, tabelaPorSlug } from '@/lib/assistente/tabelas-espacos'
+import { PAGAMENTO_FASTIX, TABELAS_ESPACOS, tabelaPorSlug } from '@/lib/assistente/tabelas-espacos'
 import {
   DADOS_VAZIOS, br, diaDaSemana, linhasLocacao, novoNumero, parcelas, soma,
   type DadosEvento, type LinhaOrcamento, type TipoDia,
@@ -93,6 +93,9 @@ export default function AssistenteClient() {
   const [ocupacao, setOcupacao] = useState<{ data: string; porSlug: Record<string, Ocupacao[]>; falhou: boolean } | null>(null)
 
   const [montagem, setMontagem] = useState(false)
+  // Parceria: FASTIX obrigatória (contrato). Locação: FASTIX opcional.
+  const [contratacao, setContratacao] = useState<'locacao' | 'parceria'>('locacao')
+  const [fastixOpcional, setFastixOpcional] = useState(false)
   const [staffComplementar, setStaffComplementar] = useState(0)
   const [valorManual, setValorManual] = useState<number | null>(null)
 
@@ -158,6 +161,8 @@ export default function AssistenteClient() {
     [espaco, dados, montagem, staffComplementar, valorManual],
   )
   const totalLoc = soma(linhasLoc)
+  const fastix: 'parceria' | 'opcional' | null = contratacao === 'parceria' ? 'parceria' : fastixOpcional ? 'opcional' : null
+  const regraLoc = espaco ? (fastix ? PAGAMENTO_FASTIX : espaco.pagamento) : []
 
   const tabelaBuffet = tabelasBuffet.find(t => t.id === buffetId)
   const faixa = sugerirFaixa(tabelaBuffet, buffetOpcao, dados.convidados ?? undefined)
@@ -183,7 +188,7 @@ export default function AssistenteClient() {
       setFalta(r.faltaPerguntar ?? [])
       setSlug(r.espacoDesejado && tabelaPorSlug(r.espacoDesejado) ? r.espacoDesejado : '')
       setNumero(novoNumero()); setVersao(1)
-      setMontagem(false); setStaffComplementar(0); setValorManual(null)
+      setMontagem(false); setStaffComplementar(0); setValorManual(null); setContratacao('locacao'); setFastixOpcional(false)
       setBuffetId(''); setBuffetOpcao(''); setBuffetValor(null); setExtras([]); setOpcionais([])
     } catch (e) {
       setErro(mensagemDeErro(e, 'Não foi possível analisar a mensagem.'))
@@ -209,7 +214,8 @@ export default function AssistenteClient() {
           itensLocacao: linhasLoc.map(l => `${l.descricao}: ${formatCurrency(l.valor)}`),
           inclusoNaLocacao: [...espaco.staffDaCasa, ...espaco.rider.map(r => r.titulo)],
           obrigatorios: espaco.obrigatorios,
-          pagamento: parcelas(totalLoc, espaco.pagamento, dados.data).map(p => `${p.descricao}: ${formatCurrency(p.valor)}${p.vencimento ? ` até ${br(p.vencimento)}` : ''}`),
+          contratacao: contratacao === 'parceria' ? 'parceria (venda de ingressos obrigatória pela FASTIX)' : fastix ? 'locação com condição FASTIX (cliente vende ingressos pela FASTIX)' : 'locação',
+          pagamento: parcelas(totalLoc, regraLoc, dados.data).map(p => `${p.descricao}: ${formatCurrency(p.valor)}${p.vencimento ? ` até ${br(p.vencimento)}` : ''}`),
         },
         alternativasLivres: opcoesEspacos
           .filter(o => o.t.slug !== slug && o.livre === true && o.cabe && !o.t.semTabela)
@@ -330,6 +336,16 @@ export default function AssistenteClient() {
                   <Campo label={espaco.semTabela ? 'Valor da locação (sem tabela)' : 'Ajustar valor da locação (opcional)'}>
                     <input className={inputCls} type="number" min={0} placeholder={espaco.semTabela ? 'Informe o valor' : 'Usar tabela'} value={valorManual ?? ''} onChange={e => setValorManual(e.target.value ? Number(e.target.value) : null)} />
                   </Campo>
+                  <Campo label="Contratação">
+                    <select className={inputCls} value={contratacao} onChange={e => setContratacao(e.target.value as 'locacao' | 'parceria')}>
+                      <option value="locacao">Locação</option>
+                      <option value="parceria">Parceria (FASTIX obrigatória)</option>
+                    </select>
+                  </Campo>
+                  <label className="flex items-center gap-2 self-end text-sm text-app-text">
+                    <input type="checkbox" disabled={contratacao === 'parceria'} checked={contratacao === 'parceria' || fastixOpcional} onChange={e => setFastixOpcional(e.target.checked)} />
+                    Condição FASTIX: 25% na reserva e 75% até 8 dias antes
+                  </label>
                   <Campo label="Staff complementar obrigatório (R$)">
                     <input className={inputCls} type="number" min={0} value={staffComplementar || ''} onChange={e => setStaffComplementar(Number(e.target.value) || 0)} />
                   </Campo>
@@ -439,8 +455,9 @@ export default function AssistenteClient() {
             espaco={espaco}
             linhas={imprimindo === 'locacao' ? linhasLoc : linhasServ}
             opcionais={opcionais.filter(o => o.descricao.trim())}
-            parcelas={imprimindo === 'locacao' ? parcelas(totalLoc, espaco.pagamento, dados.data) : parcelas(totalServ, PAGAMENTO_SERVICOS, dados.data)}
+            parcelas={imprimindo === 'locacao' ? parcelas(totalLoc, regraLoc, dados.data) : parcelas(totalServ, PAGAMENTO_SERVICOS, dados.data)}
             condicoesServicos={condicoesServicos}
+            fastix={imprimindo === 'locacao' ? fastix : null}
           />
         </div>
       )}

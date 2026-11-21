@@ -1,6 +1,8 @@
 // Tabela de locação de cada espaço, usada pelo Assistente de IA para montar o
 // Orçamento de Locação. Fonte: as artes de valores de cada espaço (Fabrique,
 // Usine, House Pacaembu, Armazém Solon, CESA) enviadas em 21/11/2026.
+// Complexo Jussara fica de fora: está em negociação de venda e cada proposta
+// é analisada pessoalmente.
 //
 // Fica em código (e não no banco) nesta primeira etapa para a aba funcionar
 // sem migration. Quando o portal do dono existir, isto vira cadastro.
@@ -15,6 +17,7 @@ export interface BlocoLista {
 export interface TabelaEspaco {
   slug: string // igual a espacos.slug no banco (para checar a agenda)
   nome: string
+  logo: string // em /public/logos, recortado da arte do espaço
   endereco: string
   capacidade: number
   precos: [number, number, number, number, number, number, number]
@@ -27,14 +30,24 @@ export interface TabelaEspaco {
   estrutura: string[]
   rider: BlocoLista[]
   obrigatorios: string[] // vai no orçamento como observação obrigatória
-  pagamento: { descricao: string; pct: number; diasAntes?: number }[]
+  pagamento: RegraPagamento[]
   observacoes: string[]
   aPartirDe?: boolean // tabela "a partir de" (pode variar pelo formato do evento)
   semAgendaNoSistema?: boolean
-  semTabela?: boolean
+  semTabela?: boolean // sem valores cadastrados: locação digitada à mão
 }
 
-const PAGAMENTO_PADRAO = [
+export interface RegraPagamento { descricao: string; pct: number; diasAntes?: number }
+
+// FASTIX: tiqueteira parceira enquanto a da E&L não fica pronta. Pelo contrato,
+// é obrigatória nos eventos em parceria e opcional nas locações; quem vende
+// ingresso por ela paga 25% na reserva e 75% até 8 dias antes.
+export const PAGAMENTO_FASTIX: RegraPagamento[] = [
+  { descricao: 'Na reserva da data (condição FASTIX)', pct: 25 },
+  { descricao: 'Até 8 dias antes do evento (condição FASTIX)', pct: 75, diasAntes: 8 },
+]
+
+const PAGAMENTO_PADRAO: RegraPagamento[] = [
   { descricao: 'Na reserva da data', pct: 50 },
   { descricao: 'Até 8 dias antes do evento', pct: 50, diasAntes: 8 },
 ]
@@ -43,6 +56,7 @@ export const TABELAS_ESPACOS: TabelaEspaco[] = [
   {
     slug: 'fabrique',
     nome: 'Espaço Fabrique',
+    logo: '/logos/espaco-fabrique.png',
     endereco: 'Rua Barra Funda, 1071 · Barra Funda · São Paulo/SP',
     capacidade: 800,
     precos: [10000, 7000, 7000, 7000, 8000, 12000, 15000],
@@ -78,6 +92,7 @@ export const TABELAS_ESPACOS: TabelaEspaco[] = [
   {
     slug: 'usine',
     nome: 'Espaço Usine',
+    logo: '/logos/espaco-usine.png',
     endereco: 'Rua Barra Funda, 973 · Barra Funda · São Paulo/SP',
     capacidade: 1500,
     precos: [15000, 10000, 10000, 10000, 12000, 16000, 22000],
@@ -116,6 +131,7 @@ export const TABELAS_ESPACOS: TabelaEspaco[] = [
   {
     slug: 'house-pacaembu',
     nome: 'House Pacaembu',
+    logo: '/logos/espaco-house-pacaembu.png',
     endereco: 'Rua Alagoas, 836 · Higienópolis · São Paulo/SP',
     capacidade: 250,
     precos: [6500, 4000, 4000, 4000, 4500, 6500, 8000],
@@ -146,6 +162,7 @@ export const TABELAS_ESPACOS: TabelaEspaco[] = [
   {
     slug: 'espaco-solon',
     nome: 'Armazém Solon',
+    logo: '/logos/espaco-solon.png',
     endereco: 'Rua Solon, 1121 · Bom Retiro · São Paulo/SP',
     capacidade: 1500,
     precos: [25000, 20000, 20000, 20000, 20000, 30000, 40000],
@@ -173,9 +190,10 @@ export const TABELAS_ESPACOS: TabelaEspaco[] = [
   {
     slug: 'cesa',
     nome: 'CESA Eventos SP',
+    logo: '/logos/espaco-cesa.png',
     endereco: 'Av. Adolfo Pinheiro, 384 · Santo Amaro · São Paulo/SP (galeria Borba Gato)',
     capacidade: 564,
-    precos: [15000, 3500, 3500, 10000, 5500, 7500, 7500],
+    precos: [15000, 3500, 3500, 3500, 5500, 7500, 7500], // quarta: R$ 3.500 (confirmado em 21/11; a arte mostra 10.000)
     horasInclusas: 8,
     aPartirDe: true,
     semAgendaNoSistema: true,
@@ -190,21 +208,6 @@ export const TABELAS_ESPACOS: TabelaEspaco[] = [
     obrigatorios: [],
     pagamento: PAGAMENTO_PADRAO,
     observacoes: ['Valores a partir da tabela, podendo variar conforme tipo, formato e necessidades do evento.'],
-  },
-  {
-    slug: 'complexo-jussara',
-    nome: 'Complexo Jussara',
-    endereco: '',
-    capacidade: 600,
-    precos: [0, 0, 0, 0, 0, 0, 0],
-    horasInclusas: 8,
-    semTabela: true,
-    staffDaCasa: [],
-    estrutura: [],
-    rider: [],
-    obrigatorios: [],
-    pagamento: PAGAMENTO_PADRAO,
-    observacoes: ['Tabela de valores ainda não cadastrada: preencher o valor da locação à mão.'],
   },
 ]
 
