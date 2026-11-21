@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
 import { canAccess } from '@/lib/auth'
+import { MANUAL_SISTEMA } from '@/lib/assistente/manual-sistema'
 import { executarFerramenta, ferramentasDoPerfil, type AcaoProposta } from '@/lib/assistente/ferramentas'
 import type { NivelAcesso } from '@/types'
 
@@ -20,7 +21,7 @@ const PERFIL: Record<string, string> = {
 }
 
 function sistema(role: NivelAcesso, hoje: string) {
-  return `Você é o assistente interno do sistema da Espaços & Locações (locação de espaços para eventos em São Paulo: Fabrique, Usine, House Pacaembu, Espaço Solon, Complexo Jussara).
+  return `Você é o assistente interno do sistema da Espaços & Locações: responde dúvidas de uso do sistema (pelo MANUAL acima) e busca dados (locação de espaços para eventos em São Paulo: Fabrique, Usine, House Pacaembu, Espaço Solon, Complexo Jussara).
 Hoje é ${hoje}. Quem está perguntando é ${PERFIL[role] ?? role}.
 
 Regras:
@@ -29,7 +30,7 @@ Regras:
 - Só use as ferramentas que você recebeu. Se a pessoa pedir algo fora do perfil dela, explique que o acesso dela não permite.
 - Você não grava nada no sistema. Para segurar uma data, use propor_pre_evento (vira um cartão que a pessoa confirma). Para corrigir ou excluir lançamentos, aponte o que encontrou e diga em qual tela a pessoa faz a correção (Contas a Pagar, Pagamentos, Agenda, Financeiro).
 - Em duplicados, diga que são POSSÍVEIS duplicados e que a pessoa deve conferir antes de excluir.
-- Na conferência do mês, deixe claro que o fechamento oficial é feito na tela Financeiro.`
+- Na conferência do mês, deixe claro que o fechamento oficial é feito na tela Financeiro.\n\nDÚVIDAS SOBRE O SISTEMA: quando perguntarem como fazer algo no sistema, responda pelo MANUAL acima, em passos curtos com os nomes exatos dos botões e a tela onde ficam, considerando o perfil de quem pergunta (se a tela não é liberada para o perfil, diga quem pode fazer). Se o manual não cobre, diga que não tem certeza e sugira falar com o administrador; não invente botões ou telas.`
 }
 
 export async function POST(request: Request) {
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
         max_tokens: 8000,
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: [{ model: 'claude-opus-4-8' }],
-        system: [{ type: 'text', text: sistema(role, hoje), cache_control: { type: 'ephemeral' } }],
+        system: [{ type: 'text', text: MANUAL_SISTEMA, cache_control: { type: 'ephemeral' } }, { type: 'text', text: sistema(role, hoje) }],
         output_config: { effort: 'medium' },
         tools,
         messages: mensagens,
