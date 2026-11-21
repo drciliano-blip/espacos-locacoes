@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/proxy'
 import { paginaInicial, ROLE_PERMISSIONS, ROLES_SEM_API } from '@/lib/auth'
 import type { NivelAcesso } from '@/types'
 
-const publicPaths = ['/login', '/ficha-cliente', '/teste-assistente']
+const publicPaths = ['/login', '/ficha-cliente']
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
