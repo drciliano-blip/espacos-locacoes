@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Sidebar from '@/components/layout/Sidebar'
 import Header from '@/components/layout/Header'
 import AvisoAtrasoBanner from '@/components/layout/AvisoAtrasoBanner'
+import AssistenteFlutuante from '@/components/assistente/AssistenteFlutuante'
 import { createClient } from '@/lib/supabase/server'
 import { EventosProvider } from '@/contexts/EventosContext'
 import { EspacosProvider } from '@/contexts/EspacosContext'
@@ -64,6 +65,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
                                     </main>
                                   </div>
                                 </div>
+                                {/* Assistente de IA em todas as telas (some na própria página do assistente). */}
+                                <AssistenteFlutuante />
                               </SidebarUIProvider>
                             </PadroesClassificacaoProvider>
                           </ConciliacaoProvider>
