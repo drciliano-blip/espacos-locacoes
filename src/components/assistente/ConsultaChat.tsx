@@ -93,6 +93,25 @@ export default function ConsultaChat({ role, autor, tela, compacto }: { role: Ni
     }
   }
 
+  // Diagnóstico: mostra no chat o que funciona e o que falha na ligação com a IA.
+  const [testando, setTestando] = useState(false)
+  async function testar() {
+    setTestando(true)
+    try {
+      const res = await fetch('/api/assistente/diagnostico', { cache: 'no-store' })
+      const j = await res.json().catch(() => ({ error: `O servidor respondeu ${res.status} sem dados.` }))
+      const texto = j.passos
+        ? 'Teste da IA:\n' + (j.passos as { passo: string; ok: boolean; detalhe: string }[]).map(p => `${p.ok ? '✅' : '❌'} ${p.passo}: ${p.detalhe}`).join('\n')
+        : `Teste da IA falhou: ${j.error ?? res.status}`
+      setBolhas(b => [...b, { id: crypto.randomUUID(), autor: 'ia', texto }])
+      setErro(null)
+    } catch (e) {
+      setBolhas(b => [...b, { id: crypto.randomUUID(), autor: 'ia', texto: `Teste da IA: a conexão com o servidor falhou (${e instanceof Error ? e.message : 'erro'}).` }])
+    } finally {
+      setTestando(false)
+    }
+  }
+
   function marcarFeita(bolhaId: string, i: number) {
     setBolhas(bs => bs.map(b => (b.id === bolhaId ? { ...b, acoes: b.acoes?.map((x, j) => (j === i ? { ...x, feita: true } : x)) } : b)))
   }
@@ -122,6 +141,7 @@ export default function ConsultaChat({ role, autor, tela, compacto }: { role: Ni
     <div className={`flex flex-col bg-app-surface ${compacto ? 'h-full' : 'min-h-[60vh] rounded-xl border border-app-border'}`}>
       <div className="flex items-center justify-between border-b border-app-border px-4 py-3">
         <p className="text-sm text-app-muted">Tire dúvidas de como usar o sistema ou pergunte sobre agenda, eventos e financeiro. A IA busca no sistema com o seu nível de acesso e não altera nada sozinha.</p>
+        <button type="button" onClick={testar} disabled={testando} className="shrink-0 text-xs text-app-muted underline disabled:opacity-50">{testando ? 'Testando…' : 'Testar a IA'}</button>
         {bolhas.length > 0 && <button type="button" onClick={limpar} className="inline-flex shrink-0 items-center gap-1 text-xs text-app-muted"><RotateCcw className="h-3.5 w-3.5" /> Nova conversa</button>}
       </div>
 
@@ -155,7 +175,14 @@ export default function ConsultaChat({ role, autor, tela, compacto }: { role: Ni
           </div>
         ))}
         {pensando && <p className="inline-flex items-center gap-2 text-sm text-app-muted"><Loader2 className="h-4 w-4 animate-spin" /> Consultando o sistema...</p>}
-        {erro && <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600">{erro}</p>}
+        {erro && (
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600">
+            <p>{erro}</p>
+            <button type="button" onClick={testar} disabled={testando} className="mt-1.5 inline-flex items-center gap-1 rounded-lg border border-red-500/40 bg-white px-2.5 py-1 text-xs font-semibold text-red-700 disabled:opacity-50">
+              {testando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Testar a IA
+            </button>
+          </div>
+        )}
         <div ref={fim} />
       </div>
 

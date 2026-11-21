@@ -246,6 +246,7 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ resposta: 'Essa tarefa ficou longa demais. Pode dividir em partes?', acoes, historico: mensagens, estado: estadoMudou ? estado : undefined })
   } catch (err) {
+    console.error('[assistente/chat]', err)
     if (err instanceof Anthropic.RateLimitError) return NextResponse.json({ error: 'Muitas consultas à IA agora. Tente em 1 minuto.' }, { status: 429 })
     if (err instanceof Anthropic.APIError) return NextResponse.json({ error: `Erro da IA (${err.status}): ${err.message}` }, { status: 502 })
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Erro ao consultar.' }, { status: 502 })
