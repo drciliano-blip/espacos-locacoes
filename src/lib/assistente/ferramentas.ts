@@ -7,7 +7,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { canAccess, veValoresAReceber } from '@/lib/auth'
-import type { NivelAcesso } from '@/types'
+import type { FichaCliente, NivelAcesso } from '@/types'
 import { aplicarPatch } from './calculo-estado'
 import { novoNumero } from './orcamento'
 import { mensagemInicial } from './roteiro'
@@ -31,6 +31,8 @@ export type AcaoProposta =
   | { tipo: 'evento'; eventoId: string; acao: 'gerar_contrato' | 'cancelar' | 'reagendar' | 'converter' | 'ver'; novaData?: string; resumo: string }
   // Abre a janela "Editar parcela" para dar baixa.
   | { tipo: 'baixa'; receitaId: string; resumo: string }
+  // Abre "Novo Evento" preenchido com a ficha do cliente (depois oferece gerar o contrato).
+  | { tipo: 'cadastro_evento'; ficha: FichaCliente; resumo: string }
   // Abre o atendimento (chat do cliente) criado com os dados, para montar o orçamento.
   | { tipo: 'atendimento'; atendimentoId: string; resumo: string }
   // Abre "Nova Conta a Pagar" já preenchida.
@@ -343,6 +345,59 @@ const FERRAMENTAS: Record<string, Ferramenta> = {
       return { ok: true, mensagem: 'Proposta pronta. Diga à pessoa para conferir e clicar em Confirmar no cartão que aparece abaixo da resposta.' }
     },
   },
+  preparar_cadastro_evento: {
+    pode: r => r !== 'socio' && r !== 'visualizador' && canAccess(r, 'eventos'),
+    definicao: {
+      name: 'preparar_cadastro_evento',
+      description: 'Cadastra um evento confirmado a partir da ficha do cliente (texto colado, ficha anexada já lida ou dados ditados). Mostra um cartão que abre "Novo Evento" do sistema já preenchido; a pessoa confere, salva e o próprio sistema oferece gerar o contrato em seguida. Para só segurar a data, use pré-evento. Datas em AAAA-MM-DD; valores como texto "16.000,00".',
+      input_schema: {
+        type: 'object',
+        properties: {
+          nome_completo: { type: 'string' }, cpf: { type: 'string' }, rg: { type: 'string' }, data_nascimento: { type: 'string', description: 'AAAA-MM-DD' },
+          email: { type: 'string' }, telefone: { type: 'string' },
+          endereco: { type: 'object', properties: { rua: { type: 'string' }, numero: { type: 'string' }, complemento: { type: 'string' }, bairro: { type: 'string' }, cidade: { type: 'string' }, estado: { type: 'string' }, cep: { type: 'string' } } },
+          pessoa_juridica: { type: 'boolean' }, razao_social: { type: 'string' }, nome_fantasia: { type: 'string' }, cnpj: { type: 'string' },
+          nome_evento: { type: 'string' }, espaco: { type: 'string' }, tipo_evento: { type: 'string' },
+          data_evento: { type: 'string', description: 'AAAA-MM-DD' },
+          hora_inicio_montagem: { type: 'string', description: 'HH:MM' }, hora_inicio: { type: 'string', description: 'HH:MM' }, hora_fim: { type: 'string', description: 'HH:MM' },
+          valor_locacao: { type: 'string' }, forma_pagamento: { type: 'string' }, valor_sinal: { type: 'string' },
+          vencimento_saldo: { type: 'string', description: 'AAAA-MM-DD' },
+        },
+        required: ['nome_completo', 'data_evento'],
+      },
+    },
+    async executar(sb, e, { acoes }) {
+      const data = texto(e.data_evento)
+      if (!ISO.test(data)) throw new Error('Data do evento em AAAA-MM-DD.')
+      let espaco = texto(e.espaco)
+      if (espaco) { const { id, nomes } = await filtroEspaco(sb, espaco); espaco = id ? nomes.get(id) ?? espaco : espaco }
+      const end = (e.endereco ?? {}) as Record<string, unknown>
+      const ficha: FichaCliente = {
+        id: crypto.randomUUID(), criadoEm: new Date().toISOString(),
+        nomeCompleto: texto(e.nome_completo), cpf: texto(e.cpf), rg: texto(e.rg) || undefined,
+        dataNascimento: ISO.test(texto(e.data_nascimento)) ? texto(e.data_nascimento) : undefined,
+        email: texto(e.email), telefoneCelular: texto(e.telefone),
+        endereco: { rua: texto(end.rua) || undefined, numero: texto(end.numero) || undefined, complemento: texto(end.complemento) || undefined, bairro: texto(end.bairro) || undefined, cidade: texto(end.cidade) || undefined, estado: texto(end.estado) || undefined, cep: texto(end.cep) || undefined },
+        pessoaJuridica: e.pessoa_juridica === true, razaoSocial: texto(e.razao_social) || undefined, nomeFantasia: texto(e.nome_fantasia) || undefined, cnpj: texto(e.cnpj) || undefined,
+        nomeEvento: texto(e.nome_evento), espacoDesejado: espaco, tipoEvento: texto(e.tipo_evento), dataEvento: data,
+        horaInicioMontagem: texto(e.hora_inicio_montagem) || undefined, horaInicioEvento: texto(e.hora_inicio) || undefined, horaTerminoEvento: texto(e.hora_fim) || undefined,
+        valorLocacao: texto(e.valor_locacao) || undefined, formaPagamento: texto(e.forma_pagamento) || undefined, valorSinal: texto(e.valor_sinal) || undefined,
+        dataVencimentoSaldo: ISO.test(texto(e.vencimento_saldo)) ? texto(e.vencimento_saldo) : undefined,
+      }
+      let aviso: string | undefined
+      if (espaco) {
+        const { id } = await filtroEspaco(sb, espaco)
+        if (id) {
+          const { data: conflito } = await sb.from('eventos').select('cliente, status').eq('espaco_id', id).eq('data', data).neq('status', 'cancelado')
+          if (conflito?.length) aviso = `Atenção: já existe evento nesse espaço em ${data}: ${conflito.map(c => `${c.cliente} (${c.status === 'em_negociacao' ? 'pré-evento' : c.status})`).join(', ')}. Se for o pré-evento deste cliente, o certo é converter o pré-evento (abrir_evento com acao converter) em vez de cadastrar outro.`
+        }
+      }
+      const faltando = [!ficha.telefoneCelular && 'telefone', !espaco && 'espaço', !ficha.horaInicioEvento && 'horário', !ficha.valorLocacao && 'valor'].filter(Boolean)
+      acoes.push({ tipo: 'cadastro_evento', ficha, resumo: `Cadastrar evento: ${ficha.nomeCompleto} · ${espaco || 'espaço a definir'} · ${data.split('-').reverse().join('/')}` })
+      return { ok: true, aviso, faltando_na_ficha: faltando, mensagem: 'Cartão mostrado; a pessoa confere, completa o que falta e salva. Depois o sistema oferece gerar o contrato.' }
+    },
+  },
+
   abrir_orcamento: {
     pode: r => r === 'admin' || r === 'operacional',
     definicao: {
