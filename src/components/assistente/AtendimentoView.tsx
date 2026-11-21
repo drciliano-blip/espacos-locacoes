@@ -532,7 +532,7 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
           onChange={e => setNovoTexto(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && window.matchMedia('(min-width: 768px)').matches) { e.preventDefault(); enviarChat() } }}
         />
-        <BotaoAnexo disabled={pensando} onErro={setErro} onLido={f => enviarChat(`📎 ${f.arquivo}${novoTexto.trim() ? ` — ${novoTexto.trim()}` : ''}`, textoDaFicha(f, novoTexto.trim()))} />
+        <BotaoAnexo disabled={pensando} pergunta={novoTexto.trim()} onErro={setErro} onLido={f => enviarChat(`📎 ${f.arquivo}${novoTexto.trim() ? ` — ${novoTexto.trim()}` : ''}`, textoDaFicha(f, novoTexto.trim()))} />
         <BotaoVoz disabled={pensando} onParcial={setNovoTexto} onFinal={t => enviarChat(t)} onErro={setErro} />
         <button type="submit" aria-label="Enviar" disabled={pensando || (!novoTexto.trim() && !mensagens.some(m => m.autor === 'cliente' && (!iaAte || m.em > iaAte)))} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#072A43] text-white disabled:opacity-40">
           {pensando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
