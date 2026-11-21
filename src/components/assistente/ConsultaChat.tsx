@@ -14,6 +14,7 @@ import { br } from '@/lib/assistente/orcamento'
 import type { AcaoProposta } from '@/lib/assistente/ferramentas'
 import type { Espaco, Evento, NivelAcesso } from '@/types'
 import CartaoAcaoSistema from './CartaoAcaoSistema'
+import BotaoVoz from './BotaoVoz'
 
 interface Bolha {
   id: string
@@ -155,7 +156,8 @@ export default function ConsultaChat({ role, autor, tela, compacto }: { role: Ni
       </div>
 
       <form className="flex gap-2 border-t border-app-border p-3" onSubmit={e => { e.preventDefault(); perguntar() }}>
-        <input className="flex-1 rounded-lg border border-app-border2 bg-app-surface2 px-3 py-2 text-sm text-app-text focus:outline-none" placeholder="Ex.: quais pré-eventos de dezembro ainda não foram confirmados?" value={pergunta} onChange={e => setPergunta(e.target.value)} />
+        <input className="min-w-0 flex-1 rounded-lg border border-app-border2 bg-app-surface2 px-3 py-2 text-sm text-app-text focus:outline-none" placeholder="Escreva ou toque no microfone e fale" value={pergunta} onChange={e => setPergunta(e.target.value)} />
+        <BotaoVoz disabled={pensando} onParcial={setPergunta} onFinal={t => perguntar(t)} onErro={setErro} />
         <button type="submit" disabled={pensando || !pergunta.trim()} aria-label="Enviar" className="inline-flex items-center rounded-lg bg-[#072A43] px-3 text-white disabled:opacity-50"><Send className="h-4 w-4" /></button>
       </form>
     </div>

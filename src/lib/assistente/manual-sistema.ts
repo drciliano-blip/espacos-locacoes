@@ -107,6 +107,7 @@ Abas "Orçamentos" e "Cadastros e tabelas". "Novo orçamento": cliente, evento (
 O cliente preenche os dados (ou a IA lê de um documento) → aparece em Eventos e Contratos → Documentos → "Fichas recebidas".
 
 13. ASSISTENTE DE IA
+Comando por voz: botão de microfone ao lado da caixa de mensagem (botão flutuante, Consultas e Atendimentos); fale e a mensagem é enviada ao terminar. Funciona no Chrome/Edge/Android e Safari recentes; se o navegador não tiver, use o microfone do teclado do celular.
 Botão redondo do assistente no canto de baixo de todas as telas (para quem tem acesso): abre o chat de Consultas por cima da tela atual; "Tela completa" leva à página do Assistente.
 Aba "Atendimentos" (admin, operacional): um chat por cliente/orçamento; o assistente monta o orçamento de locação e de serviços, gera os PDFs, prepara mensagens para o cliente e pré-reserva/confirma na Agenda (com clique de confirmação); botão "Orçamento" para ajustar à mão. Aba "Consultas" (admin, financeiro, operacional): perguntas sobre agenda, atrasados, duplicados e conferência do mês.
 Orçamento para cliente pelo botão do assistente: peça "faz um orçamento para ..." → cartão "Abrir e montar o orçamento" abre o atendimento já preenchido e o assistente monta o orçamento (admin e operacional).

@@ -28,6 +28,7 @@ import type { Espaco, Evento } from '@/types'
 import { questionario } from '@/lib/assistente/roteiro'
 import PropostaAssistente from './PropostaAssistente'
 import CartaoAcaoSistema, { type AcaoSistema } from './CartaoAcaoSistema'
+import BotaoVoz from './BotaoVoz'
 import Toast from '@/components/shared/Toast'
 
 const inputCls = 'w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none'
@@ -525,11 +526,12 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
         <textarea
           className="max-h-40 min-h-[44px] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-app-text focus:outline-none"
           rows={1}
-          placeholder="Escreva para o assistente ou cole a mensagem do cliente..."
+          placeholder="Escreva, fale no microfone ou cole a mensagem do cliente..."
           value={novoTexto}
           onChange={e => setNovoTexto(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && window.matchMedia('(min-width: 768px)').matches) { e.preventDefault(); enviarChat() } }}
         />
+        <BotaoVoz disabled={pensando} onParcial={setNovoTexto} onFinal={t => enviarChat(t)} onErro={setErro} />
         <button type="submit" aria-label="Enviar" disabled={pensando || (!novoTexto.trim() && !mensagens.some(m => m.autor === 'cliente' && (!iaAte || m.em > iaAte)))} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#072A43] text-white disabled:opacity-40">
           {pensando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </button>
