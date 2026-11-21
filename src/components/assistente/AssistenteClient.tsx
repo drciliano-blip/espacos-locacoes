@@ -6,6 +6,7 @@
 // Ver AtendimentoView.tsx para a conversa, o orçamento e as ações na Agenda.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Bot, Plus, Search, Loader2, ArrowLeft } from 'lucide-react'
 import { formatCurrency, mensagemDeErro } from '@/lib/utils'
 import { useCurrentUser } from '@/contexts/UserContext'
@@ -33,6 +34,10 @@ function quando(iso: string) {
 
 export default function AssistenteClient() {
   const { role } = useCurrentUser()
+  // Vindo do botão do assistente: ?atendimento=<id>&montar=1 abre o atendimento e já pede o orçamento.
+  const searchParams = useSearchParams()
+  const idDoLink = searchParams.get('atendimento')
+  const [montarAoAbrir, setMontarAoAbrir] = useState(searchParams.get('montar') === '1')
   // Atendimentos (chat por cliente) são de admin e operacional; o financeiro usa só as Consultas.
   const temAtendimentos = role === 'admin' || role === 'operacional'
   const [aba, setAba] = useState<'atendimentos' | 'consultas'>(temAtendimentos ? 'atendimentos' : 'consultas')
@@ -49,13 +54,14 @@ export default function AssistenteClient() {
   useEffect(() => {
     let vivo = true
     nomeDoUsuarioAtual().then(n => { if (vivo) setAutor(n) }).catch(() => {})
+    if (idDoLink) carregarAtendimento(idDoLink).then(a => { if (vivo) setAberto(a) }).catch(e => { if (vivo) setErro(mensagemDeErro(e, 'Não foi possível abrir o atendimento.')) })
     if (!temAtendimentos) { queueMicrotask(() => { if (vivo) setCarregando(false) }); return () => { vivo = false } }
     listarAtendimentos()
       .then(l => { if (vivo) setLista(l) })
       .catch(e => { if (!vivo) return; if (tabelaAusente(e)) setSemTabela(true); else setErro(mensagemDeErro(e, 'Não foi possível carregar os atendimentos.')) })
       .finally(() => { if (vivo) setCarregando(false) })
     return () => { vivo = false }
-  }, [temAtendimentos])
+  }, [temAtendimentos, idDoLink])
 
   async function abrir(id: string) {
     setAbrindo(id); setErro(null)
@@ -186,6 +192,8 @@ export default function AssistenteClient() {
               <AtendimentoView
                 key={aberto.id}
                 atendimento={aberto}
+                mensagemInicial={montarAoAbrir && aberto.id === idDoLink ? 'Monte o orçamento com esses dados. Se faltar algo do questionário, prepare a mensagem pedindo ao cliente.' : undefined}
+                onMensagemInicialEnviada={() => setMontarAoAbrir(false)}
                 autor={autor}
                 podeExcluir={role === 'admin'}
                 onAtualizado={atualizado}

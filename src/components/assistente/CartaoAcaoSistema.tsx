@@ -7,7 +7,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { CalendarClock, FileSignature, Ban, Banknote, Receipt, ExternalLink, CheckCircle2 } from 'lucide-react'
+import { CalendarClock, FileSignature, Ban, Banknote, Receipt, ExternalLink, CheckCircle2, FileText } from 'lucide-react'
 import { useEventos } from '@/contexts/EventosContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
 import { useRepasses } from '@/contexts/RepassesContext'
@@ -28,10 +28,10 @@ export default function CartaoAcaoSistema({ acao, feita, onFeita }: { acao: Acao
   const [aberto, setAberto] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
-  const icone = acao.tipo === 'baixa' ? Banknote : acao.tipo === 'conta' ? Receipt
+  const icone = acao.tipo === 'baixa' ? Banknote : acao.tipo === 'conta' ? Receipt : acao.tipo === 'atendimento' ? FileText
     : acao.acao === 'gerar_contrato' ? FileSignature : acao.acao === 'cancelar' ? Ban : CalendarClock
   const Icone = icone
-  const rotulo = acao.tipo === 'baixa' ? 'Abrir e dar baixa' : acao.tipo === 'conta' ? 'Abrir em Contas a Pagar'
+  const rotulo = acao.tipo === 'baixa' ? 'Abrir e dar baixa' : acao.tipo === 'conta' ? 'Abrir em Contas a Pagar' : acao.tipo === 'atendimento' ? 'Abrir e montar o orçamento'
     : { gerar_contrato: 'Abrir e gerar contrato', cancelar: 'Abrir cancelamento', reagendar: 'Abrir e alterar data', converter: 'Abrir e confirmar', ver: 'Abrir evento' }[acao.acao]
 
   function abrir() {
@@ -41,6 +41,11 @@ export default function CartaoAcaoSistema({ acao, feita, onFeita }: { acao: Acao
       const q = new URLSearchParams({ nova: '1', descricao: c.descricao, valor: String(c.valor), vencimento: c.vencimento, categoria: c.categoria, subcategoria: c.subcategoria, espaco: c.espaco, ...(c.fornecedor ? { fornecedor: c.fornecedor } : {}), ...(c.observacoes ? { observacoes: c.observacoes } : {}) })
       onFeita?.()
       router.push(`/contas-a-pagar?${q.toString()}`)
+      return
+    }
+    if (acao.tipo === 'atendimento') {
+      onFeita?.()
+      router.push(`/assistente?atendimento=${acao.atendimentoId}&montar=1`)
       return
     }
     if (acao.tipo === 'evento' && !eventos.some(e => e.id === acao.eventoId)) { setErro('Evento ainda carregando ou sem acesso. Tente de novo em instantes.'); return }

@@ -80,9 +80,11 @@ interface Props {
   podeExcluir: boolean
   onAtualizado: (patch: Partial<AtendimentoResumo> & { id: string }) => void
   onExcluir: () => void
+  mensagemInicial?: string // enviada sozinha ao abrir (vindo do botão do assistente)
+  onMensagemInicialEnviada?: () => void
 }
 
-export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtualizado, onExcluir }: Props) {
+export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtualizado, onExcluir, mensagemInicial, onMensagemInicialEnviada }: Props) {
   const ini = atendimento.estado
   const numero = atendimento.numero
   const { eventos, addEvento, confirmarPreEvento } = useEventos()
@@ -401,6 +403,15 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
       setPensando(false)
     }
   }
+
+  // Pedido que veio do botão do assistente: envia uma vez, logo ao abrir.
+  const inicialEnviada = useRef(false)
+  useEffect(() => {
+    if (!mensagemInicial || inicialEnviada.current) return
+    inicialEnviada.current = true
+    onMensagemInicialEnviada?.()
+    queueMicrotask(() => { void enviarChat(mensagemInicial) })
+  })
 
   async function copiar(texto: string) {
     try { await navigator.clipboard.writeText(texto); avisar('Copiado.') } catch { setErro('Não consegui copiar: selecione o texto e copie.') }
