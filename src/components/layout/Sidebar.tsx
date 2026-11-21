@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import {
-  Inbox,
   Bot,
   LayoutDashboard,
   CalendarDays,
@@ -31,8 +30,6 @@ import type { NivelAcesso } from '@/types'
 // PDF/Excel) — a aba própria foi removida, não existe mais rota /relatorios.
 const navItemsBefore = [
   { href: '/dashboard',      label: 'Dashboard',     icon: LayoutDashboard, page: 'dashboard' },
-  // Pedidos de orçamento e donos de espaço vindos do site (Plano 2027).
-  { href: '/pedidos',        label: 'Pedidos do site', icon: Inbox,         page: 'pedidos' },
   // Copiloto de atendimento: lê o pedido e prepara os orçamentos (Plano 2027).
   { href: '/assistente',     label: 'Assistente de IA', icon: Bot,         page: 'assistente' },
   { href: '/fechamento',     label: 'Financeiro',    icon: Landmark,        page: 'fechamento' },
