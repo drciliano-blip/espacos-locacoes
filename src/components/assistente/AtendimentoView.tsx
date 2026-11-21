@@ -18,7 +18,7 @@ import {
   type DadosEvento, type LinhaOrcamento, type TipoDia,
 } from '@/lib/assistente/orcamento'
 import {
-  STATUS_ATENDIMENTO, novaMensagem, salvarAtendimento,
+  STATUS_ATENDIMENTO, carregarAtendimento, juntarMensagens, novaMensagem, salvarAtendimento,
   type Atendimento, type AtendimentoResumo, type EstadoAtendimento, type Mensagem, type StatusAtendimento,
 } from '@/lib/assistente/atendimentos'
 import { useEventos } from '@/contexts/EventosContext'
@@ -145,6 +145,9 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
   const [upsell, setUpsell] = useState<{ servico: string; motivo: string }[]>(ini.upsell ?? [])
   const [alertas, setAlertas] = useState<string[]>(ini.alertas ?? [])
   const [preEventoId, setPreEventoId] = useState<string | undefined>(ini.preEventoId)
+  const [whatsapp] = useState<string | undefined>(ini.whatsapp)
+  const [waConfigurado, setWaConfigurado] = useState(false)
+  const [enviandoWa, setEnviandoWa] = useState<string | null>(null)
 
   const [imprimindo, setImprimindo] = useState<'locacao' | 'servicos' | null>(null)
   const [confirmando, setConfirmando] = useState<Evento | null>(null)
@@ -222,7 +225,7 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
   // ---------- salvamento automático do orçamento (1 s depois da última mudança)
   const estado: EstadoAtendimento = {
     versao, dados, pedidos, falta, slug, montagem, contratacao, fastixOpcional, staffComplementar, valorManual,
-    buffetId, buffetOpcao, buffetValor, extras, opcionais, condicoesServicos, upsell, alertas, preEventoId,
+    buffetId, buffetOpcao, buffetValor, extras, opcionais, condicoesServicos, upsell, alertas, preEventoId, whatsapp,
   }
   const estadoJson = JSON.stringify(estado)
   const ultimoSalvo = useRef(JSON.stringify({ ...estado }))
@@ -362,6 +365,52 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
     setMensagens(ms => ms.map(m => (m.id === id ? { ...m, texto } : m)))
   }
 
+  // WhatsApp: o sistema tem a chave do Blip? E mensagens novas que chegaram
+  // pelo WhatsApp enquanto a tela está aberta (confere a cada 15 s).
+  useEffect(() => {
+    let vivo = true
+    fetch('/api/whatsapp/enviar').then(r => r.json()).then(j => { if (vivo) setWaConfigurado(!!j.configurado) }).catch(() => {})
+    return () => { vivo = false }
+  }, [])
+  const idsConhecidos = useRef(new Set(atendimento.mensagens.map(m => m.id)))
+  useEffect(() => { for (const m of mensagens) idsConhecidos.current.add(m.id) }, [mensagens])
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (document.hidden) return
+      carregarAtendimento(atendimento.id).then(a => {
+        const novas = a.mensagens.filter(m => !idsConhecidos.current.has(m.id))
+        if (novas.length === 0) return
+        setMensagens(ms => juntarMensagens(ms, novas))
+        if (novas.some(m => m.autor === 'cliente')) {
+          setToast('Nova mensagem do cliente. Use "Reler conversa" para atualizar os dados.')
+          setTimeout(() => setToast(null), 5000)
+        }
+      }).catch(() => {})
+    }, 15000)
+    return () => clearInterval(t)
+  }, [atendimento.id])
+
+  const podeWhatsapp = waConfigurado && !!(whatsapp || dados.telefone.replace(/\D/g, '').length >= 10)
+
+  async function enviarWhatsapp(m: Mensagem) {
+    if (!window.confirm('Enviar esta mensagem ao cliente pelo WhatsApp?')) return
+    setEnviandoWa(m.id); setErro(null)
+    try {
+      await gravarMensagens(mensagens) // garante a última edição salva antes de enviar
+      const res = await fetch('/api/whatsapp/enviar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ atendimentoId: atendimento.id, mensagemId: m.id, texto: m.texto }) })
+      const j = await res.json().catch(() => ({ error: 'Resposta inválida do servidor.' }))
+      if (!res.ok) throw new Error(j.error ?? 'Falha ao enviar.')
+      setMensagens(j.mensagens)
+      if (j.status) setStatus(j.status)
+      onAtualizado({ id: atendimento.id, status: j.status, updatedAt: new Date().toISOString(), updatedByNome: autor })
+      avisar('Enviado pelo WhatsApp.')
+    } catch (e) {
+      setErro(mensagemDeErro(e, 'Não foi possível enviar pelo WhatsApp.'))
+    } finally {
+      setEnviandoWa(null)
+    }
+  }
+
   async function marcarEnviada(m: Mensagem) {
     const novas = mensagens.map(x => (x.id === m.id ? { ...x, enviada: true, por: autor ?? x.por } : x))
     await gravarMensagens(novas, status === 'aberto' ? 'enviado' : undefined)
@@ -468,6 +517,7 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
                       <p className="mb-1 text-[11px] text-app-muted">
                         {ROTULO_AUTOR[m.autor]} · {new Date(m.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}{m.por ? ` · ${m.por}` : ''}
                         {m.autor === 'assistente' && (m.enviada ? ' · enviada' : ' · rascunho')}
+                        {m.canal === 'whatsapp' && ' · WhatsApp'}
                       </p>
                       {m.autor === 'assistente' && !m.enviada
                         ? <textarea className={`${inputCls} min-h-[160px]`} value={m.texto} onChange={e => editarMensagem(m.id, e.target.value)} onBlur={() => gravarMensagens(mensagens)} />
@@ -475,7 +525,12 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
                       {m.autor === 'assistente' && (
                         <div className="mt-2 flex flex-wrap justify-end gap-2">
                           <button type="button" className={btnSec} onClick={() => navigator.clipboard.writeText(m.texto).then(() => avisar('Resposta copiada.'))}><Copy className="h-4 w-4" /> Copiar</button>
-                          {!m.enviada && <button type="button" className={btnSec} onClick={() => marcarEnviada(m)}><Send className="h-4 w-4" /> Marcar como enviada</button>}
+                          {!m.enviada && podeWhatsapp && (
+                            <button type="button" className={btnPrim} disabled={enviandoWa === m.id} onClick={() => enviarWhatsapp(m)}>
+                              {enviandoWa === m.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Enviar pelo WhatsApp
+                            </button>
+                          )}
+                          {!m.enviada && <button type="button" className={btnSec} onClick={() => marcarEnviada(m)}>{podeWhatsapp ? 'Já enviei por fora' : <><Send className="h-4 w-4" /> Marcar como enviada</>}</button>}
                         </div>
                       )}
                     </div>
