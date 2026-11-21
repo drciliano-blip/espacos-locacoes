@@ -77,7 +77,8 @@ export default function ConsultaChat({ role, autor, tela, compacto }: { role: Ni
     const q = texto.trim()
     if (!q || pensando) return
     setErro(null); setPergunta(''); setPensando(true)
-    setBolhas(b => [...b, { id: crypto.randomUUID(), autor: 'pessoa', texto: q }])
+    const idBolha = crypto.randomUUID()
+    setBolhas(b => [...b, { id: idBolha, autor: 'pessoa', texto: q }])
     try {
       const res = await fetch('/api/assistente/consulta', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pergunta: paraIA ?? q, historico, tela }) })
       const json = await res.json().catch(() => ({ error: 'Resposta inválida do servidor.' }))
@@ -85,9 +86,13 @@ export default function ConsultaChat({ role, autor, tela, compacto }: { role: Ni
       setHistorico(json.historico ?? [])
       setBolhas(b => [...b, { id: crypto.randomUUID(), autor: 'ia', texto: json.resposta, acoes: json.acoes?.length ? json.acoes : undefined }])
     } catch (e) {
-      // "Load failed"/"Failed to fetch": a conexão caiu; devolve a pergunta para reenviar.
-      if (e instanceof TypeError) { setErro('A resposta demorou ou a internet oscilou. Sua mensagem voltou para a caixa: toque em enviar de novo.'); setPergunta(q) }
-      else setErro(mensagemDeErro(e, 'Não foi possível consultar.'))
+      // Não chegou ao assistente: tira a mensagem da conversa e devolve para a caixa,
+      // para não parecer que foi respondida (senão a próxima pergunta vai sem ela).
+      setBolhas(b => b.filter(x => x.id !== idBolha))
+      if (!paraIA) setPergunta(q)
+      setErro(e instanceof TypeError
+        ? 'A mensagem não chegou ao assistente (a resposta demorou ou a internet oscilou). Ela voltou para a caixa: toque em enviar de novo.'
+        : `${mensagemDeErro(e, 'Não foi possível consultar.')} A mensagem voltou para a caixa.`)
     } finally {
       setPensando(false)
     }
