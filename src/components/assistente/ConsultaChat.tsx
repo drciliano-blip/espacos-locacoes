@@ -15,6 +15,7 @@ import type { AcaoProposta } from '@/lib/assistente/ferramentas'
 import type { Espaco, Evento, NivelAcesso } from '@/types'
 import CartaoAcaoSistema from './CartaoAcaoSistema'
 import BotaoVoz from './BotaoVoz'
+import BotaoAnexo, { textoDaFicha } from './BotaoAnexo'
 
 interface Bolha {
   id: string
@@ -71,13 +72,14 @@ export default function ConsultaChat({ role, autor, tela, compacto }: { role: Ni
     fim.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [bolhas, historico])
 
-  async function perguntar(texto = pergunta) {
+  // paraIA: texto completo para o assistente (ex.: dados da ficha anexada); o chat mostra só `texto`.
+  async function perguntar(texto = pergunta, paraIA?: string) {
     const q = texto.trim()
     if (!q || pensando) return
     setErro(null); setPergunta(''); setPensando(true)
     setBolhas(b => [...b, { id: crypto.randomUUID(), autor: 'pessoa', texto: q }])
     try {
-      const res = await fetch('/api/assistente/consulta', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pergunta: q, historico, tela }) })
+      const res = await fetch('/api/assistente/consulta', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pergunta: paraIA ?? q, historico, tela }) })
       const json = await res.json().catch(() => ({ error: 'Resposta inválida do servidor.' }))
       if (!res.ok) throw new Error(json.error ?? 'Erro ao consultar.')
       setHistorico(json.historico ?? [])
@@ -157,6 +159,7 @@ export default function ConsultaChat({ role, autor, tela, compacto }: { role: Ni
 
       <form className="flex gap-2 border-t border-app-border p-3" onSubmit={e => { e.preventDefault(); perguntar() }}>
         <input className="min-w-0 flex-1 rounded-lg border border-app-border2 bg-app-surface2 px-3 py-2 text-sm text-app-text focus:outline-none" placeholder="Escreva ou toque no microfone e fale" value={pergunta} onChange={e => setPergunta(e.target.value)} />
+        <BotaoAnexo disabled={pensando} onErro={setErro} onLido={f => perguntar(`📎 ${f.arquivo}${pergunta.trim() ? ` — ${pergunta.trim()}` : ''}`, textoDaFicha(f, pergunta.trim()))} />
         <BotaoVoz disabled={pensando} onParcial={setPergunta} onFinal={t => perguntar(t)} onErro={setErro} />
         <button type="submit" disabled={pensando || !pergunta.trim()} aria-label="Enviar" className="inline-flex items-center rounded-lg bg-[#072A43] px-3 text-white disabled:opacity-50"><Send className="h-4 w-4" /></button>
       </form>

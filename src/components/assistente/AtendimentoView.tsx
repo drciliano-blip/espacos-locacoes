@@ -29,6 +29,7 @@ import { questionario } from '@/lib/assistente/roteiro'
 import PropostaAssistente from './PropostaAssistente'
 import CartaoAcaoSistema, { type AcaoSistema } from './CartaoAcaoSistema'
 import BotaoVoz from './BotaoVoz'
+import BotaoAnexo, { textoDaFicha } from './BotaoAnexo'
 import Toast from '@/components/shared/Toast'
 
 const inputCls = 'w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none'
@@ -370,7 +371,7 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
   }
 
   // ---------- Chat com o assistente
-  async function enviarChat(textoFixo?: string) {
+  async function enviarChat(textoFixo?: string, paraIA?: string) {
     const texto = (textoFixo ?? novoTexto).trim()
     const clienteNovas = mensagens.filter(m => m.autor === 'cliente' && (!iaAte || m.em > iaAte)).map(m => m.texto)
     if ((!texto && clienteNovas.length === 0) || pensando) return
@@ -381,7 +382,7 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
     try {
       const res = await fetch('/api/assistente/chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mensagem: texto, historico: iaHist, estado, preEvento: preEvento ? { status: preEvento.status } : null, clienteNovas }),
+        body: JSON.stringify({ mensagem: paraIA ?? texto, historico: iaHist, estado, preEvento: preEvento ? { status: preEvento.status } : null, clienteNovas }),
       })
       const j = await res.json().catch(() => ({ error: 'Resposta inválida do servidor.' }))
       if (!res.ok) throw new Error(j.error ?? 'Erro ao falar com o assistente.')
@@ -531,6 +532,7 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
           onChange={e => setNovoTexto(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && window.matchMedia('(min-width: 768px)').matches) { e.preventDefault(); enviarChat() } }}
         />
+        <BotaoAnexo disabled={pensando} onErro={setErro} onLido={f => enviarChat(`📎 ${f.arquivo}${novoTexto.trim() ? ` — ${novoTexto.trim()}` : ''}`, textoDaFicha(f, novoTexto.trim()))} />
         <BotaoVoz disabled={pensando} onParcial={setNovoTexto} onFinal={t => enviarChat(t)} onErro={setErro} />
         <button type="submit" aria-label="Enviar" disabled={pensando || (!novoTexto.trim() && !mensagens.some(m => m.autor === 'cliente' && (!iaAte || m.em > iaAte)))} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#072A43] text-white disabled:opacity-40">
           {pensando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

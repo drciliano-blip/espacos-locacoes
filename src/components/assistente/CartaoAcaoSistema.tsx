@@ -7,12 +7,13 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { CalendarClock, FileSignature, Ban, Banknote, Receipt, ExternalLink, CheckCircle2, FileText } from 'lucide-react'
+import { CalendarClock, FileSignature, Ban, Banknote, Receipt, ExternalLink, CheckCircle2, FileText, CalendarPlus } from 'lucide-react'
 import { useEventos } from '@/contexts/EventosContext'
 import { useReceitas } from '@/contexts/ReceitasContext'
 import { useRepasses } from '@/contexts/RepassesContext'
 import { aplicarBaixaComRepasseAutomatico } from '@/lib/repasse-socio'
 import EventoDrawer from '@/components/eventos/EventoDrawer'
+import NovoEventoModal from '@/components/eventos/NovoEventoModal'
 import { EditarParcelaModal } from '@/components/eventos/PlanoPagamentoSection'
 import type { AcaoProposta } from '@/lib/assistente/ferramentas'
 
@@ -22,16 +23,16 @@ const btn = 'inline-flex items-center gap-1.5 rounded-lg bg-[#072A43] px-3 py-1.
 
 export default function CartaoAcaoSistema({ acao, feita, onFeita }: { acao: AcaoSistema; feita?: boolean; onFeita?: () => void }) {
   const router = useRouter()
-  const { eventos, updateEvento, deleteEvento } = useEventos()
+  const { eventos, updateEvento, deleteEvento, addEvento } = useEventos()
   const { receitas, updateReceita } = useReceitas()
   const { repasses, addRepasse } = useRepasses()
   const [aberto, setAberto] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
-  const icone = acao.tipo === 'baixa' ? Banknote : acao.tipo === 'conta' ? Receipt : acao.tipo === 'atendimento' ? FileText
+  const icone = acao.tipo === 'cadastro_evento' ? CalendarPlus : acao.tipo === 'baixa' ? Banknote : acao.tipo === 'conta' ? Receipt : acao.tipo === 'atendimento' ? FileText
     : acao.acao === 'gerar_contrato' ? FileSignature : acao.acao === 'cancelar' ? Ban : CalendarClock
   const Icone = icone
-  const rotulo = acao.tipo === 'baixa' ? 'Abrir e dar baixa' : acao.tipo === 'conta' ? 'Abrir em Contas a Pagar' : acao.tipo === 'atendimento' ? 'Abrir e montar o orçamento'
+  const rotulo = acao.tipo === 'cadastro_evento' ? 'Abrir cadastro do evento' : acao.tipo === 'baixa' ? 'Abrir e dar baixa' : acao.tipo === 'conta' ? 'Abrir em Contas a Pagar' : acao.tipo === 'atendimento' ? 'Abrir e montar o orçamento'
     : { gerar_contrato: 'Abrir e gerar contrato', cancelar: 'Abrir cancelamento', reagendar: 'Abrir e alterar data', converter: 'Abrir e confirmar', ver: 'Abrir evento' }[acao.acao]
 
   function abrir() {
@@ -72,6 +73,14 @@ export default function CartaoAcaoSistema({ acao, feita, onFeita }: { acao: Acao
           onClose={() => setAberto(false)}
           onUpdate={async ev => { await updateEvento(ev) }}
           onDelete={async (id, motivo) => { await deleteEvento(id, motivo); setAberto(false); onFeita?.() }}
+        />
+      )}
+
+      {aberto && acao.tipo === 'cadastro_evento' && (
+        <NovoEventoModal
+          fichaOrigem={acao.ficha}
+          onClose={() => setAberto(false)}
+          onSave={async ev => { await addEvento(ev); onFeita?.() }}
         />
       )}
 

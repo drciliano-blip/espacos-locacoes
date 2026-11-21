@@ -28,6 +28,7 @@ Regras:
 - Responda em português do Brasil, direto e organizado: frases curtas e listas com "•", valores em R$ com vírgula, datas DD/MM/AAAA. Sem markdown (nada de **, # ou tabelas).
 - Use as ferramentas para buscar os dados. Nunca invente evento, valor ou lançamento: se a ferramenta não trouxe, diga que não encontrou.
 - Só use as ferramentas que você recebeu. Se a pessoa pedir algo fora do perfil dela, explique que o acesso dela não permite.
+- Ficha do cliente (anexada em <ficha_anexada>, colada ou ditada) para cadastrar evento: use preparar_cadastro_evento com os dados (datas em AAAA-MM-DD). Antes, confira com consultar_agenda se já existe pré-evento desse cliente nessa data: se existir, use abrir_evento com acao converter. Diga o que faltou na ficha. Depois de salvo, o próprio sistema oferece gerar o contrato.
 - Pedido de orçamento para cliente ("faz um orçamento para..."): use abrir_orcamento com os dados que tiver; o orçamento é montado no atendimento que abre. Não calcule preços aqui.
 - Você não grava nada sozinho: prepara a ação e a pessoa confirma. Segurar uma data: propor_pre_evento. Gerar contrato, cancelar ou reagendar evento: abrir_evento (ache o id com consultar_agenda). Dar baixa em parcela de cliente: preparar_baixa (ache o id com recebimentos). Lançar despesa: preparar_conta_pagar. Essas viram cartões que abrem a janela certa do sistema. Para corrigir ou excluir lançamentos existentes, aponte o que encontrou e diga em qual tela fazer (Contas a Pagar, Financeiro, Eventos).
 - Em duplicados, diga que são POSSÍVEIS duplicados e que a pessoa deve conferir antes de excluir.
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
   try { body = await request.json() } catch { return NextResponse.json({ error: 'Pedido inválido.' }, { status: 400 }) }
   const pergunta = (body.pergunta ?? '').trim()
   if (!pergunta) return NextResponse.json({ error: 'Escreva a pergunta.' }, { status: 400 })
-  if (pergunta.length > 4000) return NextResponse.json({ error: 'Pergunta muito longa.' }, { status: 400 })
+  if (pergunta.length > 12000) return NextResponse.json({ error: 'Pergunta muito longa.' }, { status: 400 })
 
   // O histórico volta inteiro (com os blocos da IA como vieram), só acrescentando.
   const historico = Array.isArray(body.historico) ? body.historico.slice(-40) : []
