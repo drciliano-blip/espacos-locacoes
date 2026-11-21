@@ -455,14 +455,14 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
         {mensagens.map(m => {
           if (m.autor === 'equipe') return (
             <div key={m.id} className="flex justify-end">
-              <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-[#072A43] px-3.5 py-2 text-sm text-white">{m.texto}</div>
+              <div className="max-w-[85%] whitespace-pre-wrap [overflow-wrap:anywhere] rounded-2xl bg-[#072A43] px-3.5 py-2 text-sm text-white">{m.texto}</div>
             </div>
           )
           if (m.autor === 'cliente') return (
             <div key={m.id} className="flex justify-start">
               <div className="max-w-[85%] rounded-2xl bg-app-surface2 px-3.5 py-2 text-sm text-app-text">
                 <p className="mb-0.5 text-[11px] font-semibold text-app-muted">Cliente{m.canal === 'whatsapp' ? ' · WhatsApp' : ''} · {new Date(m.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</p>
-                <p className="whitespace-pre-wrap">{m.texto}</p>
+                <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{m.texto}</p>
               </div>
             </div>
           )
@@ -470,7 +470,7 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
             <div key={m.id} className="max-w-[92%] rounded-2xl border border-[#072A43]/20 bg-app-surface p-3 text-sm">
               <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-app-muted"><MessageSquareText className="h-3.5 w-3.5" /> Mensagem para o cliente · {m.enviada ? `enviada${m.canal === 'whatsapp' ? ' pelo WhatsApp' : ''}` : 'rascunho'}</p>
               {m.enviada
-                ? <p className="whitespace-pre-wrap text-app-text">{m.texto}</p>
+                ? <p className="whitespace-pre-wrap [overflow-wrap:anywhere] text-app-text">{m.texto}</p>
                 : <textarea className={`${inputCls} min-h-[140px]`} value={m.texto} onChange={e => editarMensagem(m.id, e.target.value)} onBlur={() => gravarMensagens(mensagens)} />}
               <div className="mt-2 flex flex-wrap justify-end gap-2">
                 <button type="button" className={btnSec} onClick={() => copiar(m.texto)}><Copy className="h-4 w-4" /> Copiar</button>
@@ -518,7 +518,7 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
           return (
             <div key={m.id} className="flex gap-2">
               <Sparkles className="mt-1 h-4 w-4 shrink-0 text-[#9A7937]" />
-              <p className="whitespace-pre-wrap text-sm text-app-text">{m.texto}</p>
+              <p className="whitespace-pre-wrap [overflow-wrap:anywhere] text-sm text-app-text">{m.texto}</p>
             </div>
           )
         })}

@@ -144,8 +144,8 @@ export default function ConsultaChat({ role, autor, tela, compacto }: { role: Ni
 
   return (
     <div className={`flex flex-col bg-app-surface ${compacto ? 'h-full' : 'min-h-[60vh] rounded-xl border border-app-border'}`}>
-      <div className="flex items-center justify-between border-b border-app-border px-4 py-3">
-        <p className="text-sm text-app-muted">Tire dúvidas de como usar o sistema ou pergunte sobre agenda, eventos e financeiro. A IA busca no sistema com o seu nível de acesso e não altera nada sozinha.</p>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-app-border px-4 py-2.5">
+        <p className="min-w-0 basis-full text-xs text-app-muted sm:basis-0 sm:flex-1 sm:text-sm">Tire dúvidas, consulte agenda e financeiro ou peça tarefas. A IA usa o seu nível de acesso e não altera nada sozinha.</p>
         <button type="button" onClick={testar} disabled={testando} className="shrink-0 text-xs text-app-muted underline disabled:opacity-50">{testando ? 'Testando…' : 'Testar a IA'}</button>
         {bolhas.length > 0 && <button type="button" onClick={limpar} className="inline-flex shrink-0 items-center gap-1 text-xs text-app-muted"><RotateCcw className="h-3.5 w-3.5" /> Nova conversa</button>}
       </div>
@@ -164,7 +164,7 @@ export default function ConsultaChat({ role, autor, tela, compacto }: { role: Ni
         {bolhas.map(b => (
           <div key={b.id} className={`flex ${b.autor === 'pessoa' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[90%] rounded-xl px-3 py-2 text-sm ${b.autor === 'pessoa' ? 'bg-[#072A43] text-white' : 'bg-app-surface2 text-app-text'}`}>
-              <p className="whitespace-pre-wrap">{b.texto}</p>
+              <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{b.texto}</p>
               {b.acoes?.map((a, i) => a.tipo !== 'pre_evento' ? (
                 <CartaoAcaoSistema key={i} acao={a} feita={a.feita} onFeita={() => marcarFeita(b.id, i)} />
               ) : (
