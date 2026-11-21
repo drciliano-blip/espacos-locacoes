@@ -6,6 +6,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
 import { canAccess } from '@/lib/auth'
 import { MANUAL_SISTEMA } from '@/lib/assistente/manual-sistema'
+import { BASE_JURIDICA, REGRAS_JURIDICAS } from '@/lib/assistente/base-juridica'
 import { LIMITE_HISTORICO, respostaViva } from '@/lib/assistente/resposta-viva'
 import { executarFerramenta, ferramentasDoPerfil, type AcaoProposta } from '@/lib/assistente/ferramentas'
 import type { NivelAcesso } from '@/types'
@@ -25,7 +26,7 @@ const PERFIL: Record<string, string> = {
 }
 
 function sistema(role: NivelAcesso, hoje: string) {
-  return `Você é o assistente interno do sistema da Espaços & Locações: responde dúvidas de uso do sistema (pelo MANUAL acima) e busca dados (locação de espaços para eventos em São Paulo: Fabrique, Usine, House Pacaembu, Espaço Solon, Complexo Jussara).
+  return `Você é o assistente interno do sistema da Espaços & Locações: responde dúvidas de uso do sistema (pelo MANUAL acima), dúvidas jurídicas e de regulamentação de eventos (pela BASE JURÍDICA acima) e busca dados (locação de espaços para eventos em São Paulo: Fabrique, Usine, House Pacaembu, Espaço Solon, Complexo Jussara).
 Hoje é ${hoje}. Quem está perguntando é ${PERFIL[role] ?? role}.
 
 Regras:
@@ -91,7 +92,7 @@ export async function POST(request: Request) {
         max_tokens: 8000,
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: [{ model: 'claude-opus-4-8' }],
-        system: [{ type: 'text', text: MANUAL_SISTEMA, cache_control: { type: 'ephemeral' } }, { type: 'text', text: sistema(role, hoje) }],
+        system: [{ type: 'text', text: MANUAL_SISTEMA }, { type: 'text', text: BASE_JURIDICA, cache_control: { type: 'ephemeral' } }, { type: 'text', text: sistema(role, hoje) + '\n\n' + REGRAS_JURIDICAS }],
         output_config: { effort: 'low' },
         // Perto do limite de tempo: responde com o que já tem, sem novas consultas.
         ...(Date.now() - inicio > 30000 ? { tool_choice: { type: 'none' as const } } : {}),

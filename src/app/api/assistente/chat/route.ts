@@ -6,6 +6,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
 import { canAccess } from '@/lib/auth'
 import { MANUAL_SISTEMA } from '@/lib/assistente/manual-sistema'
+import { BASE_JURIDICA, REGRAS_JURIDICAS } from '@/lib/assistente/base-juridica'
 import { LIMITE_HISTORICO, respostaViva } from '@/lib/assistente/resposta-viva'
 import { executarFerramenta, ferramentasDoPerfil, type AcaoProposta } from '@/lib/assistente/ferramentas'
 import { aplicarPatch, calcular, type PatchOrcamento } from '@/lib/assistente/calculo-estado'
@@ -193,7 +194,7 @@ export async function POST(request: Request) {
         max_tokens: 8000,
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: [{ model: 'claude-opus-4-8' }],
-        system: [{ type: 'text', text: MANUAL_SISTEMA }, { type: 'text', text: SISTEMA, cache_control: { type: 'ephemeral' } }],
+        system: [{ type: 'text', text: MANUAL_SISTEMA }, { type: 'text', text: BASE_JURIDICA }, { type: 'text', text: SISTEMA + '\n\n' + REGRAS_JURIDICAS, cache_control: { type: 'ephemeral' } }],
         output_config: { effort: 'low' },
         // Perto do limite de tempo: responde com o que já tem, sem novas consultas.
         ...(Date.now() - inicio > 30000 ? { tool_choice: { type: 'none' as const } } : {}),
