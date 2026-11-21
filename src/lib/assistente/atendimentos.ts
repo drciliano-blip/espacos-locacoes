@@ -14,6 +14,8 @@ export interface Mensagem {
   em: string // ISO
   por?: string // nome de quem colou/gerou/aprovou
   enviada?: boolean // resposta da IA marcada como enviada ao cliente
+  canal?: 'whatsapp' // chegou ou saiu pelo WhatsApp (Blip)
+  idExterno?: string // id da mensagem no WhatsApp (evita duplicar)
 }
 
 export type StatusAtendimento = 'aberto' | 'enviado' | 'fechado' | 'perdido'
@@ -45,6 +47,7 @@ export interface EstadoAtendimento {
   upsell: { servico: string; motivo: string }[]
   alertas: string[]
   preEventoId?: string // evento (em negociação) criado na Agenda a partir deste atendimento
+  whatsapp?: string // número do cliente no WhatsApp (só dígitos, com 55)
 }
 
 export interface AtendimentoResumo {
@@ -130,8 +133,14 @@ export async function salvarAtendimento(id: string, p: PatchAtendimento, autor?:
   if (p.totalLocacao !== undefined) row.total_locacao = p.totalLocacao
   if (p.totalServicos !== undefined) row.total_servicos = p.totalServicos
   if (p.estado !== undefined) row.estado = p.estado
-  if (p.mensagens !== undefined) row.mensagens = p.mensagens
-  const { error } = await createClient().from('assistente_atendimentos').update(row).eq('id', id)
+  const sb = createClient()
+  // Mensagens podem chegar pelo WhatsApp enquanto a tela está aberta: grava
+  // juntando com o que já está no banco, para não apagar o que chegou.
+  if (p.mensagens !== undefined) {
+    const { data: atual } = await sb.from('assistente_atendimentos').select('mensagens').eq('id', id).single()
+    row.mensagens = juntarMensagens((atual?.mensagens ?? []) as Mensagem[], p.mensagens)
+  }
+  const { error } = await sb.from('assistente_atendimentos').update(row).eq('id', id)
   if (error) throw error
   return row.updated_at as string
 }
@@ -139,6 +148,14 @@ export async function salvarAtendimento(id: string, p: PatchAtendimento, autor?:
 export async function excluirAtendimento(id: string): Promise<void> {
   const { error } = await createClient().from('assistente_atendimentos').delete().eq('id', id)
   if (error) throw error
+}
+
+// Une duas listas de mensagens pelo id (a segunda vence nos repetidos), em ordem de horário.
+export function juntarMensagens(base: Mensagem[], novas: Mensagem[]): Mensagem[] {
+  const porId = new Map<string, Mensagem>()
+  for (const m of base) porId.set(m.id, m)
+  for (const m of novas) porId.set(m.id, m)
+  return [...porId.values()].sort((a, b) => a.em.localeCompare(b.em))
 }
 
 export function novaMensagem(autor: AutorMensagem, texto: string, por?: string): Mensagem {
