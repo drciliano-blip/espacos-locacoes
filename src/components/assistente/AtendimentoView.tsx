@@ -399,9 +399,12 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
       }
       await gravarMensagens([...comPergunta, ...novas])
     } catch (e) {
-      if (e instanceof TypeError) { setErro('A resposta demorou ou a internet oscilou. Sua mensagem voltou para a caixa: toque em enviar de novo.'); if (!textoFixo) setNovoTexto(texto) }
-      else setErro(mensagemDeErro(e, 'Não foi possível falar com o assistente.'))
-      await gravarMensagens(comPergunta)
+      // Não chegou ao assistente: tira da conversa e devolve para a caixa.
+      setMensagens(mensagens)
+      if (!paraIA) setNovoTexto(texto)
+      setErro(e instanceof TypeError
+        ? 'A mensagem não chegou ao assistente (a resposta demorou ou a internet oscilou). Ela voltou para a caixa: toque em enviar de novo.'
+        : `${mensagemDeErro(e, 'Não foi possível falar com o assistente.')} A mensagem voltou para a caixa.`)
     } finally {
       setPensando(false)
     }
