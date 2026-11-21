@@ -8,7 +8,7 @@
 // só acontecem com o clique de quem está atendendo e usam as permissões dele.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Sparkles, Loader2, FileDown, Copy, Plus, Trash2, CalendarCheck, CalendarX, AlertTriangle, CalendarClock, CheckCircle2, Send, StickyNote, MessageSquareText } from 'lucide-react'
+import { Sparkles, Loader2, FileDown, Copy, Plus, Trash2, CalendarCheck, CalendarX, AlertTriangle, CalendarClock, CheckCircle2, Send, MessageSquareText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, mensagemDeErro } from '@/lib/utils'
 import { carregarTabelas, opcoesDaTabela, sugerirFaixa, type BuffetTabela } from '@/lib/buffet'
@@ -40,13 +40,7 @@ const PAGAMENTO_SERVICOS = [
 ]
 
 interface Ocupacao { cliente: string; status: string }
-interface Extraido {
-  cliente: string | null; empresa: string | null; telefone: string | null; email: string | null
-  tipoEvento: string | null; dataEvento: string | null; convidados: number | null; duracaoHoras: number | null
-  vesperaOuFeriado: TipoDia; espacoDesejado: string | null; servicosPedidos: string[]
-  observacoes: string | null; faltaPerguntar: string[]
-}
-interface Resposta { mensagem: string; upsell: { servico: string; motivo: string }[]; alertas: string[] }
+
 
 function Campo({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
@@ -79,24 +73,6 @@ function EditorLinhas({ lista, setLista, rotulo }: { lista: LinhaOrcamento[]; se
   )
 }
 
-async function chamar<T>(corpo: unknown): Promise<T> {
-  const res = await fetch('/api/assistente', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) })
-  const json = await res.json().catch(() => ({ error: 'Resposta inválida do servidor.' }))
-  if (!res.ok) throw new Error(json.error ?? 'Erro ao consultar a IA.')
-  return json as T
-}
-
-
-const ROTULO_AUTOR: Record<Mensagem['autor'], string> = { cliente: 'Cliente', assistente: 'Resposta da IA', equipe: 'Nota da equipe', sistema: 'Sistema' }
-
-// Texto da conversa para a IA ler, em ordem, com quem disse o quê.
-function conversaParaIA(msgs: Mensagem[]): string {
-  return msgs
-    .filter(m => m.autor !== 'sistema')
-    .map(m => `[${new Date(m.em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}] ${m.autor === 'cliente' ? 'CLIENTE' : m.autor === 'assistente' ? 'E&L (resposta enviada ou rascunho)' : 'NOTA INTERNA DA EQUIPE'}: ${m.texto}`)
-    .join('\n\n')
-}
-
 interface Props {
   atendimento: Atendimento
   autor?: string
@@ -111,20 +87,23 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
   const { eventos, addEvento, confirmarPreEvento } = useEventos()
   const { espacosConfig } = useEspacos()
 
-  const [analisando, setAnalisando] = useState(false)
-  const [gerando, setGerando] = useState(false)
+  const [pensando, setPensando] = useState(false)
+  const [verOrcamento, setVerOrcamento] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
-  const [salvoEm, setSalvoEm] = useState<string | null>(null)
+  const [, setSalvoEm] = useState<string | null>(null)
 
   const [mensagens, setMensagens] = useState<Mensagem[]>(atendimento.mensagens)
   const [status, setStatus] = useState<StatusAtendimento>(atendimento.status)
   const [novoTexto, setNovoTexto] = useState('')
+  const [iaHist, setIaHist] = useState<unknown[]>(ini.ia ?? [])
+  const [iaAte, setIaAte] = useState<string | undefined>(ini.iaAte)
+  const fimChat = useRef<HTMLDivElement>(null)
 
   const [versao, setVersao] = useState(ini.versao ?? 1)
   const [dados, setDados] = useState<DadosEvento>({ ...DADOS_VAZIOS, ...(ini.dados ?? {}) })
-  const [pedidos, setPedidos] = useState<string[]>(ini.pedidos ?? [])
-  const [falta, setFalta] = useState<string[]>(ini.falta ?? [])
+  const [pedidos] = useState<string[]>(ini.pedidos ?? [])
+  const [falta] = useState<string[]>(ini.falta ?? [])
   const [slug, setSlug] = useState<string>(ini.slug ?? '')
   const [ocupacao, setOcupacao] = useState<{ data: string; porSlug: Record<string, Ocupacao[]>; falhou: boolean } | null>(null)
 
@@ -142,8 +121,8 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
   const [extras, setExtras] = useState<LinhaOrcamento[]>(ini.extras ?? [])
   const [opcionais, setOpcionais] = useState<LinhaOrcamento[]>(ini.opcionais ?? [])
   const [condicoesServicos, setCondicoesServicos] = useState(ini.condicoesServicos ?? '')
-  const [upsell, setUpsell] = useState<{ servico: string; motivo: string }[]>(ini.upsell ?? [])
-  const [alertas, setAlertas] = useState<string[]>(ini.alertas ?? [])
+  const [upsell] = useState<{ servico: string; motivo: string }[]>(ini.upsell ?? [])
+  const [alertas] = useState<string[]>(ini.alertas ?? [])
   const [preEventoId, setPreEventoId] = useState<string | undefined>(ini.preEventoId)
   const [whatsapp] = useState<string | undefined>(ini.whatsapp)
   const [waConfigurado, setWaConfigurado] = useState(false)
@@ -226,6 +205,7 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
   const estado: EstadoAtendimento = {
     versao, dados, pedidos, falta, slug, montagem, contratacao, fastixOpcional, staffComplementar, valorManual,
     buffetId, buffetOpcao, buffetValor, extras, opcionais, condicoesServicos, upsell, alertas, preEventoId, whatsapp,
+    ia: iaHist, iaAte,
   }
   const estadoJson = JSON.stringify(estado)
   const ultimoSalvo = useRef(JSON.stringify({ ...estado }))
@@ -266,98 +246,6 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
       onAtualizado({ id: atendimento.id, status: s, updatedAt: em, updatedByNome: autor })
     } catch (err) {
       setErro(mensagemDeErro(err, 'Não foi possível mudar a situação.'))
-    }
-  }
-
-  // ---------- IA: ler a conversa
-  async function adicionarDoCliente() {
-    const texto = novoTexto.trim()
-    if (!texto) return
-    const novas = [...mensagens, novaMensagem('cliente', texto, autor)]
-    setNovoTexto('')
-    await gravarMensagens(novas)
-    await analisar(novas)
-  }
-
-  async function adicionarNota() {
-    const texto = novoTexto.trim()
-    if (!texto) return
-    setNovoTexto('')
-    await gravarMensagens([...mensagens, novaMensagem('equipe', texto, autor)])
-  }
-
-  async function analisar(msgs = mensagens) {
-    if (!msgs.some(m => m.autor === 'cliente')) { setErro('Adicione pelo menos uma mensagem do cliente.'); return }
-    setErro(null); setAnalisando(true)
-    try {
-      const r = await chamar<Extraido>({ acao: 'extrair', texto: conversaParaIA(msgs), dadosAtuais: { ...dados, espaco: slug || null } })
-      // A IA devolve null no que não sabe: nesses campos fica o que já estava.
-      setDados(d => ({
-        cliente: r.cliente ?? d.cliente, empresa: r.empresa ?? d.empresa, telefone: r.telefone ?? d.telefone, email: r.email ?? d.email,
-        tipoEvento: r.tipoEvento ?? d.tipoEvento, data: r.dataEvento ?? d.data, convidados: r.convidados ?? d.convidados,
-        duracaoHoras: r.duracaoHoras ?? d.duracaoHoras, tipoDia: r.vesperaOuFeriado ?? d.tipoDia, observacoes: r.observacoes ?? d.observacoes,
-      }))
-      setPedidos(r.servicosPedidos ?? [])
-      setFalta(r.faltaPerguntar ?? [])
-      if (r.espacoDesejado && tabelaPorSlug(r.espacoDesejado)) setSlug(r.espacoDesejado)
-    } catch (e) {
-      setErro(mensagemDeErro(e, 'Não foi possível analisar a conversa.'))
-    } finally {
-      setAnalisando(false)
-    }
-  }
-
-  async function gerarResposta() {
-    setErro(null); setGerando(true)
-    try {
-      const escolhido = opcoesEspacos.find(o => o.t.slug === slug)
-      // Etapa 1 (coleta): falta alguma das 5 respostas → a IA pede só o que falta.
-      const contexto = emColeta || !espaco ? {
-        etapa: 'coleta',
-        conversaAteAgora: conversaParaIA(mensagens.slice(-30)),
-        jaRespondido: perguntas.filter(p => p.resposta).map(p => `${p.pergunta}: ${p.resposta}`),
-        faltaResponder: perguntas.filter(p => !p.resposta).map(p => p.pergunta),
-        espacosLivresQueComportam: dados.data && dados.convidados && agendaDoDia
-          ? opcoesEspacos.filter(o => o.livre === true && o.cabe && !o.t.semTabela).map(o => `${o.t.nome} (até ${o.t.capacidade.toLocaleString('pt-BR')} pessoas)`)
-          : 'ainda não dá para conferir (falta data ou número de pessoas)',
-        observacao: 'O Complexo Jussara é atendido pessoalmente pela direção: se o cliente escolher o Jussara, diga que a equipe vai retornar com os detalhes.',
-      } : {
-        etapa: 'orcamento',
-        conversaAteAgora: conversaParaIA(mensagens.slice(-30)),
-        cliente: { nome: dados.cliente, empresa: dados.empresa },
-        evento: { tipo: dados.tipoEvento, data: dados.data ? `${diaDaSemana(dados.data)}, ${br(dados.data)}` : 'não informada', convidados: dados.convidados, duracaoHoras: dados.duracaoHoras, observacoes: dados.observacoes },
-        espacoEscolhido: {
-          nome: espaco.nome,
-          disponivelNaData: escolhido?.livre ?? 'verificar manualmente',
-          jaPreReservadoParaEsteCliente: !!preEvento,
-          comportaOPublico: escolhido?.cabe ?? true,
-          capacidade: espaco.capacidade,
-          totalLocacao: formatCurrency(totalLoc),
-          itensLocacao: linhasLoc.map(l => `${l.descricao}: ${formatCurrency(l.valor)}`),
-          inclusoNaLocacao: [...espaco.staffDaCasa, ...espaco.rider.map(r => r.titulo)],
-          obrigatorios: espaco.obrigatorios,
-          contratacao: contratacao === 'parceria' ? 'parceria (venda de ingressos obrigatória pela FASTIX)' : fastix ? 'locação com condição FASTIX (cliente vende ingressos pela FASTIX)' : 'locação',
-          pagamento: parcelas(totalLoc, regraLoc, dados.data).map(p => `${p.descricao}: ${formatCurrency(p.valor)}${p.vencimento ? ` até ${br(p.vencimento)}` : ''}`),
-        },
-        alternativasLivres: opcoesEspacos
-          .filter(o => o.t.slug !== slug && o.livre === true && o.cabe && !o.t.semTabela)
-          .map(o => `${o.t.nome}: ${formatCurrency(o.total)} (até ${o.t.capacidade} pessoas)`),
-        orcamentoServicos: { itens: linhasServ.map(l => `${l.descricao} (${l.prestador || 'E&L'}): ${formatCurrency(l.valor)}`), total: formatCurrency(totalServ) },
-        opcionaisJaOferecidos: opcionais.map(o => o.descricao),
-        servicosQueOClientePediu: pedidos,
-        faltaPerguntar: falta,
-        catalogo: {
-          buffetEL: tabelasBuffet.map(t => t.nome),
-          parceiros: ['decoração', 'foto e vídeo', 'som e iluminação extra', 'painel de LED', 'mobiliário e lounge', 'bar de drinks', 'cabine de fotos', 'produção do evento', 'segurança e brigada'],
-        },
-      }
-      const r = await chamar<Resposta>({ acao: 'resposta', contexto })
-      setUpsell(r.upsell); setAlertas(r.alertas)
-      await gravarMensagens([...mensagens, novaMensagem('assistente', r.mensagem, autor)])
-    } catch (e) {
-      setErro(mensagemDeErro(e, 'Não foi possível gerar a resposta.'))
-    } finally {
-      setGerando(false)
     }
   }
 
@@ -418,8 +306,8 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
   }
 
   // ---------- Agenda (com as permissões de quem está usando)
-  async function preReservar() {
-    if (!espaco || !nomeNoSistema || !dados.data) return
+  async function preReservar(cartaoId?: string) {
+    if (!espaco || !nomeNoSistema || !dados.data) { setErro('Para pré-reservar, o orçamento precisa ter cliente, data e um espaço da agenda.'); return }
     const ocupado = opcoesEspacos.find(o => o.t.slug === slug)?.livre === false
     const aviso = ocupado ? '\n\nATENÇÃO: já existe evento nesse espaço nessa data.' : ''
     if (!window.confirm(`Criar pré-evento na Agenda?\n\n${dados.empresa || dados.cliente} · ${nomeNoSistema} · ${br(dados.data)}${aviso}`)) return
@@ -445,7 +333,8 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
       }
       await addEvento(evento)
       setPreEventoId(evento.id)
-      await gravarMensagens([...mensagens, novaMensagem('sistema', `Pré-evento criado na Agenda: ${nomeNoSistema}, ${br(dados.data)}.`, autor)])
+      const base = cartaoId ? mensagens.map(m => (m.id === cartaoId ? { ...m, feita: true } : m)) : mensagens
+      await gravarMensagens([...base, novaMensagem('sistema', `Pré-evento criado na Agenda: ${nomeNoSistema}, ${br(dados.data)}.`, autor)])
       avisar('Pré-evento criado na Agenda.')
     } catch (e) {
       setErro(mensagemDeErro(e, 'Não foi possível criar o pré-evento (confira se você tem acesso à Agenda).'))
@@ -465,91 +354,181 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
 
   const pronto = !!espaco
   const perguntas = questionario(dados, espaco?.nome)
-  const emColeta = perguntas.some(p => !p.resposta)
-  const ultimaResposta = [...mensagens].reverse().find(m => m.autor === 'assistente')
+  const faltam = perguntas.filter(p => !p.resposta)
+
+  useEffect(() => { fimChat.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [mensagens.length, pensando])
+
+  // Aplica na tela o orçamento que o assistente montou (o salvamento automático grava).
+  function aplicarEstado(e: EstadoAtendimento) {
+    setDados({ ...DADOS_VAZIOS, ...e.dados }); setSlug(e.slug); setMontagem(e.montagem); setContratacao(e.contratacao)
+    setFastixOpcional(e.fastixOpcional); setStaffComplementar(e.staffComplementar); setValorManual(e.valorManual)
+    setBuffetId(e.buffetId); setBuffetOpcao(e.buffetOpcao); setBuffetValor(e.buffetValor); setExtras(e.extras); setOpcionais(e.opcionais)
+  }
+
+  // ---------- Chat com o assistente
+  async function enviarChat(textoFixo?: string) {
+    const texto = (textoFixo ?? novoTexto).trim()
+    const clienteNovas = mensagens.filter(m => m.autor === 'cliente' && (!iaAte || m.em > iaAte)).map(m => m.texto)
+    if ((!texto && clienteNovas.length === 0) || pensando) return
+    setErro(null); setNovoTexto(''); setPensando(true)
+    const comPergunta = texto ? [...mensagens, novaMensagem('equipe', texto, autor)] : mensagens
+    setMensagens(comPergunta)
+    const agora = new Date().toISOString()
+    try {
+      const res = await fetch('/api/assistente/chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mensagem: texto, historico: iaHist, estado, preEvento: preEvento ? { status: preEvento.status } : null, clienteNovas }),
+      })
+      const j = await res.json().catch(() => ({ error: 'Resposta inválida do servidor.' }))
+      if (!res.ok) throw new Error(j.error ?? 'Erro ao falar com o assistente.')
+      if (j.estado) aplicarEstado(j.estado as EstadoAtendimento)
+      setIaHist(j.historico ?? iaHist); setIaAte(agora)
+      const novas: Mensagem[] = []
+      if (j.resposta) novas.push(novaMensagem('assistente', j.resposta))
+      for (const a of (j.acoes ?? []) as { tipo: string; texto?: string; dados?: Record<string, unknown> }[]) {
+        if (a.tipo === 'rascunho' && a.texto) novas.push({ ...novaMensagem('assistente', a.texto), tipo: 'rascunho_cliente', enviada: false })
+        if (a.tipo === 'pdfs') novas.push({ ...novaMensagem('sistema', 'Orçamentos prontos para gerar.'), tipo: 'pdfs' })
+        if (a.tipo === 'pre_evento') novas.push({ ...novaMensagem('sistema', 'Pré-reservar a data na Agenda'), tipo: 'pre_evento', acao: a.dados })
+        if (a.tipo === 'confirmar_evento') novas.push({ ...novaMensagem('sistema', 'Converter o pré-evento em evento'), tipo: 'confirmar_evento' })
+      }
+      await gravarMensagens([...comPergunta, ...novas])
+    } catch (e) {
+      setErro(mensagemDeErro(e, 'Não foi possível falar com o assistente.'))
+      await gravarMensagens(comPergunta)
+    } finally {
+      setPensando(false)
+    }
+  }
+
+  async function copiar(texto: string) {
+    try { await navigator.clipboard.writeText(texto); avisar('Copiado.') } catch { setErro('Não consegui copiar: selecione o texto e copie.') }
+  }
+
+  const ehRascunho = (m: Mensagem) => m.tipo === 'rascunho_cliente' || (m.autor === 'assistente' && !m.tipo && m.enviada !== undefined)
 
   return (
-    <div className="space-y-4">
-      <div className="print:hidden space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="truncate text-lg font-semibold text-app-text">{titulo}</h2>
-            <p className="text-xs text-app-muted">
-              Nº {numero} · aberto por {atendimento.createdByNome ?? '—'}
-              {salvoEm && <> · salvo às {new Date(salvoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</>}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <select className={`${inputCls} w-auto`} value={status} onChange={e => mudarStatus(e.target.value as StatusAtendimento)} aria-label="Situação do atendimento">
-              {(Object.keys(STATUS_ATENDIMENTO) as StatusAtendimento[]).map(s => <option key={s} value={s}>{STATUS_ATENDIMENTO[s].label}</option>)}
-            </select>
-            {podeExcluir && (
-              <button type="button" className={btnSec} aria-label="Excluir atendimento" onClick={() => { if (window.confirm('Excluir este atendimento e toda a conversa? Não dá para desfazer.')) onExcluir() }}>
-                <Trash2 className="h-4 w-4" />
-              </button>
-            )}
-          </div>
+    <div className="flex min-h-[60vh] flex-col">
+      <div className="print:hidden flex flex-wrap items-center justify-between gap-2 border-b border-app-border pb-3">
+        <div className="min-w-0">
+          <h2 className="truncate text-lg font-semibold text-app-text">{titulo}</h2>
+          <p className="truncate text-xs text-app-muted">
+            {espaco ? `${espaco.nome} · ` : ''}{dados.data ? `${br(dados.data)} · ` : ''}{dados.convidados ? `${dados.convidados} pessoas · ` : ''}
+            {espaco ? `Locação ${formatCurrency(totalLoc)}` : 'sem espaço'}{totalServ ? ` · Serviços ${formatCurrency(totalServ)}` : ''}
+          </p>
         </div>
-
-        {erro && <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600">{erro}</div>}
-
-        <section className={cardCls}>
-          <h2 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-app-text"><MessageSquareText className="h-4 w-4" /> 1. Conversa</h2>
-          {mensagens.length === 0 && <p className="mb-3 text-xs text-app-muted">Cole a primeira mensagem do cliente (WhatsApp, e-mail ou pedido do site).</p>}
-          <div className="mb-3 rounded-lg border border-app-border2 p-3">
-            <p className="mb-2 text-xs font-semibold text-app-muted">Questionário inicial {emColeta ? `· faltam ${perguntas.filter(p => !p.resposta).length}` : '· completo: siga para o orçamento e os extras'}</p>
-            <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-5">
-              {perguntas.map(p => (
-                <div key={p.chave} className={`rounded-md px-2 py-1.5 text-xs ${p.resposta ? 'bg-emerald-500/10 text-emerald-800' : 'bg-amber-500/10 text-amber-800'}`}>
-                  <p className="font-semibold">{p.resposta ? '✓' : '•'} {p.pergunta}</p>
-                  <p className="truncate">{p.resposta ?? 'pendente'}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-2">
-            {mensagens.map(m => (
-              <div key={m.id} className={`flex ${m.autor === 'cliente' ? 'justify-start' : m.autor === 'sistema' ? 'justify-center' : 'justify-end'}`}>
-                {m.autor === 'sistema'
-                  ? <p className="rounded-full bg-app-surface2 px-3 py-1 text-xs text-app-muted">{m.texto} · {m.por ?? ''}</p>
-                  : (
-                    <div className={`w-full max-w-[85%] rounded-xl px-3 py-2 text-sm ${m.autor === 'cliente' ? 'bg-app-surface2 text-app-text' : m.autor === 'equipe' ? 'border border-amber-500/30 bg-amber-500/10 text-app-text' : 'border border-[#072A43]/20 bg-[#072A43]/5 text-app-text'}`}>
-                      <p className="mb-1 text-[11px] text-app-muted">
-                        {ROTULO_AUTOR[m.autor]} · {new Date(m.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}{m.por ? ` · ${m.por}` : ''}
-                        {m.autor === 'assistente' && (m.enviada ? ' · enviada' : ' · rascunho')}
-                        {m.canal === 'whatsapp' && ' · WhatsApp'}
-                      </p>
-                      {m.autor === 'assistente' && !m.enviada
-                        ? <textarea className={`${inputCls} min-h-[160px]`} value={m.texto} onChange={e => editarMensagem(m.id, e.target.value)} onBlur={() => gravarMensagens(mensagens)} />
-                        : <p className="whitespace-pre-wrap">{m.texto}</p>}
-                      {m.autor === 'assistente' && (
-                        <div className="mt-2 flex flex-wrap justify-end gap-2">
-                          <button type="button" className={btnSec} onClick={() => navigator.clipboard.writeText(m.texto).then(() => avisar('Resposta copiada.'))}><Copy className="h-4 w-4" /> Copiar</button>
-                          {!m.enviada && podeWhatsapp && (
-                            <button type="button" className={btnPrim} disabled={enviandoWa === m.id} onClick={() => enviarWhatsapp(m)}>
-                              {enviandoWa === m.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Enviar pelo WhatsApp
-                            </button>
-                          )}
-                          {!m.enviada && <button type="button" className={btnSec} onClick={() => marcarEnviada(m)}>{podeWhatsapp ? 'Já enviei por fora' : <><Send className="h-4 w-4" /> Marcar como enviada</>}</button>}
-                        </div>
-                      )}
-                    </div>
-                  )}
-              </div>
-            ))}
-          </div>
-          <textarea className={`${inputCls} mt-3 min-h-[90px]`} placeholder="Cole a nova mensagem do cliente ou escreva uma nota interna." value={novoTexto} onChange={e => setNovoTexto(e.target.value)} />
-          <div className="mt-2 flex flex-wrap justify-end gap-2">
-            <button type="button" className={btnSec} disabled={!novoTexto.trim()} onClick={adicionarNota}><StickyNote className="h-4 w-4" /> Nota interna</button>
-            {mensagens.some(m => m.autor === 'cliente') && (
-              <button type="button" className={btnSec} disabled={analisando} onClick={() => analisar()}>Reler conversa</button>
-            )}
-            <button type="button" className={btnPrim} disabled={analisando || !novoTexto.trim()} onClick={adicionarDoCliente}>
-              {analisando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Mensagem do cliente
+        <div className="flex items-center gap-2">
+          <button type="button" className={btnSec} onClick={() => setVerOrcamento(true)}><FileDown className="h-4 w-4" /> Orçamento</button>
+          <select className={`${inputCls} w-auto`} value={status} onChange={e => mudarStatus(e.target.value as StatusAtendimento)} aria-label="Situação do atendimento">
+            {(Object.keys(STATUS_ATENDIMENTO) as StatusAtendimento[]).map(s => <option key={s} value={s}>{STATUS_ATENDIMENTO[s].label}</option>)}
+          </select>
+          {podeExcluir && (
+            <button type="button" className={btnSec} aria-label="Excluir atendimento" onClick={() => { if (window.confirm('Excluir este atendimento e toda a conversa? Não dá para desfazer.')) onExcluir() }}>
+              <Trash2 className="h-4 w-4" />
             </button>
-          </div>
-        </section>
+          )}
+        </div>
+        {faltam.length > 0 && faltam.length < 5 && (
+          <p className="w-full text-xs text-amber-700">Falta do cliente: {faltam.map(p => p.pergunta.toLowerCase()).join(', ')}</p>
+        )}
+      </div>
 
+      <div className="print:hidden flex-1 space-y-4 py-4">
+        {mensagens.map(m => {
+          if (m.autor === 'equipe') return (
+            <div key={m.id} className="flex justify-end">
+              <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-[#072A43] px-3.5 py-2 text-sm text-white">{m.texto}</div>
+            </div>
+          )
+          if (m.autor === 'cliente') return (
+            <div key={m.id} className="flex justify-start">
+              <div className="max-w-[85%] rounded-2xl bg-app-surface2 px-3.5 py-2 text-sm text-app-text">
+                <p className="mb-0.5 text-[11px] font-semibold text-app-muted">Cliente{m.canal === 'whatsapp' ? ' · WhatsApp' : ''} · {new Date(m.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</p>
+                <p className="whitespace-pre-wrap">{m.texto}</p>
+              </div>
+            </div>
+          )
+          if (ehRascunho(m)) return (
+            <div key={m.id} className="max-w-[92%] rounded-2xl border border-[#072A43]/20 bg-app-surface p-3 text-sm">
+              <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-app-muted"><MessageSquareText className="h-3.5 w-3.5" /> Mensagem para o cliente · {m.enviada ? `enviada${m.canal === 'whatsapp' ? ' pelo WhatsApp' : ''}` : 'rascunho'}</p>
+              {m.enviada
+                ? <p className="whitespace-pre-wrap text-app-text">{m.texto}</p>
+                : <textarea className={`${inputCls} min-h-[140px]`} value={m.texto} onChange={e => editarMensagem(m.id, e.target.value)} onBlur={() => gravarMensagens(mensagens)} />}
+              <div className="mt-2 flex flex-wrap justify-end gap-2">
+                <button type="button" className={btnSec} onClick={() => copiar(m.texto)}><Copy className="h-4 w-4" /> Copiar</button>
+                {!m.enviada && podeWhatsapp && (
+                  <button type="button" className={btnPrim} disabled={enviandoWa === m.id} onClick={() => enviarWhatsapp(m)}>
+                    {enviandoWa === m.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Enviar pelo WhatsApp
+                  </button>
+                )}
+                {!m.enviada && <button type="button" className={btnSec} onClick={() => marcarEnviada(m)}><CheckCircle2 className="h-4 w-4" /> Já enviei</button>}
+              </div>
+            </div>
+          )
+          if (m.tipo === 'pdfs') return (
+            <div key={m.id} className="flex flex-wrap items-center gap-2 rounded-2xl border border-app-border2 p-3 text-sm">
+              <span className="text-app-muted">Orçamentos:</span>
+              <button type="button" className={btnSec} disabled={!pronto} onClick={() => setImprimindo('locacao')}><FileDown className="h-4 w-4" /> PDF Locação</button>
+              <button type="button" className={btnSec} disabled={!pronto || linhasServ.length === 0} onClick={() => setImprimindo('servicos')}><FileDown className="h-4 w-4" /> PDF Serviços</button>
+              <button type="button" className={btnSec} onClick={() => setVerOrcamento(true)}>Conferir ou ajustar</button>
+            </div>
+          )
+          if (m.tipo === 'pre_evento') return (
+            <div key={m.id} className="flex flex-wrap items-center gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+              <CalendarClock className="h-4 w-4 text-amber-600" />
+              <span className="text-app-text">Pré-reservar: {dados.empresa || dados.cliente} · {nomeNoSistema ?? espaco?.nome} · {br(dados.data)}{dados.convidados ? ` · ${dados.convidados} pessoas` : ''}</span>
+              {m.feita || preEventoId
+                ? <span className="inline-flex items-center gap-1 text-emerald-700"><CheckCircle2 className="h-4 w-4" /> Na Agenda</span>
+                : <button type="button" className={btnPrim} disabled={agendando} onClick={() => preReservar(m.id)}>{agendando ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Confirmar</button>}
+            </div>
+          )
+          if (m.tipo === 'confirmar_evento') return (
+            <div key={m.id} className="flex flex-wrap items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm">
+              <CheckCircle2 className="h-4 w-4 text-emerald-700" />
+              {preEvento?.status === 'confirmado'
+                ? <span className="text-emerald-800">Evento confirmado na Agenda.</span>
+                : <><span className="text-app-text">Converter o pré-evento em evento confirmado</span>
+                  <button type="button" className={btnPrim} disabled={!preEvento} onClick={() => preEvento && setConfirmando(preEvento)}>Abrir formulário</button></>}
+            </div>
+          )
+          if (m.autor === 'sistema') return <p key={m.id} className="text-center text-xs text-app-muted">{m.texto}</p>
+          return (
+            <div key={m.id} className="flex gap-2">
+              <Sparkles className="mt-1 h-4 w-4 shrink-0 text-[#9A7937]" />
+              <p className="whitespace-pre-wrap text-sm text-app-text">{m.texto}</p>
+            </div>
+          )
+        })}
+        {pensando && <p className="inline-flex items-center gap-2 text-sm text-app-muted"><Loader2 className="h-4 w-4 animate-spin" /> Pensando...</p>}
+        {erro && <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600">{erro}</p>}
+        <div ref={fimChat} />
+      </div>
+
+      <form className="print:hidden sticky bottom-0 z-10 flex items-end gap-2 rounded-2xl border border-app-border2 bg-app-surface p-2 shadow-lg" onSubmit={e => { e.preventDefault(); enviarChat() }}>
+        <textarea
+          className="max-h-40 min-h-[44px] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-app-text focus:outline-none"
+          rows={1}
+          placeholder="Escreva para o assistente ou cole a mensagem do cliente..."
+          value={novoTexto}
+          onChange={e => setNovoTexto(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && window.matchMedia('(min-width: 768px)').matches) { e.preventDefault(); enviarChat() } }}
+        />
+        <button type="submit" aria-label="Enviar" disabled={pensando || (!novoTexto.trim() && !mensagens.some(m => m.autor === 'cliente' && (!iaAte || m.em > iaAte)))} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#072A43] text-white disabled:opacity-40">
+          {pensando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        </button>
+      </form>
+
+      {verOrcamento && (
+        <div className="print:hidden fixed inset-0 z-40 flex justify-end bg-black/40" onClick={e => { if (e.target === e.currentTarget) setVerOrcamento(false) }}>
+          <div className="h-full w-full max-w-3xl space-y-4 overflow-y-auto bg-app-bg p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-base font-semibold text-app-text">Orçamento nº {numero} · versão {versao}</h2>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className={btnSec} disabled={!pronto} onClick={() => setImprimindo('locacao')}><FileDown className="h-4 w-4" /> PDF Locação</button>
+                <button type="button" className={btnSec} disabled={!pronto || linhasServ.length === 0} onClick={() => setImprimindo('servicos')}><FileDown className="h-4 w-4" /> PDF Serviços</button>
+                <button type="button" className={btnSec} disabled={!pronto} onClick={() => setVersao(v => v + 1)}>Nova versão</button>
+                <button type="button" className={btnPrim} onClick={() => setVerOrcamento(false)}>Voltar ao chat</button>
+              </div>
+            </div>
             <section className={cardCls}>
               <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
                 <h2 className="text-sm font-semibold text-app-text">2. Dados do evento</h2>
@@ -577,7 +556,6 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
                 </div>
               )}
             </section>
-
             <section className={cardCls}>
               <h2 className="mb-2 text-sm font-semibold text-app-text">3. Espaço e Orçamento de Locação</h2>
               {!dados.data && <p className="mb-2 text-xs text-amber-700">Informe a data para conferir a agenda e o preço do dia.</p>}
@@ -637,7 +615,7 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
                     <>
                       <span className="text-app-muted">Agenda:</span>
                       {nomeNoSistema
-                        ? <button type="button" className={btnSec} disabled={agendando || !dados.data || !(dados.empresa || dados.cliente)} onClick={preReservar}>
+                        ? <button type="button" className={btnSec} disabled={agendando || !dados.data || !(dados.empresa || dados.cliente)} onClick={() => preReservar()}>
                             {agendando ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarClock className="h-4 w-4" />} Pré-reservar a data
                           </button>
                         : <span className="text-app-muted">{espaco.nome} não está na agenda do sistema: reserve por fora.</span>}
@@ -658,7 +636,6 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
                 </div>
               )}
             </section>
-
             <section className={cardCls}>
               <h2 className="mb-2 text-sm font-semibold text-app-text">4. Orçamento de Serviços</h2>
               <p className="mb-3 text-xs text-app-muted">Não inclua aqui o que já vem com o espaço (staff da casa e rider técnico): isso fica no Orçamento de Locação.</p>
@@ -695,42 +672,9 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
               </Campo>
               <p className="mt-2 text-right text-sm font-semibold text-app-text">Total dos serviços: {formatCurrency(totalServ)}</p>
             </section>
-
-            <section className={cardCls}>
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold text-app-text">5. Resposta e PDFs</h2>
-                <div className="flex flex-wrap gap-2">
-                  <button type="button" className={btnSec} disabled={!pronto} onClick={() => setImprimindo('locacao')}><FileDown className="h-4 w-4" /> PDF Locação</button>
-                  <button type="button" className={btnSec} disabled={!pronto || linhasServ.length === 0} onClick={() => setImprimindo('servicos')}><FileDown className="h-4 w-4" /> PDF Serviços</button>
-                  <button type="button" className={btnSec} disabled={!pronto} onClick={() => setVersao(v => v + 1)}>Nova versão</button>
-                  <button type="button" className={btnPrim} disabled={gerando || !mensagens.some(m => m.autor === 'cliente')} onClick={gerarResposta}>
-                    {gerando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} {emColeta ? 'Gerar resposta (pedir o que falta)' : 'Gerar resposta com orçamento'}
-                  </button>
-                </div>
-              </div>
-              {emColeta && <p className="text-xs text-app-muted">Etapa de coleta: a resposta agradece e pede só o que falta do questionário (e sugere os espaços livres, se já tiver data e pessoas). Os PDFs saem quando o espaço estiver escolhido.</p>}
-              {ultimaResposta && !ultimaResposta.enviada && <p className="text-xs text-app-muted">A resposta gerada fica na conversa (passo 1) como rascunho: revise, copie e marque como enviada.</p>}
-              {alertas.length > 0 && (
-                <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800">
-                  <p className="mb-1 font-semibold">Atenção da equipe</p>
-                  {alertas.map(a => <p key={a}>• {a}</p>)}
-                </div>
-              )}
-              {upsell.length > 0 && (
-                <div className="mt-2 rounded-lg border border-app-border2 p-3 text-sm">
-                  <p className="mb-2 text-xs font-semibold text-app-muted">Serviços extras sugeridos pela IA</p>
-                  {upsell.map(u => (
-                    <div key={u.servico} className="flex items-start justify-between gap-3 py-1">
-                      <div><p className="text-app-text">{u.servico}</p><p className="text-xs text-app-muted">{u.motivo}</p></div>
-                      <button type="button" className={btnSec} onClick={() => { setOpcionais(o => [...o, { descricao: u.servico, prestador: '[Parceiro credenciado]', valor: 0 }]); setUpsell(us => us.filter(x => x.servico !== u.servico)); avisar('Adicionado aos opcionais: preencha o valor.') }}>
-                        <Plus className="h-4 w-4" /> Opcional
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-      </div>
+          </div>
+        </div>
+      )}
 
       {imprimindo && espaco && (
         <div className="hidden print:block">

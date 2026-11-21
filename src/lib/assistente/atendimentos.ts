@@ -16,6 +16,11 @@ export interface Mensagem {
   enviada?: boolean // resposta da IA marcada como enviada ao cliente
   canal?: 'whatsapp' // chegou ou saiu pelo WhatsApp (Blip)
   idExterno?: string // id da mensagem no WhatsApp (evita duplicar)
+  // Chat com o assistente: 'equipe' = quem atende falando com a IA; 'assistente'
+  // sem tipo = resposta da IA para a equipe. Cartões dentro do chat:
+  tipo?: 'rascunho_cliente' | 'pre_evento' | 'pdfs' | 'confirmar_evento'
+  acao?: Record<string, unknown> // dados do cartão (ex.: pré-evento proposto)
+  feita?: boolean // cartão de ação já executado
 }
 
 export type StatusAtendimento = 'aberto' | 'enviado' | 'fechado' | 'perdido'
@@ -48,6 +53,8 @@ export interface EstadoAtendimento {
   alertas: string[]
   preEventoId?: string // evento (em negociação) criado na Agenda a partir deste atendimento
   whatsapp?: string // número do cliente no WhatsApp (só dígitos, com 55)
+  ia?: unknown[] // histórico da conversa com a IA no formato da API (só acrescenta)
+  iaAte?: string // horário da última mensagem já mostrada à IA
 }
 
 export interface AtendimentoResumo {
