@@ -14,8 +14,10 @@ const MODEL = 'claude-opus-5-5'
 
 const SISTEMA_EXTRAIR = `Você é o assistente de atendimento da Espaços & Locações, empresa de São Paulo que aluga espaços para eventos (Fabrique, Usine, House Pacaembu, Armazém Solon, CESA) e oferece serviços para o evento (buffet Experiência Churrasco e parceiros: decoração, foto e vídeo, som, luz, LED, mobiliário, produção).
 
-Leia a mensagem de um cliente (WhatsApp, e-mail ou formulário do site) e extraia os dados do evento.
+Leia a conversa com um cliente (WhatsApp, e-mail ou formulário do site; pode ter várias mensagens, em ordem) e extraia os dados do evento.
 Regras:
+- Vale sempre a informação mais recente da conversa (ex.: o cliente mudou a data ou o número de convidados).
+- Em <dados_atuais> vêm os dados que a equipe já preencheu. Repita-os quando a conversa não trouxer nada mais novo sobre aquele campo.
 - Use null quando a informação não estiver na mensagem. Não invente.
 - dataEvento no formato AAAA-MM-DD. Se o cliente não disser o ano, use a próxima ocorrência da data a partir de hoje.
 - espacoDesejado: um destes slugs, só se o cliente citar o espaço: fabrique, usine, house-pacaembu, espaco-solon, cesa. Se o cliente pedir o Complexo Jussara, deixe null e registre em observacoes que o Jussara é atendido pessoalmente pela direção.
@@ -47,6 +49,7 @@ const SISTEMA_RESPOSTA = `Você é o assistente de atendimento da Espaços & Loc
 
 Regras:
 - Português do Brasil, tom cordial e direto, como uma pessoa da equipe. Sem exageros nem emojis em excesso (no máximo 1 ou 2).
+- O contexto traz a conversa até agora: responda à última mensagem do cliente, sem repetir o que a equipe já disse.
 - Use SÓ os valores e datas do contexto. Nunca invente preço, desconto, disponibilidade ou condição.
 - Não confirme a reserva: diga que a data fica pré-reservada por 72 h após o aceite e o sinal, sujeita a confirmação da equipe.
 - Cite o total da locação e o total dos serviços separadamente e diga que os detalhes estão nos PDFs.
@@ -105,7 +108,7 @@ export async function POST(request: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return NextResponse.json({ error: 'ANTHROPIC_API_KEY não configurada no servidor.' }, { status: 500 })
 
-  let body: { acao?: string; texto?: string; contexto?: unknown }
+  let body: { acao?: string; texto?: string; dadosAtuais?: unknown; contexto?: unknown }
   try {
     body = await request.json()
   } catch {
@@ -119,8 +122,9 @@ export async function POST(request: Request) {
     if (body.acao === 'extrair') {
       const texto = (body.texto ?? '').trim()
       if (!texto) return NextResponse.json({ error: 'Cole a mensagem do cliente.' }, { status: 400 })
-      if (texto.length > 20000) return NextResponse.json({ error: 'Mensagem muito longa: cole só a parte da conversa com o pedido.' }, { status: 400 })
-      const dados = await chamarIA(client, SISTEMA_EXTRAIR, `Hoje é ${hoje}.\n\n<mensagem_do_cliente>\n${texto}\n</mensagem_do_cliente>`, SCHEMA_EXTRAIR, 'low')
+      if (texto.length > 60000) return NextResponse.json({ error: 'Conversa muito longa: cole só a parte com o pedido.' }, { status: 400 })
+      const atuais = body.dadosAtuais ? `\n\n<dados_atuais>\n${JSON.stringify(body.dadosAtuais)}\n</dados_atuais>` : ''
+      const dados = await chamarIA(client, SISTEMA_EXTRAIR, `Hoje é ${hoje}.${atuais}\n\n<conversa_com_o_cliente>\n${texto}\n</conversa_com_o_cliente>`, SCHEMA_EXTRAIR, 'low')
       return NextResponse.json(dados)
     }
     if (body.acao === 'resposta') {
