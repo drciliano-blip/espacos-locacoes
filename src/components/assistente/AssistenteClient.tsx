@@ -69,7 +69,10 @@ export default function AssistenteClient() {
     try {
       const criado = await criarAtendimento(novoNumero(), autor)
       // Todo atendimento começa com a mensagem padrão (as 5 perguntas), pronta para copiar.
-      const mensagens = [novaMensagem('assistente', mensagemInicial(autor), autor)]
+      const mensagens = [
+        novaMensagem('assistente', 'Oi! Me diga o que precisa ou cole aqui a mensagem do cliente. Posso montar o orçamento, consultar a agenda, pré-reservar a data e preparar as mensagens para o cliente.\n\nPara começar um atendimento novo, a mensagem padrão já está pronta abaixo.'),
+        { ...novaMensagem('assistente', mensagemInicial(autor), autor), tipo: 'rascunho_cliente' as const, enviada: false },
+      ]
       await salvarAtendimento(criado.id, { mensagens }, autor)
       const a = { ...criado, mensagens }
       setLista(l => [a, ...l])

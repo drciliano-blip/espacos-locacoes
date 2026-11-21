@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       continue
     }
 
-    const saudacao: Mensagem = { id: crypto.randomUUID(), autor: 'assistente', texto: mensagemInicial(), em: new Date(Date.now() + 1000).toISOString(), por: 'Assistente' }
+    const saudacao: Mensagem = { id: crypto.randomUUID(), autor: 'assistente', tipo: 'rascunho_cliente', enviada: false, texto: mensagemInicial(), em: new Date(Date.now() + 1000).toISOString(), por: 'Assistente' }
     const { error: e3 } = await sb.from('assistente_atendimentos').insert({
       numero: `${novoNumero()}-${r.numero.slice(-4)}`, // final do telefone: dois números novos no mesmo minuto não colidem
       titulo: r.nome ? `${r.nome} (WhatsApp)` : numeroParaExibir(r.numero),
