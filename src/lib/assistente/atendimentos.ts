@@ -18,7 +18,7 @@ export interface Mensagem {
   idExterno?: string // id da mensagem no WhatsApp (evita duplicar)
   // Chat com o assistente: 'equipe' = quem atende falando com a IA; 'assistente'
   // sem tipo = resposta da IA para a equipe. Cartões dentro do chat:
-  tipo?: 'rascunho_cliente' | 'pre_evento' | 'pdfs' | 'confirmar_evento'
+  tipo?: 'rascunho_cliente' | 'pre_evento' | 'pdfs' | 'confirmar_evento' | 'acao_sistema'
   acao?: Record<string, unknown> // dados do cartão (ex.: pré-evento proposto)
   feita?: boolean // cartão de ação já executado
 }

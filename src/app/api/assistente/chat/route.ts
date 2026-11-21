@@ -26,6 +26,7 @@ type Acao =
   | { tipo: 'pre_evento'; dados: AcaoProposta }
   | { tipo: 'pdfs' }
   | { tipo: 'confirmar_evento' }
+  | { tipo: 'sistema'; dados: AcaoProposta } // contrato, cancelar, reagendar, baixa, conta a pagar
 
 const SISTEMA = `Você é o assistente de atendimento da Espaços & Locações (locação de espaços para eventos em São Paulo). Você conversa com a PESSOA DA EQUIPE que está atendendo um cliente — não com o cliente. Cada chat é um atendimento (um cliente/orçamento).
 
@@ -37,6 +38,7 @@ Como trabalhar:
 - Enquanto faltar resposta do questionário, use redigir_mensagem_cliente para preparar a mensagem que pede só o que falta (e, se já houver data e pessoas, sugira os espaços livres que comportam).
 - Com tudo respondido, monte o orçamento (atualizar_orcamento), confira os totais no resultado da ferramenta, chame mostrar_pdfs e prepare com redigir_mensagem_cliente a mensagem com os totais de locação e serviços e uma oferta natural de extras.
 - Para segurar a data use pre_reservar; para converter em evento use confirmar_evento. Elas viram cartões: a pessoa confirma.
+- Tarefas em eventos já cadastrados (gerar contrato, cancelar, reagendar) use abrir_evento; dar baixa em parcela de cliente use preparar_baixa; lançar despesa use preparar_conta_pagar. Todas viram cartões que abrem a janela certa do sistema; a pessoa confere e salva lá. Se a ferramenta não estiver disponível para o perfil, diga quem pode fazer.
 - Preços: SÓ os que as ferramentas devolverem. Nunca invente valor, desconto, disponibilidade ou condição. Staff complementar e valores de parceiros: só se a pessoa informar.
 - Parceria: venda de ingressos obrigatória pela FASTIX (pagamento 25% na reserva e 75% até 8 dias antes); na locação a FASTIX é opcional.
 - Respostas para a pessoa da equipe: curtas, em português, sem markdown (nada de ** ou #), listas com "•", valores em R$ com vírgula, datas DD/MM/AAAA. Diga o que fez e o próximo passo.
@@ -221,7 +223,9 @@ export async function POST(request: Request) {
           else if (body.preEvento.status !== 'em_negociacao') r = { erro: `O evento já está ${body.preEvento.status}.` }
           else { acoes.push({ tipo: 'confirmar_evento' }); r = { ok: true } }
         } else {
-          r = await executarFerramenta(b.name, entrada, sb, { role, acoes: [] })
+          const propostas: AcaoProposta[] = []
+          r = await executarFerramenta(b.name, entrada, sb, { role, acoes: propostas })
+          for (const p of propostas) if (p.tipo !== 'pre_evento') acoes.push({ tipo: 'sistema', dados: p })
         }
         const conteudo = JSON.stringify(r)
         resultados.push({

@@ -27,6 +27,7 @@ import NovoEventoModal from '@/components/eventos/NovoEventoModal'
 import type { Espaco, Evento } from '@/types'
 import { questionario } from '@/lib/assistente/roteiro'
 import PropostaAssistente from './PropostaAssistente'
+import CartaoAcaoSistema, { type AcaoSistema } from './CartaoAcaoSistema'
 import Toast from '@/components/shared/Toast'
 
 const inputCls = 'w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none'
@@ -390,6 +391,7 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
         if (a.tipo === 'pdfs') novas.push({ ...novaMensagem('sistema', 'Orçamentos prontos para gerar.'), tipo: 'pdfs' })
         if (a.tipo === 'pre_evento') novas.push({ ...novaMensagem('sistema', 'Pré-reservar a data na Agenda'), tipo: 'pre_evento', acao: a.dados })
         if (a.tipo === 'confirmar_evento') novas.push({ ...novaMensagem('sistema', 'Converter o pré-evento em evento'), tipo: 'confirmar_evento' })
+        if (a.tipo === 'sistema' && a.dados) novas.push({ ...novaMensagem('sistema', String(a.dados.resumo ?? 'Ação no sistema')), tipo: 'acao_sistema', acao: a.dados })
       }
       await gravarMensagens([...comPergunta, ...novas])
     } catch (e) {
@@ -488,6 +490,11 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
                 ? <span className="text-emerald-800">Evento confirmado na Agenda.</span>
                 : <><span className="text-app-text">Converter o pré-evento em evento confirmado</span>
                   <button type="button" className={btnPrim} disabled={!preEvento} onClick={() => preEvento && setConfirmando(preEvento)}>Abrir formulário</button></>}
+            </div>
+          )
+          if (m.tipo === 'acao_sistema' && m.acao) return (
+            <div key={m.id} className="max-w-[92%]">
+              <CartaoAcaoSistema acao={m.acao as unknown as AcaoSistema} feita={m.feita} onFeita={() => gravarMensagens(mensagens.map(x => (x.id === m.id ? { ...x, feita: true } : x)))} />
             </div>
           )
           if (m.autor === 'sistema') return <p key={m.id} className="text-center text-xs text-app-muted">{m.texto}</p>

@@ -205,7 +205,15 @@ export default function ContasPagarPage() {
   // ?aba=atraso abre direto em Em Atraso (link da faixa de aviso no topo).
   // Se a página já estiver aberta, o link só troca a URL — por isso a aba
   // também acompanha mudanças do parâmetro, não só o valor inicial.
-  const abaParam = useSearchParams().get('aba')
+  const searchParams = useSearchParams()
+  const abaParam = searchParams.get('aba')
+  // Assistente de IA: ?nova=1&descricao=...&valor=... abre "Nova Conta" já preenchida.
+  const [contaSugerida] = useState<Partial<FormState> | null>(() => searchParams.get('nova') === '1' ? {
+    descricao: searchParams.get('descricao') ?? '', valor: searchParams.get('valor') ?? '', dataVencimento: searchParams.get('vencimento') ?? '',
+    categoria: (CATEGORIAS as string[]).includes(searchParams.get('categoria') ?? '') ? searchParams.get('categoria') as CategoriaContaPagar : '',
+    subcategoria: SUBCATEGORIAS.includes(searchParams.get('subcategoria') ?? '') ? searchParams.get('subcategoria') ?? '' : '',
+    espaco: searchParams.get('espaco') ?? '', fornecedor: searchParams.get('fornecedor') ?? '', observacoes: searchParams.get('observacoes') ?? '',
+  } : null)
   const abaDoParam = abaParam === 'atraso' || abaParam === 'pagas' ? abaParam : null
   const [tab,               setTab]               = useState<'apagar' | 'pagas' | 'atraso'>(abaDoParam ?? 'apagar')
   const [abaParamVisto,     setAbaParamVisto]     = useState(abaParam)
@@ -224,7 +232,7 @@ export default function ContasPagarPage() {
   const [filterFornecedor,  setFilterFornecedor]  = useState('')
   const [filterValorMin,    setFilterValorMin]    = useState('')
   const [filterValorMax,    setFilterValorMax]    = useState('')
-  const [novaContaOpen,     setNovaContaOpen]     = useState(false)
+  const [novaContaOpen,     setNovaContaOpen]     = useState(() => !!contaSugerida)
   const [transferirFundoOpen, setTransferirFundoOpen] = useState(false)
   const [docModalOpen,      setDocModalOpen]      = useState(false)
   const [excluindo,         setExcluindo]         = useState(false)
@@ -614,6 +622,7 @@ export default function ContasPagarPage() {
       {novaContaOpen && (
         <ContaFormModal
           vencimentoInicial={vencimentoNovaConta}
+          inicial={contaSugerida ?? undefined}
           onClose={() => { setNovaContaOpen(false); setVencimentoNovaConta(undefined) }}
           onSave={salvarNovaConta}
         />
@@ -745,18 +754,20 @@ interface ContaFormModalProps {
   conta?: ContaPagar
   // Conta nova criada a partir de um dia do Calendário Financeiro.
   vencimentoInicial?: string
+  // Conta nova sugerida pelo Assistente de IA (a pessoa confere e salva).
+  inicial?: Partial<FormState>
   onClose: () => void
   onSave: (c: ContaPagar, opcoes: OpcoesSalvarConta) => Promise<void>
 }
 
-function ContaFormModal({ conta, vencimentoInicial, onClose, onSave }: ContaFormModalProps) {
+function ContaFormModal({ conta, vencimentoInicial, inicial, onClose, onSave }: ContaFormModalProps) {
   const { espacosNomes } = useEspacos()
   // Só usado pra travar o espaço de contas NOVAS — editar uma conta existente
   // continua livre pra trocar o espaço (ela já pode pertencer a outro
   // diferente do que está ativo agora, isso é legítimo).
   const { espacoUnico } = useEspacoAtivo()
   const isEdit = !!conta
-  const [form, setForm] = useState<FormState>(() => conta ? contaParaForm(conta) : { ...FORM_EMPTY, espaco: espacoUnico ?? espacosNomes[0] ?? '', dataVencimento: vencimentoInicial ?? '' })
+  const [form, setForm] = useState<FormState>(() => conta ? contaParaForm(conta) : { ...FORM_EMPTY, espaco: espacoUnico ?? espacosNomes[0] ?? '', dataVencimento: vencimentoInicial ?? '', ...Object.fromEntries(Object.entries(inicial ?? {}).filter(([, v]) => v)) })
   const [contaFixa, setContaFixa] = useState(false)
   const [mesesFixa, setMesesFixa] = useState('12')
   const [aplicarProximas, setAplicarProximas] = useState(true)

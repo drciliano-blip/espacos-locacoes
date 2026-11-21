@@ -13,6 +13,7 @@ import { useEventos } from '@/contexts/EventosContext'
 import { br } from '@/lib/assistente/orcamento'
 import type { AcaoProposta } from '@/lib/assistente/ferramentas'
 import type { Espaco, Evento, NivelAcesso } from '@/types'
+import CartaoAcaoSistema from './CartaoAcaoSistema'
 
 interface Bolha {
   id: string
@@ -87,6 +88,10 @@ export default function ConsultaChat({ role, autor }: { role: NivelAcesso; autor
     }
   }
 
+  function marcarFeita(bolhaId: string, i: number) {
+    setBolhas(bs => bs.map(b => (b.id === bolhaId ? { ...b, acoes: b.acoes?.map((x, j) => (j === i ? { ...x, feita: true } : x)) } : b)))
+  }
+
   async function executar(bolhaId: string, i: number, a: AcaoProposta) {
     if (a.tipo !== 'pre_evento') return
     try {
@@ -97,7 +102,7 @@ export default function ConsultaChat({ role, autor }: { role: NivelAcesso; autor
         observacoes: [`Pré-reserva pelo Assistente de IA${autor ? ` (${autor})` : ''}`, a.observacoes].filter(Boolean).join('\n'),
       }
       await addEvento(evento)
-      setBolhas(bs => bs.map(b => (b.id === bolhaId ? { ...b, acoes: b.acoes?.map((x, j) => (j === i ? { ...x, feita: true } : x)) } : b)))
+      marcarFeita(bolhaId, i)
     } catch (e) {
       setErro(mensagemDeErro(e, 'Não foi possível criar o pré-evento.'))
     }
@@ -130,7 +135,9 @@ export default function ConsultaChat({ role, autor }: { role: NivelAcesso; autor
           <div key={b.id} className={`flex ${b.autor === 'pessoa' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[90%] rounded-xl px-3 py-2 text-sm ${b.autor === 'pessoa' ? 'bg-[#072A43] text-white' : 'bg-app-surface2 text-app-text'}`}>
               <p className="whitespace-pre-wrap">{b.texto}</p>
-              {b.acoes?.map((a, i) => (
+              {b.acoes?.map((a, i) => a.tipo !== 'pre_evento' ? (
+                <CartaoAcaoSistema key={i} acao={a} feita={a.feita} onFeita={() => marcarFeita(b.id, i)} />
+              ) : (
                 <div key={i} className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-app-text">
                   <p className="flex items-center gap-1.5 text-xs font-semibold"><CalendarClock className="h-4 w-4 text-amber-600" /> Criar pré-evento na Agenda</p>
                   <p className="mt-1 text-sm">{a.cliente} · {a.espaco} · {br(a.data)}{a.pessoas ? ` · ${a.pessoas} pessoas` : ''}{a.valor ? ` · ${formatCurrency(a.valor)}` : ''}</p>

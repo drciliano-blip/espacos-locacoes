@@ -62,9 +62,12 @@ interface EventoDrawerProps {
   onClose: () => void
   onUpdate: (updated: Evento) => void | Promise<void>
   onDelete: (id: string, motivo: string) => Promise<void>
+  // Assistente de IA: abre o painel já na ação pedida (o resto do fluxo é o de sempre).
+  acaoInicial?: 'gerar_contrato' | 'cancelar' | 'reagendar' | 'converter'
+  novaData?: string
 }
 
-export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: EventoDrawerProps) {
+export default function EventoDrawer({ evento, onClose, onUpdate, onDelete, acaoInicial, novaData }: EventoDrawerProps) {
   const { role } = useCurrentUser()
   const { confirmarPreEvento, solicitarExclusao, recusarExclusao } = useEventos()
   const exclusaoPendente = !!evento.exclusaoSolicitadaEm
@@ -101,7 +104,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
   // "PRÉ" na frente do nome do cliente.
   const ehPreEventoAntigo = evento.status === 'confirmado' && semPrefixoPre(evento.cliente) !== evento.cliente
   const ehPreEvento = evento.status === 'em_negociacao' || ehPreEventoAntigo
-  const [confirmarPreOpen, setConfirmarPreOpen] = useState(false)
+  const [confirmarPreOpen, setConfirmarPreOpen] = useState(() => acaoInicial === 'converter' && evento.status === 'em_negociacao')
   // Depois de confirmado, os dados deste drawer (prop `evento`) ficam velhos —
   // fecha o drawer junto com o formulário.
   const [preConfirmado, setPreConfirmado] = useState(false)
@@ -110,20 +113,20 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete }: Ev
   const { addConta, recarregar: recarregarContas } = useContasPagar()
   const { contratos, addContrato, recarregar: recarregarContratos } = useContratos()
   const [tab, setTab] = useState<DrawerTab>('detalhes')
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState<Evento>({ ...evento })
+  const [editing, setEditing] = useState(acaoInicial === 'reagendar')
+  const [draft, setDraft] = useState<Evento>(() => ({ ...evento, ...(acaoInicial === 'reagendar' && novaData ? { data: novaData } : {}) }))
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [motivoExclusao, setMotivoExclusao] = useState('')
   const [motivoErro, setMotivoErro] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [cancelConfirm, setCancelConfirm] = useState(false)
-  const [cancelarEventoOpen, setCancelarEventoOpen] = useState(false)
+  const [cancelarEventoOpen, setCancelarEventoOpen] = useState(() => acaoInicial === 'cancelar' && evento.status === 'confirmado')
   const [togglingStatus, setTogglingStatus] = useState(false)
   const [trocaTipoContratoPendente, setTrocaTipoContratoPendente] = useState<TipoMinuta | null>(null)
   const [saving, setSaving] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
-  const [gerarContratoDoEventoOpen, setGerarContratoDoEventoOpen] = useState(false)
-  const [contratoParaGerar, setContratoParaGerar] = useState<Contrato | null>(null)
+  const [gerarContratoDoEventoOpen, setGerarContratoDoEventoOpen] = useState(() => acaoInicial === 'gerar_contrato' && !contratos.some(c => c.eventoId === evento.id))
+  const [contratoParaGerar, setContratoParaGerar] = useState<Contrato | null>(() => (acaoInicial === 'gerar_contrato' ? contratos.find(c => c.eventoId === evento.id) ?? null : null))
 
   const contratoExistente = contratos.find(c => c.eventoId === evento.id)
 
