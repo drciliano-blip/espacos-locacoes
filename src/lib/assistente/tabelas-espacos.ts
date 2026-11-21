@@ -17,7 +17,7 @@ export interface BlocoLista {
 export interface TabelaEspaco {
   slug: string // igual a espacos.slug no banco (para checar a agenda)
   nome: string
-  logo: string // em /public/logos, recortado da arte do espaço
+  logo: string // em /public/logos: logo oficial do espaço, fundo transparente
   endereco: string
   capacidade: number
   precos: [number, number, number, number, number, number, number]
