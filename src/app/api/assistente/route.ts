@@ -141,6 +141,7 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ error: 'Ação desconhecida.' }, { status: 400 })
   } catch (err) {
+    console.error('[assistente/orcamento]', err)
     if (err instanceof Anthropic.RateLimitError) return NextResponse.json({ error: 'Muitas consultas à IA agora. Tente em 1 minuto.' }, { status: 429 })
     if (err instanceof Anthropic.APIError) return NextResponse.json({ error: `Erro da IA (${err.status}): ${err.message}` }, { status: 502 })
     const message = err instanceof Error ? err.message : 'Erro desconhecido ao consultar a IA.'
