@@ -12,17 +12,24 @@ import type { NivelAcesso } from '@/types'
 type Tool = Anthropic.Beta.BetaTool
 type Entrada = Record<string, unknown>
 
-export interface AcaoProposta {
-  tipo: 'pre_evento'
-  cliente: string
-  telefone?: string
-  espaco: string // nome do espaço no sistema
-  data: string
-  pessoas?: number
-  valor?: number
-  nomeEvento?: string
-  observacoes?: string
-}
+export type AcaoProposta =
+  | {
+      tipo: 'pre_evento'
+      cliente: string
+      telefone?: string
+      espaco: string // nome do espaço no sistema (no chat do atendimento: o slug)
+      data: string
+      pessoas?: number
+      valor?: number
+      nomeEvento?: string
+      observacoes?: string
+    }
+  // Abre o painel do evento já na ação pedida (contrato, cancelar, reagendar, converter).
+  | { tipo: 'evento'; eventoId: string; acao: 'gerar_contrato' | 'cancelar' | 'reagendar' | 'converter' | 'ver'; novaData?: string; resumo: string }
+  // Abre a janela "Editar parcela" para dar baixa.
+  | { tipo: 'baixa'; receitaId: string; resumo: string }
+  // Abre "Nova Conta a Pagar" já preenchida.
+  | { tipo: 'conta'; campos: { descricao: string; valor: number; vencimento: string; categoria: string; subcategoria: string; espaco: string; fornecedor?: string; observacoes?: string }; resumo: string }
 
 interface Ferramenta {
   definicao: Tool
@@ -109,7 +116,7 @@ const FERRAMENTAS: Record<string, Ferramenta> = {
         periodo: { de, ate },
         total: data?.length ?? 0,
         eventos: (data ?? []).map(ev => ({
-          data: ev.data, espaco: nomes.get(ev.espaco_id), cliente: ev.cliente, evento: ev.nome_evento ?? undefined,
+          id: ev.id, data: ev.data, espaco: nomes.get(ev.espaco_id), cliente: ev.cliente, evento: ev.nome_evento ?? undefined,
           status: ev.status === 'em_negociacao' ? 'pré-evento (em negociação)' : ev.status,
           pessoas: ev.numero_pessoas ?? undefined,
           horario: ev.hora_inicio && !String(ev.hora_inicio).startsWith('00:00') ? `${String(ev.hora_inicio).slice(0, 5)}–${String(ev.hora_fim).slice(0, 5)}` : undefined,
@@ -151,7 +158,7 @@ const FERRAMENTAS: Record<string, Ferramenta> = {
       const { data, error } = await q
       if (error) throw error
       const lista = (data ?? []).map(r => ({
-        cliente: r.cliente, espaco: nomes.get(r.espaco_id), parcela: r.parcela_label ?? r.descricao ?? undefined,
+        id: r.id, cliente: r.cliente, espaco: nomes.get(r.espaco_id), parcela: r.parcela_label ?? r.descricao ?? undefined,
         valor: Number(r.valor), vencimento: r.data, recebido_em: r.data_recebimento ?? undefined, situacao: r.status,
         dias_em_atraso: r.status !== 'pago' && r.data < hoje ? Math.round(dias(hoje, r.data)) : undefined,
       }))
@@ -329,6 +336,94 @@ const FERRAMENTAS: Record<string, Ferramenta> = {
       }
       acoes.push(acao)
       return { ok: true, mensagem: 'Proposta pronta. Diga à pessoa para conferir e clicar em Confirmar no cartão que aparece abaixo da resposta.' }
+    },
+  },
+  abrir_evento: {
+    pode: r => r !== 'socio' && r !== 'visualizador' && (canAccess(r, 'agenda') || canAccess(r, 'eventos')),
+    definicao: {
+      name: 'abrir_evento',
+      description: 'Prepara uma ação num evento já cadastrado e mostra um cartão; ao clicar, abre o painel do evento já na tela da ação: gerar_contrato (gera o contrato pela minuta do espaço), cancelar (manter receita, reembolso ou excluir), reagendar (abre a edição com a nova data), converter (pré-evento em evento confirmado) ou ver. Use consultar_agenda antes para achar o id do evento.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          evento_id: { type: 'string' },
+          acao: { type: 'string', enum: ['gerar_contrato', 'cancelar', 'reagendar', 'converter', 'ver'] },
+          nova_data: { type: 'string', description: 'AAAA-MM-DD, só para reagendar' },
+        },
+        required: ['evento_id', 'acao'],
+      },
+    },
+    async executar(sb, e, { acoes }) {
+      const acao = texto(e.acao) as 'gerar_contrato' | 'cancelar' | 'reagendar' | 'converter' | 'ver'
+      const { data: ev, error } = await sb.from('eventos').select('id, cliente, data, status, espaco_id').eq('id', texto(e.evento_id)).maybeSingle()
+      if (error) throw error
+      if (!ev) throw new Error('Evento não encontrado (ou sem acesso). Use consultar_agenda para achar o id.')
+      const { nomes } = await filtroEspaco(sb, '')
+      if (acao === 'cancelar' && ev.status !== 'confirmado') throw new Error(`Só dá para cancelar evento confirmado (este está ${ev.status}).`)
+      if (acao === 'converter' && ev.status !== 'em_negociacao') throw new Error('Este evento não é um pré-evento.')
+      if (acao === 'gerar_contrato' && ev.status === 'em_negociacao') throw new Error('Pré-evento ainda não gera contrato: converta em evento confirmado antes.')
+      let aviso: string | undefined
+      const novaData = texto(e.nova_data)
+      if (acao === 'reagendar') {
+        if (!ISO.test(novaData)) throw new Error('Informe nova_data em AAAA-MM-DD.')
+        const { data: conflito } = await sb.from('eventos').select('cliente, status').eq('espaco_id', ev.espaco_id).eq('data', novaData).neq('status', 'cancelado').neq('id', ev.id)
+        if (conflito?.length) aviso = `Atenção: já existe evento nesse espaço em ${novaData}: ${conflito.map(c => `${c.cliente} (${c.status})`).join(', ')}.`
+      }
+      const rotulo = { gerar_contrato: 'Gerar contrato', cancelar: 'Cancelar evento', reagendar: `Reagendar para ${novaData.split('-').reverse().join('/')}`, converter: 'Converter em evento confirmado', ver: 'Abrir evento' }[acao]
+      acoes.push({ tipo: 'evento', eventoId: ev.id, acao, novaData: novaData || undefined, resumo: `${rotulo}: ${ev.cliente} · ${nomes.get(ev.espaco_id) ?? ''} · ${String(ev.data).split('-').reverse().join('/')}` })
+      return { ok: true, aviso, mensagem: 'Cartão mostrado; a pessoa abre e confirma na janela do sistema.' }
+    },
+  },
+
+  preparar_baixa: {
+    pode: r => r === 'admin' || r === 'financeiro',
+    definicao: {
+      name: 'preparar_baixa',
+      description: 'Prepara a baixa (registro de pagamento) de uma parcela de cliente: mostra um cartão que abre a janela "Editar parcela" do sistema, onde a pessoa confere data, forma de pagamento e anexa o comprovante. Use recebimentos para achar o id da parcela.',
+      input_schema: { type: 'object', properties: { receita_id: { type: 'string' } }, required: ['receita_id'] },
+    },
+    async executar(sb, e, { acoes }) {
+      const { data: r, error } = await sb.from('receitas').select('id, cliente, valor, data, status, parcela_label, descricao').eq('id', texto(e.receita_id)).maybeSingle()
+      if (error) throw error
+      if (!r) throw new Error('Parcela não encontrada (ou sem acesso).')
+      if (r.status === 'pago') throw new Error('Esta parcela já está paga.')
+      acoes.push({ tipo: 'baixa', receitaId: r.id, resumo: `Dar baixa: ${r.cliente} · ${r.parcela_label ?? r.descricao ?? 'parcela'} · R$ ${Number(r.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} · venc. ${String(r.data).split('-').reverse().join('/')}` })
+      return { ok: true, mensagem: 'Cartão mostrado; a baixa é feita na janela "Editar parcela", com o comprovante.' }
+    },
+  },
+
+  preparar_conta_pagar: {
+    pode: r => r === 'admin' || r === 'financeiro',
+    definicao: {
+      name: 'preparar_conta_pagar',
+      description: 'Prepara uma nova conta a pagar (despesa) com os dados que a pessoa passou ou colou (boleto, nota, mensagem). Mostra um cartão que abre "Nova Conta a Pagar" já preenchida em Contas a Pagar; lá a pessoa confere, anexa o documento e salva (o sistema avisa se parecer duplicada). Não marca como paga.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          descricao: { type: 'string' },
+          valor: { type: 'number' },
+          vencimento: { type: 'string', description: 'AAAA-MM-DD' },
+          categoria: { type: 'string', enum: ['operacional', 'obra', 'financeiro', 'retirada_socio', 'fundo_caixa', 'reembolso_evento'] },
+          subcategoria: { type: 'string', enum: ['aluguel', 'energia', 'agua', 'iptu', 'internet', 'funcionários', 'manutenção', 'fornecedores', 'extras', 'outros', 'despesa_a_comprovar'] },
+          espaco: { type: 'string', description: 'Nome do espaço' },
+          fornecedor: { type: 'string' },
+          observacoes: { type: 'string' },
+        },
+        required: ['descricao', 'valor', 'vencimento', 'categoria', 'subcategoria', 'espaco'],
+      },
+    },
+    async executar(sb, e, { acoes }) {
+      const valor = Number(e.valor)
+      if (!(valor > 0)) throw new Error('Valor inválido.')
+      if (!ISO.test(texto(e.vencimento))) throw new Error('Vencimento em AAAA-MM-DD.')
+      const { id, nomes } = await filtroEspaco(sb, e.espaco)
+      if (!id) throw new Error('Informe o espaço da despesa.')
+      const campos = {
+        descricao: texto(e.descricao), valor, vencimento: texto(e.vencimento), categoria: texto(e.categoria), subcategoria: texto(e.subcategoria),
+        espaco: nomes.get(id)!, fornecedor: texto(e.fornecedor) || undefined, observacoes: texto(e.observacoes) || undefined,
+      }
+      acoes.push({ tipo: 'conta', campos, resumo: `Nova conta: ${campos.descricao} · R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} · venc. ${campos.vencimento.split('-').reverse().join('/')} · ${campos.espaco}` })
+      return { ok: true, mensagem: 'Cartão mostrado; a pessoa confere e salva em Contas a Pagar.' }
     },
   },
 }
