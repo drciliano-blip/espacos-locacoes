@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
 import { canAccess } from '@/lib/auth'
+import { MANUAL_SISTEMA } from '@/lib/assistente/manual-sistema'
 import { executarFerramenta, ferramentasDoPerfil, type AcaoProposta } from '@/lib/assistente/ferramentas'
 import { aplicarPatch, calcular, type PatchOrcamento } from '@/lib/assistente/calculo-estado'
 import { TABELAS_ESPACOS, tabelaPorSlug } from '@/lib/assistente/tabelas-espacos'
@@ -39,7 +40,7 @@ Como trabalhar:
 - Preços: SÓ os que as ferramentas devolverem. Nunca invente valor, desconto, disponibilidade ou condição. Staff complementar e valores de parceiros: só se a pessoa informar.
 - Parceria: venda de ingressos obrigatória pela FASTIX (pagamento 25% na reserva e 75% até 8 dias antes); na locação a FASTIX é opcional.
 - Respostas para a pessoa da equipe: curtas, em português, sem markdown (nada de ** ou #), listas com "•", valores em R$ com vírgula, datas DD/MM/AAAA. Diga o que fez e o próximo passo.
-- Mensagens para o cliente (redigir_mensagem_cliente): tom cordial de WhatsApp, até 12 linhas, no máximo 1 ou 2 emojis, sem confirmar reserva (pré-reserva vale 72 h após o aceite e o sinal).`
+- Mensagens para o cliente (redigir_mensagem_cliente): tom cordial de WhatsApp, até 12 linhas, no máximo 1 ou 2 emojis, sem confirmar reserva (pré-reserva vale 72 h após o aceite e o sinal).\n\nDÚVIDAS SOBRE O SISTEMA: quando perguntarem como fazer algo no sistema, responda pelo MANUAL acima, em passos curtos com os nomes exatos dos botões e a tela onde ficam, considerando o perfil de quem pergunta (se a tela não é liberada para o perfil, diga quem pode fazer). Se o manual não cobre, diga que não tem certeza e sugira falar com o administrador; não invente botões ou telas.`
 
 const FERRAMENTAS_ATENDIMENTO: Anthropic.Beta.BetaTool[] = [
   {
@@ -157,7 +158,7 @@ export async function POST(request: Request) {
 
   // Cada turno leva o orçamento atual e as mensagens novas do cliente (WhatsApp).
   const partes = [
-    `Hoje é ${hoje}.`,
+    `Hoje é ${hoje}. Perfil de quem está atendendo: ${role}.`,
     `<orcamento_atual>\n${JSON.stringify(resumo(estado, buffets))}\n</orcamento_atual>`,
     `<pre_evento>${body.preEvento ? `existe, status ${body.preEvento.status}` : 'nenhum'}</pre_evento>`,
     ...(body.clienteNovas?.length ? [`<mensagens_novas_do_cliente>\n${body.clienteNovas.join('\n---\n')}\n</mensagens_novas_do_cliente>`] : []),
@@ -175,7 +176,7 @@ export async function POST(request: Request) {
         max_tokens: 8000,
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: [{ model: 'claude-opus-4-8' }],
-        system: [{ type: 'text', text: SISTEMA, cache_control: { type: 'ephemeral' } }],
+        system: [{ type: 'text', text: MANUAL_SISTEMA }, { type: 'text', text: SISTEMA, cache_control: { type: 'ephemeral' } }],
         output_config: { effort: 'medium' },
         tools,
         messages: mensagens,

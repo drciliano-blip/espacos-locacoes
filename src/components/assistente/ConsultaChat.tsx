@@ -27,17 +27,20 @@ const SUGESTOES: Record<string, string[]> = {
     'Quais clientes estão com pagamento atrasado?',
     'Tem lançamento duplicado no mês passado?',
     'Confere o mês passado do Espaço Solon para o fechamento.',
+    'Como faço o fechamento do mês?',
   ],
   financeiro: [
     'Quais clientes estão com pagamento atrasado?',
     'Tem lançamento duplicado no mês passado?',
     'Confere o mês passado de todos os espaços.',
     'Quanto entra de parcelas nos próximos 15 dias?',
+    'Como dou baixa numa conta paga?',
   ],
   operacional: [
     'O que tem na agenda nos próximos 7 dias?',
     'O Fabrique está livre nos sábados de dezembro?',
     'Quais pré-eventos estão em aberto?',
+    'Como gero o contrato de um evento?',
   ],
 }
 
@@ -108,7 +111,7 @@ export default function ConsultaChat({ role, autor }: { role: NivelAcesso; autor
   return (
     <div className="flex min-h-[60vh] flex-col rounded-xl border border-app-border bg-app-surface">
       <div className="flex items-center justify-between border-b border-app-border px-4 py-3">
-        <p className="text-sm text-app-muted">Pergunte sobre agenda, eventos e financeiro. A IA busca no sistema com o seu nível de acesso e não altera nada sozinha.</p>
+        <p className="text-sm text-app-muted">Tire dúvidas de como usar o sistema ou pergunte sobre agenda, eventos e financeiro. A IA busca no sistema com o seu nível de acesso e não altera nada sozinha.</p>
         {bolhas.length > 0 && <button type="button" onClick={limpar} className="inline-flex shrink-0 items-center gap-1 text-xs text-app-muted"><RotateCcw className="h-3.5 w-3.5" /> Nova conversa</button>}
       </div>
 
