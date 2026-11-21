@@ -168,7 +168,7 @@ export async function POST(request: Request) {
   ]
   const historico = Array.isArray(body.historico) ? body.historico : []
   const mensagens: Anthropic.Beta.BetaMessageParam[] = [...historico, { role: 'user', content: partes.join('\n\n') }]
-  const tools = [...FERRAMENTAS_ATENDIMENTO, ...ferramentasDoPerfil(role).filter(t => t.name !== 'propor_pre_evento')]
+  const tools = [...FERRAMENTAS_ATENDIMENTO, ...ferramentasDoPerfil(role).filter(t => t.name !== 'propor_pre_evento' && t.name !== 'abrir_orcamento')]
   const client = new Anthropic({ apiKey })
 
   try {

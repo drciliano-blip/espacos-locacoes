@@ -8,6 +8,9 @@ import type Anthropic from '@anthropic-ai/sdk'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { canAccess, veValoresAReceber } from '@/lib/auth'
 import type { NivelAcesso } from '@/types'
+import { aplicarPatch } from './calculo-estado'
+import { novoNumero } from './orcamento'
+import { mensagemInicial } from './roteiro'
 
 type Tool = Anthropic.Beta.BetaTool
 type Entrada = Record<string, unknown>
@@ -28,6 +31,8 @@ export type AcaoProposta =
   | { tipo: 'evento'; eventoId: string; acao: 'gerar_contrato' | 'cancelar' | 'reagendar' | 'converter' | 'ver'; novaData?: string; resumo: string }
   // Abre a janela "Editar parcela" para dar baixa.
   | { tipo: 'baixa'; receitaId: string; resumo: string }
+  // Abre o atendimento (chat do cliente) criado com os dados, para montar o orçamento.
+  | { tipo: 'atendimento'; atendimentoId: string; resumo: string }
   // Abre "Nova Conta a Pagar" já preenchida.
   | { tipo: 'conta'; campos: { descricao: string; valor: number; vencimento: string; categoria: string; subcategoria: string; espaco: string; fornecedor?: string; observacoes?: string }; resumo: string }
 
@@ -338,6 +343,47 @@ const FERRAMENTAS: Record<string, Ferramenta> = {
       return { ok: true, mensagem: 'Proposta pronta. Diga à pessoa para conferir e clicar em Confirmar no cartão que aparece abaixo da resposta.' }
     },
   },
+  abrir_orcamento: {
+    pode: r => r === 'admin' || r === 'operacional',
+    definicao: {
+      name: 'abrir_orcamento',
+      description: 'Começa um orçamento para um cliente: cria o atendimento (chat do cliente) já com os dados que a pessoa passou e mostra um cartão para abrir; lá o assistente monta o Orçamento de Locação e o de Serviços, os PDFs e as mensagens. Use sempre que pedirem para fazer/montar/gerar um orçamento.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          cliente: { type: 'string' }, empresa: { type: 'string' }, telefone: { type: 'string' },
+          tipo_evento: { type: 'string' }, data: { type: 'string', description: 'AAAA-MM-DD' },
+          convidados: { type: 'integer' }, espaco: { type: 'string', description: 'Nome do espaço' },
+          pedido: { type: 'string', description: 'O que mais a pessoa pediu (buffet, serviços, observações), em uma frase' },
+        },
+      },
+    },
+    async executar(sb, e, { acoes }) {
+      const { estado, avisos } = aplicarPatch({}, {
+        cliente: texto(e.cliente) || undefined, empresa: texto(e.empresa) || undefined, telefone: texto(e.telefone) || undefined,
+        tipo_evento: texto(e.tipo_evento) || undefined, data: ISO.test(texto(e.data)) ? texto(e.data) : undefined,
+        convidados: typeof e.convidados === 'number' ? e.convidados : undefined, espaco: texto(e.espaco) || undefined,
+      }, [])
+      const titulo = (estado.dados.empresa || estado.dados.cliente || 'Novo atendimento').trim()
+      const agora = Date.now()
+      const resumoPedido = [estado.dados.cliente || estado.dados.empresa, estado.dados.tipoEvento, estado.dados.data && estado.dados.data.split('-').reverse().join('/'), estado.dados.convidados && `${estado.dados.convidados} pessoas`, texto(e.espaco), texto(e.pedido)].filter(Boolean).join(', ')
+      const mensagens = [
+        { id: crypto.randomUUID(), autor: 'assistente', texto: 'Atendimento aberto pela conversa do assistente. Escreva aqui o que mais o cliente pediu, ou peça para eu montar o orçamento.', em: new Date(agora).toISOString() },
+        { id: crypto.randomUUID(), autor: 'equipe', texto: `Pedido: ${resumoPedido || '(sem detalhes ainda)'}`, em: new Date(agora + 1).toISOString() },
+        { id: crypto.randomUUID(), autor: 'assistente', tipo: 'rascunho_cliente', enviada: false, texto: mensagemInicial(), em: new Date(agora + 2).toISOString() },
+      ]
+      const { data: { user } } = await sb.auth.getUser()
+      const { data, error } = await sb.from('assistente_atendimentos').insert({
+        numero: `${novoNumero()}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`,
+        titulo, estado, mensagens, espaco_slug: estado.slug || null, data_evento: estado.dados.data || null,
+        created_by: user?.id ?? null,
+      }).select('id').single()
+      if (error) throw error
+      acoes.push({ tipo: 'atendimento', atendimentoId: data.id, resumo: `Orçamento: ${titulo}${resumoPedido ? ` · ${resumoPedido}` : ''}` })
+      return { ok: true, avisos, mensagem: 'Atendimento criado. Diga à pessoa para abrir o cartão: lá o orçamento é montado.' }
+    },
+  },
+
   abrir_evento: {
     pode: r => r !== 'socio' && r !== 'visualizador' && (canAccess(r, 'agenda') || canAccess(r, 'eventos')),
     definicao: {
