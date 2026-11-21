@@ -45,3 +45,4 @@ next-env.d.ts
 # …exceto os ícones do app (tela de início)
 !src/app/apple-icon.png
 !public/icons/*.png
+!public/logos/*.png

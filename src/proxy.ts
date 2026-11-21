@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/proxy'
 import { paginaInicial, ROLE_PERMISSIONS, ROLES_SEM_API } from '@/lib/auth'
 import type { NivelAcesso } from '@/types'
 
-const publicPaths = ['/login', '/ficha-cliente']
+const publicPaths = ['/login', '/ficha-cliente', '/teste-assistente']
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -65,5 +65,5 @@ export const config = {
   // Ícones e manifest ficam fora: o celular os busca sem sessão ao "Adicionar
   // à Tela de Início" e, logado, o controle por página redirecionaria (o
   // primeiro segmento, ex. "apple-icon.png", não é uma permissão).
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|apple-icon.png|manifest.webmanifest|icons/).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|apple-icon.png|manifest.webmanifest|icons/|logos/).*)'],
 }

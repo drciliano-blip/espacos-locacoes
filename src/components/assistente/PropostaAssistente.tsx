@@ -26,6 +26,7 @@ interface Props {
   opcionais: LinhaOrcamento[]
   parcelas: Parcela[]
   condicoesServicos?: string
+  fastix?: 'parceria' | 'opcional' | null
 }
 
 function Titulo({ t, sub }: { t: string; sub: string }) {
@@ -59,7 +60,7 @@ function Caixa({ titulo, itens }: { titulo: string; itens: string[] }) {
   )
 }
 
-export default function PropostaAssistente({ tipo, numero, versao, dados, espaco, linhas, opcionais, parcelas, condicoesServicos }: Props) {
+export default function PropostaAssistente({ tipo, numero, versao, dados, espaco, linhas, opcionais, parcelas, condicoesServicos, fastix }: Props) {
   const locacao = tipo === 'locacao'
   const total = linhas.reduce((s, l) => s + l.valor, 0)
   const sufixo = locacao ? 'E' : 'S'
@@ -74,14 +75,19 @@ export default function PropostaAssistente({ tipo, numero, versao, dados, espaco
     <div style={{ background: CREME, color: NAVY, fontFamily: 'Helvetica, Arial, sans-serif' }} className="px-7 pt-7 pb-6">
       <style>{'@page { size: 143mm 254mm; margin: 0 } html, body { background: ' + CREME + ' !important }'}</style>
 
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-[12px] font-bold leading-[1.15]">ESPAÇOS<br />E LOCAÇÕES</p>
-          <div className="mt-1.5 h-px w-6" style={{ background: GOLD }} />
+      {/* Logo da E&L + logo do espaço (recortados das artes oficiais). */}
+      <div className="flex items-stretch justify-between gap-4">
+        <div className="flex flex-col justify-between">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logos/espacos-e-locacoes.png" alt="Espaços e Locações" className="h-[34px] w-auto self-start" />
+          <div className="mt-2 text-[9.5px] font-bold tracking-[0.12em] leading-relaxed">
+            <p>{locacao ? 'ORÇAMENTO DE LOCAÇÃO' : 'ORÇAMENTO DE SERVIÇOS'}</p>
+            <p style={{ color: GOLD }}>Nº {numero}-{sufixo} · VERSÃO {versao}</p>
+          </div>
         </div>
-        <div className="text-right text-[10px] font-bold tracking-[0.12em] leading-relaxed">
-          <p>{locacao ? 'ORÇAMENTO DE LOCAÇÃO' : 'ORÇAMENTO DE SERVIÇOS'}</p>
-          <p style={{ color: GOLD }}>Nº {numero}-{sufixo} · VERSÃO {versao}</p>
+        <div className="flex w-[150px] items-center justify-center px-3 py-2.5" style={{ background: NAVY }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={espaco.logo} alt={espaco.nome} className="max-h-[62px] max-w-full object-contain" />
         </div>
       </div>
       <div className="my-3.5 h-px" style={{ background: GOLD }} />
@@ -147,6 +153,13 @@ export default function PropostaAssistente({ tipo, numero, versao, dados, espaco
           <div className="text-right">{formatCurrency(p.valor)}</div>
         </div>
       ))}
+      {locacao && fastix && (
+        <p className="mt-1.5 text-[9px] leading-snug">
+          {fastix === 'parceria'
+            ? <><b>Evento em parceria:</b> venda de ingressos obrigatória pela FASTIX, ticketeira oficial, conforme contrato. Pagamento na condição FASTIX.</>
+            : <><b>Condição FASTIX:</b> para produtores que vendem os ingressos do evento pela FASTIX, ticketeira oficial.</>}
+        </p>
+      )}
       {!locacao && condicoesServicos && <p className="mt-1.5 text-[9px] whitespace-pre-line">{condicoesServicos}</p>}
 
       <p className="mt-2 text-[8.5px] leading-snug" style={{ color: '#4a5b68' }}>
