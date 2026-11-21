@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 
 // A IA pode levar mais de 10 s (várias consultas seguidas): sem isto a conexão cai ("Load failed").
-export const maxDuration = 60
+export const maxDuration = 120
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
 import { canAccess } from '@/lib/auth'
 import { MANUAL_SISTEMA } from '@/lib/assistente/manual-sistema'
+import { LIMITE_HISTORICO, respostaViva } from '@/lib/assistente/resposta-viva'
 import { executarFerramenta, ferramentasDoPerfil, type AcaoProposta } from '@/lib/assistente/ferramentas'
 import { aplicarPatch, calcular, type PatchOrcamento } from '@/lib/assistente/calculo-estado'
 import { TABELAS_ESPACOS, tabelaPorSlug } from '@/lib/assistente/tabelas-espacos'
@@ -171,11 +172,19 @@ export async function POST(request: Request) {
     ...(body.clienteNovas?.length ? [`<mensagens_novas_do_cliente>\n${body.clienteNovas.join('\n---\n')}\n</mensagens_novas_do_cliente>`] : []),
     `<equipe>\n${texto || '(chegou mensagem nova do cliente: o que fazer?)'}\n</equipe>`,
   ]
-  const historico = Array.isArray(body.historico) ? body.historico : []
+  // Conversa grande demais: recomeça com um resumo (a última resposta da IA).
+  let historico = Array.isArray(body.historico) ? body.historico : []
+  if (JSON.stringify(historico).length > LIMITE_HISTORICO) {
+    const anterior = [...historico].reverse().find(m => m.role === 'assistant' && typeof m.content !== 'string')
+    const t = anterior && typeof anterior.content !== 'string' ? anterior.content.filter(b => b.type === 'text').map(b => (b as { text: string }).text).join('\n').slice(0, 4000) : ''
+    if (t) partes.unshift(`<resumo_da_conversa_anterior>\n${t}\n</resumo_da_conversa_anterior>`)
+    historico = []
+  }
   const mensagens: Anthropic.Beta.BetaMessageParam[] = [...historico, { role: 'user', content: partes.join('\n\n') }]
   const tools = [...FERRAMENTAS_ATENDIMENTO, ...ferramentasDoPerfil(role).filter(t => t.name !== 'propor_pre_evento' && t.name !== 'abrir_orcamento')]
   const client = new Anthropic({ apiKey })
 
+  return respostaViva(async () => {
   try {
     const inicio = Date.now()
     for (let volta = 0; volta < MAX_VOLTAS; volta++) {
@@ -187,15 +196,15 @@ export async function POST(request: Request) {
         system: [{ type: 'text', text: MANUAL_SISTEMA }, { type: 'text', text: SISTEMA, cache_control: { type: 'ephemeral' } }],
         output_config: { effort: 'low' },
         // Perto do limite de tempo: responde com o que já tem, sem novas consultas.
-        ...(Date.now() - inicio > 35000 ? { tool_choice: { type: 'none' as const } } : {}),
+        ...(Date.now() - inicio > 30000 ? { tool_choice: { type: 'none' as const } } : {}),
         tools,
         messages: mensagens,
       })
       mensagens.push({ role: 'assistant', content: msg.content as Anthropic.Beta.BetaContentBlockParam[] })
-      if (msg.stop_reason === 'refusal') return NextResponse.json({ error: 'A IA não respondeu. Tente reformular.' }, { status: 422 })
+      if (msg.stop_reason === 'refusal') return { error: 'A IA não respondeu. Tente reformular.' }
       if (msg.stop_reason !== 'tool_use') {
         const resposta = msg.content.filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text').map(b => b.text).join('\n').trim()
-        return NextResponse.json({ resposta, acoes, historico: mensagens, estado: estadoMudou ? estado : undefined })
+        return { resposta, acoes, historico: mensagens, estado: estadoMudou ? estado : undefined }
       }
 
       const resultados: Anthropic.Beta.BetaToolResultBlockParam[] = []
@@ -238,17 +247,18 @@ export async function POST(request: Request) {
         const conteudo = JSON.stringify(r)
         resultados.push({
           type: 'tool_result', tool_use_id: b.id,
-          content: conteudo.length > 60000 ? conteudo.slice(0, 60000) + '…(cortado)' : conteudo,
+          content: conteudo.length > 25000 ? conteudo.slice(0, 25000) + '…(cortado)' : conteudo,
           ...(r && typeof r === 'object' && 'erro' in r ? { is_error: true } : {}),
         })
       }
       mensagens.push({ role: 'user', content: resultados })
     }
-    return NextResponse.json({ resposta: 'Essa tarefa ficou longa demais. Pode dividir em partes?', acoes, historico: mensagens, estado: estadoMudou ? estado : undefined })
+    return { resposta: 'Essa tarefa ficou longa demais. Pode dividir em partes?', acoes, historico: mensagens, estado: estadoMudou ? estado : undefined }
   } catch (err) {
     console.error('[assistente/chat]', err)
-    if (err instanceof Anthropic.RateLimitError) return NextResponse.json({ error: 'Muitas consultas à IA agora. Tente em 1 minuto.' }, { status: 429 })
-    if (err instanceof Anthropic.APIError) return NextResponse.json({ error: `Erro da IA (${err.status}): ${err.message}` }, { status: 502 })
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Erro ao consultar.' }, { status: 502 })
+    if (err instanceof Anthropic.RateLimitError) return { error: 'Muitas consultas à IA agora. Tente em 1 minuto.' }
+    if (err instanceof Anthropic.APIError) return { error: `Erro da IA (${err.status}): ${err.message}` }
+    return { error: err instanceof Error ? err.message : 'Erro ao consultar.' }
   }
+  })
 }
