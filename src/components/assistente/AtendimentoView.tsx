@@ -25,6 +25,7 @@ import { useEventos } from '@/contexts/EventosContext'
 import { useEspacos } from '@/contexts/EspacosContext'
 import NovoEventoModal from '@/components/eventos/NovoEventoModal'
 import type { Espaco, Evento } from '@/types'
+import { questionario } from '@/lib/assistente/roteiro'
 import PropostaAssistente from './PropostaAssistente'
 import Toast from '@/components/shared/Toast'
 
@@ -304,11 +305,21 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
   }
 
   async function gerarResposta() {
-    if (!espaco) { setErro('Escolha o espaço antes de gerar a resposta.'); return }
     setErro(null); setGerando(true)
     try {
       const escolhido = opcoesEspacos.find(o => o.t.slug === slug)
-      const contexto = {
+      // Etapa 1 (coleta): falta alguma das 5 respostas → a IA pede só o que falta.
+      const contexto = emColeta || !espaco ? {
+        etapa: 'coleta',
+        conversaAteAgora: conversaParaIA(mensagens.slice(-30)),
+        jaRespondido: perguntas.filter(p => p.resposta).map(p => `${p.pergunta}: ${p.resposta}`),
+        faltaResponder: perguntas.filter(p => !p.resposta).map(p => p.pergunta),
+        espacosLivresQueComportam: dados.data && dados.convidados && agendaDoDia
+          ? opcoesEspacos.filter(o => o.livre === true && o.cabe && !o.t.semTabela).map(o => `${o.t.nome} (até ${o.t.capacidade.toLocaleString('pt-BR')} pessoas)`)
+          : 'ainda não dá para conferir (falta data ou número de pessoas)',
+        observacao: 'O Complexo Jussara é atendido pessoalmente pela direção: se o cliente escolher o Jussara, diga que a equipe vai retornar com os detalhes.',
+      } : {
+        etapa: 'orcamento',
         conversaAteAgora: conversaParaIA(mensagens.slice(-30)),
         cliente: { nome: dados.cliente, empresa: dados.empresa },
         evento: { tipo: dados.tipoEvento, data: dados.data ? `${diaDaSemana(dados.data)}, ${br(dados.data)}` : 'não informada', convidados: dados.convidados, duracaoHoras: dados.duracaoHoras, observacoes: dados.observacoes },
@@ -404,6 +415,8 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
   }, [imprimindo])
 
   const pronto = !!espaco
+  const perguntas = questionario(dados, espaco?.nome)
+  const emColeta = perguntas.some(p => !p.resposta)
   const ultimaResposta = [...mensagens].reverse().find(m => m.autor === 'assistente')
 
   return (
@@ -434,6 +447,17 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
         <section className={cardCls}>
           <h2 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-app-text"><MessageSquareText className="h-4 w-4" /> 1. Conversa</h2>
           {mensagens.length === 0 && <p className="mb-3 text-xs text-app-muted">Cole a primeira mensagem do cliente (WhatsApp, e-mail ou pedido do site).</p>}
+          <div className="mb-3 rounded-lg border border-app-border2 p-3">
+            <p className="mb-2 text-xs font-semibold text-app-muted">Questionário inicial {emColeta ? `· faltam ${perguntas.filter(p => !p.resposta).length}` : '· completo: siga para o orçamento e os extras'}</p>
+            <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-5">
+              {perguntas.map(p => (
+                <div key={p.chave} className={`rounded-md px-2 py-1.5 text-xs ${p.resposta ? 'bg-emerald-500/10 text-emerald-800' : 'bg-amber-500/10 text-amber-800'}`}>
+                  <p className="font-semibold">{p.resposta ? '✓' : '•'} {p.pergunta}</p>
+                  <p className="truncate">{p.resposta ?? 'pendente'}</p>
+                </div>
+              ))}
+            </div>
+          </div>
           <div className="space-y-2">
             {mensagens.map(m => (
               <div key={m.id} className={`flex ${m.autor === 'cliente' ? 'justify-start' : m.autor === 'sistema' ? 'justify-center' : 'justify-end'}`}>
@@ -624,12 +648,12 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
                   <button type="button" className={btnSec} disabled={!pronto} onClick={() => setImprimindo('locacao')}><FileDown className="h-4 w-4" /> PDF Locação</button>
                   <button type="button" className={btnSec} disabled={!pronto || linhasServ.length === 0} onClick={() => setImprimindo('servicos')}><FileDown className="h-4 w-4" /> PDF Serviços</button>
                   <button type="button" className={btnSec} disabled={!pronto} onClick={() => setVersao(v => v + 1)}>Nova versão</button>
-                  <button type="button" className={btnPrim} disabled={!pronto || gerando} onClick={gerarResposta}>
-                    {gerando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Gerar resposta com IA
+                  <button type="button" className={btnPrim} disabled={gerando || !mensagens.some(m => m.autor === 'cliente')} onClick={gerarResposta}>
+                    {gerando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} {emColeta ? 'Gerar resposta (pedir o que falta)' : 'Gerar resposta com orçamento'}
                   </button>
                 </div>
               </div>
-              {!espaco && <p className="text-xs text-app-muted">Escolha o espaço no passo 3.</p>}
+              {emColeta && <p className="text-xs text-app-muted">Etapa de coleta: a resposta agradece e pede só o que falta do questionário (e sugere os espaços livres, se já tiver data e pessoas). Os PDFs saem quando o espaço estiver escolhido.</p>}
               {ultimaResposta && !ultimaResposta.enviada && <p className="text-xs text-app-muted">A resposta gerada fica na conversa (passo 1) como rascunho: revise, copie e marque como enviada.</p>}
               {alertas.length > 0 && (
                 <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800">
