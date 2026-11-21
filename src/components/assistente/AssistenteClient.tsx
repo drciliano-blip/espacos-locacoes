@@ -13,9 +13,10 @@ import { nomeDoUsuarioAtual } from '@/lib/buffet'
 import { tabelaPorSlug } from '@/lib/assistente/tabelas-espacos'
 import { br, novoNumero } from '@/lib/assistente/orcamento'
 import {
-  STATUS_ATENDIMENTO, carregarAtendimento, criarAtendimento, excluirAtendimento, listarAtendimentos, tabelaAusente,
+  STATUS_ATENDIMENTO, carregarAtendimento, criarAtendimento, excluirAtendimento, listarAtendimentos, novaMensagem, salvarAtendimento, tabelaAusente,
   type Atendimento, type AtendimentoResumo, type StatusAtendimento,
 } from '@/lib/assistente/atendimentos'
+import { mensagemInicial } from '@/lib/assistente/roteiro'
 import AtendimentoView from './AtendimentoView'
 import ConsultaChat from './ConsultaChat'
 
@@ -66,7 +67,11 @@ export default function AssistenteClient() {
   async function novo() {
     setAbrindo('novo'); setErro(null)
     try {
-      const a = await criarAtendimento(novoNumero(), autor)
+      const criado = await criarAtendimento(novoNumero(), autor)
+      // Todo atendimento começa com a mensagem padrão (as 5 perguntas), pronta para copiar.
+      const mensagens = [novaMensagem('assistente', mensagemInicial(autor), autor)]
+      await salvarAtendimento(criado.id, { mensagens }, autor)
+      const a = { ...criado, mensagens }
       setLista(l => [a, ...l])
       setAberto(a)
     } catch (e) {
