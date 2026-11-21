@@ -4,7 +4,7 @@ import type { NivelAcesso } from '@/types'
 // PDF/Excel) — não existe mais como página própria.
 export const ROLE_PERMISSIONS: Record<NivelAcesso, string[]> = {
   admin: ['dashboard', 'assistente', 'agenda', 'pagamentos', 'eventos', 'fechamento', 'espacos', 'contas-a-pagar', 'usuarios', 'calculadora-staff', 'credenciamento', 'buffet'],
-  financeiro: ['dashboard', 'pagamentos', 'eventos', 'fechamento', 'contas-a-pagar', 'buffet'],
+  financeiro: ['dashboard', 'assistente', 'pagamentos', 'eventos', 'fechamento', 'contas-a-pagar', 'buffet'],
   // Buffet EL: operadores montam e enviam orçamentos (sócio dos espaços não
   // vê — o buffet tem quadro societário próprio).
   operacional: ['dashboard', 'assistente', 'agenda', 'eventos', 'espacos', 'calculadora-staff', 'credenciamento', 'buffet'],

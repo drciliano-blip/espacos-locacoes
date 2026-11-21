@@ -17,6 +17,7 @@ import {
   type Atendimento, type AtendimentoResumo, type StatusAtendimento,
 } from '@/lib/assistente/atendimentos'
 import AtendimentoView from './AtendimentoView'
+import ConsultaChat from './ConsultaChat'
 
 const inputCls = 'w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none'
 const FILTROS: (StatusAtendimento | 'todos')[] = ['todos', 'aberto', 'enviado', 'fechado', 'perdido']
@@ -31,6 +32,9 @@ function quando(iso: string) {
 
 export default function AssistenteClient() {
   const { role } = useCurrentUser()
+  // Atendimentos (chat por cliente) são de admin e operacional; o financeiro usa só as Consultas.
+  const temAtendimentos = role === 'admin' || role === 'operacional'
+  const [aba, setAba] = useState<'atendimentos' | 'consultas'>(temAtendimentos ? 'atendimentos' : 'consultas')
   const [lista, setLista] = useState<AtendimentoResumo[]>([])
   const [carregando, setCarregando] = useState(true)
   const [semTabela, setSemTabela] = useState(false)
@@ -44,12 +48,13 @@ export default function AssistenteClient() {
   useEffect(() => {
     let vivo = true
     nomeDoUsuarioAtual().then(n => { if (vivo) setAutor(n) }).catch(() => {})
+    if (!temAtendimentos) { queueMicrotask(() => { if (vivo) setCarregando(false) }); return () => { vivo = false } }
     listarAtendimentos()
       .then(l => { if (vivo) setLista(l) })
       .catch(e => { if (!vivo) return; if (tabelaAusente(e)) setSemTabela(true); else setErro(mensagemDeErro(e, 'Não foi possível carregar os atendimentos.')) })
       .finally(() => { if (vivo) setCarregando(false) })
     return () => { vivo = false }
-  }, [])
+  }, [temAtendimentos])
 
   async function abrir(id: string) {
     setAbrindo(id); setErro(null)
@@ -98,24 +103,33 @@ export default function AssistenteClient() {
           <Bot className="h-6 w-6 text-app-text" />
           <div>
             <h1 className="text-xl font-semibold text-app-text">Assistente de IA</h1>
-            <p className="text-xs text-app-muted">Um chat por cliente ou orçamento. A IA prepara, a equipe revisa e envia.</p>
+            <p className="text-xs text-app-muted">A IA prepara e consulta; a equipe revisa e confirma.</p>
           </div>
         </div>
-        {!semTabela && (
+        {aba === 'atendimentos' && !semTabela && (
           <button type="button" onClick={novo} disabled={abrindo === 'novo'} className="inline-flex items-center gap-1.5 rounded-lg bg-[#072A43] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">
             {abrindo === 'novo' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Novo atendimento
           </button>
         )}
       </div>
 
-      {semTabela && (
+      <div className="print:hidden flex gap-1 border-b border-app-border">
+        {temAtendimentos && (
+          <button type="button" onClick={() => setAba('atendimentos')} className={`px-3 py-2 text-sm ${aba === 'atendimentos' ? 'border-b-2 border-[#072A43] font-semibold text-app-text' : 'text-app-muted'}`}>Atendimentos</button>
+        )}
+        <button type="button" onClick={() => setAba('consultas')} className={`px-3 py-2 text-sm ${aba === 'consultas' ? 'border-b-2 border-[#072A43] font-semibold text-app-text' : 'text-app-muted'}`}>Consultas</button>
+      </div>
+
+      {aba === 'consultas' && <ConsultaChat role={role} autor={autor} />}
+
+      {aba === 'atendimentos' && semTabela && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800">
           O histórico de atendimentos ainda não foi ativado no banco (migration 0052). Peça ao administrador para aplicá-la.
         </div>
       )}
-      {erro && <div className="print:hidden rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600">{erro}</div>}
+      {aba === 'atendimentos' && erro && <div className="print:hidden rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600">{erro}</div>}
 
-      <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
+      <div className={`grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] ${aba === 'atendimentos' ? '' : 'hidden'}`}>
         <aside className={`print:hidden space-y-2 ${aberto ? 'hidden lg:block' : ''}`}>
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-app-muted" />
