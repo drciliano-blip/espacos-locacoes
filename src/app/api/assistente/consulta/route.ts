@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server'
+
+// A IA pode levar mais de 10 s (várias consultas seguidas): sem isto a conexão cai ("Load failed").
+export const maxDuration = 60
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
 import { canAccess } from '@/lib/auth'
@@ -64,6 +67,7 @@ export async function POST(request: Request) {
   const client = new Anthropic({ apiKey })
 
   try {
+    const inicio = Date.now()
     for (let volta = 0; volta < MAX_VOLTAS; volta++) {
       const msg = await client.beta.messages.create({
         model: MODEL,
@@ -71,7 +75,9 @@ export async function POST(request: Request) {
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: [{ model: 'claude-opus-4-8' }],
         system: [{ type: 'text', text: MANUAL_SISTEMA, cache_control: { type: 'ephemeral' } }, { type: 'text', text: sistema(role, hoje) }],
-        output_config: { effort: 'medium' },
+        output_config: { effort: 'low' },
+        // Perto do limite de tempo: responde com o que já tem, sem novas consultas.
+        ...(Date.now() - inicio > 35000 ? { tool_choice: { type: 'none' as const } } : {}),
         tools,
         messages: mensagens,
       })

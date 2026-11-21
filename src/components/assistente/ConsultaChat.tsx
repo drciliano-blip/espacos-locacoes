@@ -85,7 +85,9 @@ export default function ConsultaChat({ role, autor, tela, compacto }: { role: Ni
       setHistorico(json.historico ?? [])
       setBolhas(b => [...b, { id: crypto.randomUUID(), autor: 'ia', texto: json.resposta, acoes: json.acoes?.length ? json.acoes : undefined }])
     } catch (e) {
-      setErro(mensagemDeErro(e, 'Não foi possível consultar.'))
+      // "Load failed"/"Failed to fetch": a conexão caiu; devolve a pergunta para reenviar.
+      if (e instanceof TypeError) { setErro('A resposta demorou ou a internet oscilou. Sua mensagem voltou para a caixa: toque em enviar de novo.'); setPergunta(q) }
+      else setErro(mensagemDeErro(e, 'Não foi possível consultar.'))
     } finally {
       setPensando(false)
     }

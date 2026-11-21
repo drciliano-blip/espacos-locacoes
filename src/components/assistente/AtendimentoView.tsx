@@ -399,7 +399,8 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
       }
       await gravarMensagens([...comPergunta, ...novas])
     } catch (e) {
-      setErro(mensagemDeErro(e, 'Não foi possível falar com o assistente.'))
+      if (e instanceof TypeError) { setErro('A resposta demorou ou a internet oscilou. Sua mensagem voltou para a caixa: toque em enviar de novo.'); if (!textoFixo) setNovoTexto(texto) }
+      else setErro(mensagemDeErro(e, 'Não foi possível falar com o assistente.'))
       await gravarMensagens(comPergunta)
     } finally {
       setPensando(false)

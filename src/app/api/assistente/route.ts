@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server'
+
+// A IA pode levar mais de 10 s (várias consultas seguidas): sem isto a conexão cai ("Load failed").
+export const maxDuration = 60
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
 import { canAccess } from '@/lib/auth'
