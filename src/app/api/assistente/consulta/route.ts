@@ -44,7 +44,7 @@ export async function POST(request: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return NextResponse.json({ error: 'ANTHROPIC_API_KEY não configurada no servidor.' }, { status: 500 })
 
-  let body: { historico?: Anthropic.Beta.BetaMessageParam[]; pergunta?: string }
+  let body: { historico?: Anthropic.Beta.BetaMessageParam[]; pergunta?: string; tela?: string }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'Pedido inválido.' }, { status: 400 }) }
   const pergunta = (body.pergunta ?? '').trim()
   if (!pergunta) return NextResponse.json({ error: 'Escreva a pergunta.' }, { status: 400 })
@@ -52,7 +52,9 @@ export async function POST(request: Request) {
 
   // O histórico volta inteiro (com os blocos da IA como vieram), só acrescentando.
   const historico = Array.isArray(body.historico) ? body.historico.slice(-40) : []
-  const mensagens: Anthropic.Beta.BetaMessageParam[] = [...historico, { role: 'user', content: pergunta }]
+  // A tela onde a pessoa está (botão flutuante): ajuda em "como faço isso aqui?".
+  const tela = (body.tela ?? '').slice(0, 80)
+  const mensagens: Anthropic.Beta.BetaMessageParam[] = [...historico, { role: 'user', content: tela ? `[A pessoa está na tela: ${tela}]\n${pergunta}` : pergunta }]
   const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })
   const tools = ferramentasDoPerfil(role)
   const acoes: AcaoProposta[] = []

@@ -47,7 +47,7 @@ const SUGESTOES: Record<string, string[]> = {
 
 const CHAVE = 'assistente-consulta-v1'
 
-export default function ConsultaChat({ role, autor }: { role: NivelAcesso; autor?: string }) {
+export default function ConsultaChat({ role, autor, tela, compacto }: { role: NivelAcesso; autor?: string; tela?: string; compacto?: boolean }) {
   const { addEvento } = useEventos()
   const [bolhas, setBolhas] = useState<Bolha[]>([])
   const [historico, setHistorico] = useState<Anthropic.Beta.BetaMessageParam[]>([])
@@ -76,7 +76,7 @@ export default function ConsultaChat({ role, autor }: { role: NivelAcesso; autor
     setErro(null); setPergunta(''); setPensando(true)
     setBolhas(b => [...b, { id: crypto.randomUUID(), autor: 'pessoa', texto: q }])
     try {
-      const res = await fetch('/api/assistente/consulta', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pergunta: q, historico }) })
+      const res = await fetch('/api/assistente/consulta', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pergunta: q, historico, tela }) })
       const json = await res.json().catch(() => ({ error: 'Resposta inválida do servidor.' }))
       if (!res.ok) throw new Error(json.error ?? 'Erro ao consultar.')
       setHistorico(json.historico ?? [])
@@ -114,7 +114,7 @@ export default function ConsultaChat({ role, autor }: { role: NivelAcesso; autor
   }
 
   return (
-    <div className="flex min-h-[60vh] flex-col rounded-xl border border-app-border bg-app-surface">
+    <div className={`flex flex-col bg-app-surface ${compacto ? 'h-full' : 'min-h-[60vh] rounded-xl border border-app-border'}`}>
       <div className="flex items-center justify-between border-b border-app-border px-4 py-3">
         <p className="text-sm text-app-muted">Tire dúvidas de como usar o sistema ou pergunte sobre agenda, eventos e financeiro. A IA busca no sistema com o seu nível de acesso e não altera nada sozinha.</p>
         {bolhas.length > 0 && <button type="button" onClick={limpar} className="inline-flex shrink-0 items-center gap-1 text-xs text-app-muted"><RotateCcw className="h-3.5 w-3.5" /> Nova conversa</button>}
