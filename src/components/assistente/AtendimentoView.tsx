@@ -385,7 +385,7 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
         body: JSON.stringify({ mensagem: paraIA ?? texto, historico: iaHist, estado, preEvento: preEvento ? { status: preEvento.status } : null, clienteNovas }),
       })
       const j = await res.json().catch(() => ({ error: 'Resposta inválida do servidor.' }))
-      if (!res.ok) throw new Error(j.error ?? 'Erro ao falar com o assistente.')
+      if (!res.ok || j.error) throw new Error(j.error ?? 'Erro ao falar com o assistente.')
       if (j.estado) aplicarEstado(j.estado as EstadoAtendimento)
       setIaHist(j.historico ?? iaHist); setIaAte(agora)
       const novas: Mensagem[] = []

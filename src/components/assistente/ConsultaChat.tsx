@@ -82,7 +82,7 @@ export default function ConsultaChat({ role, autor, tela, compacto }: { role: Ni
     try {
       const res = await fetch('/api/assistente/consulta', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pergunta: paraIA ?? q, historico, tela }) })
       const json = await res.json().catch(() => ({ error: 'Resposta inválida do servidor.' }))
-      if (!res.ok) throw new Error(json.error ?? 'Erro ao consultar.')
+      if (!res.ok || json.error) throw new Error(json.error ?? 'Erro ao consultar.')
       setHistorico(json.historico ?? [])
       setBolhas(b => [...b, { id: crypto.randomUUID(), autor: 'ia', texto: json.resposta, acoes: json.acoes?.length ? json.acoes : undefined }])
     } catch (e) {
