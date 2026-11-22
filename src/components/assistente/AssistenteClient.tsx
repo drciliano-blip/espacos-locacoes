@@ -19,6 +19,7 @@ import {
 } from '@/lib/assistente/atendimentos'
 import { mensagemInicial } from '@/lib/assistente/roteiro'
 import AtendimentoView from './AtendimentoView'
+import ResumoDoDia from './ResumoDoDia'
 import ConsultaChat from './ConsultaChat'
 
 const inputCls = 'w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none'
@@ -126,6 +127,8 @@ export default function AssistenteClient() {
           </button>
         )}
       </div>
+
+      <ResumoDoDia compacto={!!aberto} />
 
       <div className="print:hidden flex gap-1 border-b border-app-border">
         {temAtendimentos && (
