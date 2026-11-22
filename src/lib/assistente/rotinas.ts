@@ -1,6 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { BASE_JURIDICA } from './base-juridica'
 import { executarFerramenta, type AcaoProposta } from './ferramentas'
 import type { NivelAcesso } from '@/types'
 
@@ -20,7 +19,7 @@ const somar = (iso: string, dias: number) => new Date(Date.parse(iso + 'T12:00:0
 const br = (iso: string) => iso.split('-').reverse().join('/')
 const mesAnterior = (iso: string) => { const d = new Date(Date.parse(iso.slice(0, 8) + '01T12:00:00Z') - 864e5); return d.toISOString().slice(0, 7) }
 
-interface Rotina { tipo: 'manha' | 'semanal' | 'fechamento'; publico: Publico; titulo: string; dados: Record<string, unknown>; pedido: string; juridico?: boolean }
+interface Rotina { tipo: 'manha' | 'semanal' | 'fechamento'; publico: Publico; titulo: string; dados: Record<string, unknown>; pedido: string }
 
 async function ferramenta(sb: SupabaseClient, nome: string, entrada: Record<string, unknown>, publico: Publico) {
   const acoes: AcaoProposta[] = []
@@ -45,11 +44,11 @@ async function montar(sb: SupabaseClient, tipo: Rotina['tipo'], publico: Publico
       dados.parcelas_em_atraso = await ferramenta(sb, 'recebimentos', { situacao: 'vencidos' }, publico)
     }
     return {
-      tipo, publico, dados, juridico: true,
+      tipo, publico, dados,
       titulo: `Resumo da manhã · ${br(hoje)}`,
       pedido: publico === 'gestao'
-        ? 'Resumo da manhã para a gestão (administração e financeiro). Seções, nesta ordem, só as que tiverem conteúdo: "Hoje" (eventos do dia, com espaço e público); "Próximos 7 dias"; "A receber nesta semana" (cliente, valor, vencimento, total); "Em atraso" (os maiores e o total, e quem cobrar primeiro); "Pré-eventos" (os que estão há tempo sem virar evento ou com data próxima: pedir sinal ou liberar a data); "Exigências legais" (veja abaixo). Termine com "Para fazer hoje": no máximo 5 itens.'
-        : 'Resumo da manhã para a equipe de operação (sem valores financeiros). Seções, só as que tiverem conteúdo: "Hoje" (eventos do dia: espaço, cliente, horário, público); "Próximos 7 dias"; "Pré-eventos com data próxima"; "Exigências legais" (veja abaixo). Termine com "Para fazer hoje": no máximo 5 itens de operação (montagem, equipe, documentos).',
+        ? 'Resumo da manhã para a gestão (administração e financeiro). Seções, nesta ordem, só as que tiverem conteúdo: "Hoje" (eventos do dia, com espaço e público); "Próximos 7 dias"; "A receber nesta semana" (cliente, valor, vencimento, total); "Em atraso" (os maiores e o total, e quem cobrar primeiro); "Pré-eventos" (os que estão há tempo sem virar evento ou com data próxima: pedir sinal ou liberar a data). Termine com "Para fazer hoje": no máximo 5 itens.'
+        : 'Resumo da manhã para a equipe de operação (sem valores financeiros). Seções, só as que tiverem conteúdo: "Hoje" (eventos do dia: espaço, cliente, horário, público); "Próximos 7 dias"; "Pré-eventos com data próxima". Termine com "Para fazer hoje": no máximo 5 itens de operação (montagem, equipe, documentos).',
     }
   }
   if (tipo === 'semanal' && publico === 'gestao') {
@@ -85,7 +84,7 @@ Regras:
 - Português do Brasil, frases curtas, listas com "•", valores em R$ com vírgula, datas DD/MM. Sem markdown (nada de **, # ou tabelas). Títulos de seção em uma linha própria, terminando com ":".
 - Use só os dados recebidos. Nunca invente evento, valor ou data. Se uma seção não tem nada, não escreva a seção.
 - Seja curto: no máximo 30 linhas no total.
-- Exigências legais (quando pedidas): para cada evento CONFIRMADO dos próximos 7 dias que tenha número de pessoas, diga em uma linha o que a BASE JURÍDICA acima exige para aquele público (porte pela Lei 18.083/2024; brigada pela IT 17/2025 conforme a lotação; segurança: projeto acima de 1.000 pessoas; ambulância e equipe médica a partir de 1.500 pessoas pela Lei Municipal 15.352/2010; alvará de evento temporário acima de 250 pessoas, salvo a dispensa do art. 5º, § 4º, do Decreto 49.969/2008 quando a casa tem Alvará de Funcionamento e não monta estrutura nova). Cite a norma. Evento sem número de pessoas: peça para preencher. Nada de exigência inventada.`
+- Não fale de exigências legais, normas ou alvarás: isso só quando alguém perguntar ao assistente.`
 
 async function escrever(client: Anthropic, r: Rotina): Promise<string> {
   const msg = await client.beta.messages.create({
@@ -93,7 +92,7 @@ async function escrever(client: Anthropic, r: Rotina): Promise<string> {
     max_tokens: 8000,
     betas: ['server-side-fallback-2026-07-01'],
     fallbacks: [{ model: 'claude-opus-4-8' }],
-    system: [...(r.juridico ? [{ type: 'text' as const, text: BASE_JURIDICA, cache_control: { type: 'ephemeral' as const } }] : []), { type: 'text', text: SISTEMA }],
+    system: [{ type: 'text', text: SISTEMA }],
     output_config: { effort: 'medium' },
     messages: [{ role: 'user', content: `${r.pedido}\n\n<dados>\n${JSON.stringify(r.dados).slice(0, 60000)}\n</dados>` }],
   })
