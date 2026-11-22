@@ -12,7 +12,7 @@ import { useCurrentUser } from '@/contexts/UserContext'
 
 interface Rotina { id: string; tipo: string; data: string; titulo: string; texto: string; created_at: string }
 
-const ORDEM = ['manha', 'fechamento', 'semanal']
+const ORDEM = ['manha', 'fechamento', 'semanal', 'vendas']
 
 export default function ResumoDoDia({ compacto }: { compacto?: boolean }) {
   const { role } = useCurrentUser()
