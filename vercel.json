@@ -1,0 +1,5 @@
+{
+  "crons": [
+    { "path": "/api/assistente/rotinas", "schedule": "0 11 * * *" }
+  ]
+}

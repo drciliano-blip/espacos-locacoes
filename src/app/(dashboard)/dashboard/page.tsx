@@ -11,6 +11,7 @@ import { useEspacoAtivo } from '@/contexts/EspacoAtivoContext'
 import { useEventos } from '@/contexts/EventosContext'
 import { useReceitas, isReceitaOperacional, statusEfetivoReceita, receitaEmAtraso } from '@/contexts/ReceitasContext'
 import { useCurrentUser } from '@/contexts/UserContext'
+import ResumoDoDia from '@/components/assistente/ResumoDoDia'
 import { veValoresAReceber } from '@/lib/auth'
 import type { TipoEvento } from '@/types'
 import { eventoAtivo } from '@/types'
@@ -149,6 +150,9 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
+      {/* Resumo automático do assistente (etapa 4) */}
+      <ResumoDoDia compacto />
+
       {/* Seletor de espaço */}
       <div className="space-y-2">
         <p className="text-sm font-semibold text-app-text">
