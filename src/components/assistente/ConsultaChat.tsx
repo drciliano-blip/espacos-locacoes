@@ -69,7 +69,7 @@ export default function ConsultaChat({ role, autor, tela, compacto }: { role: Ni
   }, [])
   useEffect(() => {
     try { sessionStorage.setItem(CHAVE, JSON.stringify({ b: bolhas, h: historico })) } catch { /* ignora */ }
-    fim.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    fim.current?.scrollIntoView({ behavior: 'smooth', block: 'end', inline: 'nearest' })
   }, [bolhas, historico])
 
   // paraIA: texto completo para o assistente (ex.: dados da ficha anexada); o chat mostra só `texto`.

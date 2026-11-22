@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -11,6 +11,15 @@ export const metadata: Metadata = {
   // Nome que aparece embaixo do ícone na tela de início do iPhone ("Espaços
   // & Locações" inteiro é cortado pelo iOS).
   appleWebApp: { title: "Espaços", capable: true, statusBarStyle: "default" },
+};
+
+// No iPhone, tocar numa caixa de texto com letra menor que 16px dá zoom na
+// página inteira, que fica cortada dos lados. maximumScale 1 evita esse zoom
+// automático (o zoom com os dedos continua funcionando no iOS).
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({
