@@ -16,6 +16,7 @@ import type { Espaco, Evento, NivelAcesso } from '@/types'
 import CartaoAcaoSistema from './CartaoAcaoSistema'
 import BotaoVoz from './BotaoVoz'
 import BotaoAnexo, { textoDaFicha } from './BotaoAnexo'
+import { pedirAoVivo, type AoVivo } from '@/lib/assistente/pedir-ao-vivo'
 
 interface Bolha {
   id: string
@@ -55,6 +56,7 @@ export default function ConsultaChat({ role, autor, tela, compacto }: { role: Ni
   const [historico, setHistorico] = useState<Anthropic.Beta.BetaMessageParam[]>([])
   const [pergunta, setPergunta] = useState('')
   const [pensando, setPensando] = useState(false)
+  const [vivo, setVivo] = useState<AoVivo>({ texto: '', etapa: '' })
   const [erro, setErro] = useState<string | null>(null)
   const fim = useRef<HTMLDivElement>(null)
 
@@ -71,6 +73,8 @@ export default function ConsultaChat({ role, autor, tela, compacto }: { role: Ni
     try { sessionStorage.setItem(CHAVE, JSON.stringify({ b: bolhas, h: historico })) } catch { /* ignora */ }
     fim.current?.scrollIntoView({ behavior: 'smooth', block: 'end', inline: 'nearest' })
   }, [bolhas, historico])
+  // Rola junto enquanto a resposta vai chegando.
+  useEffect(() => { if (vivo.texto) fim.current?.scrollIntoView({ block: 'end', inline: 'nearest' }) }, [vivo.texto])
 
   // paraIA: texto completo para o assistente (ex.: dados da ficha anexada); o chat mostra só `texto`.
   async function perguntar(texto = pergunta, paraIA?: string) {
@@ -80,9 +84,9 @@ export default function ConsultaChat({ role, autor, tela, compacto }: { role: Ni
     const idBolha = crypto.randomUUID()
     setBolhas(b => [...b, { id: idBolha, autor: 'pessoa', texto: q }])
     try {
-      const res = await fetch('/api/assistente/consulta', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pergunta: paraIA ?? q, historico, tela }) })
-      const json = await res.json().catch(() => ({ error: 'Resposta inválida do servidor.' }))
-      if (!res.ok || json.error) throw new Error(json.error ?? 'Erro ao consultar.')
+      setVivo({ texto: '', etapa: '' })
+      const json = await pedirAoVivo('/api/assistente/consulta', { pergunta: paraIA ?? q, historico, tela }, setVivo)
+      if (json.error) throw new Error(json.error)
       setHistorico(json.historico ?? [])
       setBolhas(b => [...b, { id: crypto.randomUUID(), autor: 'ia', texto: json.resposta, acoes: json.acoes?.length ? json.acoes : undefined }])
     } catch (e) {
@@ -179,7 +183,14 @@ export default function ConsultaChat({ role, autor, tela, compacto }: { role: Ni
             </div>
           </div>
         ))}
-        {pensando && <p className="inline-flex items-center gap-2 text-sm text-app-muted"><Loader2 className="h-4 w-4 animate-spin" /> Consultando o sistema...</p>}
+        {pensando && vivo.texto && (
+          <div className="flex justify-start">
+            <div className="max-w-[90%] rounded-xl bg-app-surface2 px-3 py-2 text-sm text-app-text">
+              <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{vivo.texto}<span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-app-muted align-middle" /></p>
+            </div>
+          </div>
+        )}
+        {pensando && !vivo.texto && <p className="inline-flex items-center gap-2 text-sm text-app-muted"><Loader2 className="h-4 w-4 animate-spin" /> {vivo.etapa || 'Pensando...'}</p>}
         {erro && (
           <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600">
             <p>{erro}</p>
