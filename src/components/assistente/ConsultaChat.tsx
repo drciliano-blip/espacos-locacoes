@@ -51,7 +51,11 @@ const SUGESTOES: Record<string, string[]> = {
 
 const CHAVE = 'assistente-consulta-v1'
 
-export default function ConsultaChat({ role, autor, tela, compacto }: { role: NivelAcesso; autor?: string; tela?: string; compacto?: boolean }) {
+// pedido: frase vinda de fora (ex.: uma recomendação do resumo do assistente),
+// enviada assim que o chat abre; onPedidoUsado avisa para não mandar de novo.
+export default function ConsultaChat({ role, autor, tela, compacto, pedido, onPedidoUsado }: {
+  role: NivelAcesso; autor?: string; tela?: string; compacto?: boolean; pedido?: string; onPedidoUsado?: () => void
+}) {
   const { addEvento } = useEventos()
   const [bolhas, setBolhas] = useState<Bolha[]>([])
   const [historico, setHistorico] = useState<Anthropic.Beta.BetaMessageParam[]>([])
@@ -62,13 +66,16 @@ export default function ConsultaChat({ role, autor, tela, compacto }: { role: Ni
   const fim = useRef<HTMLDivElement>(null)
 
   // Mantém a conversa desta aba do navegador (some ao fechar a aba).
+  const [restaurado, setRestaurado] = useState(false)
   useEffect(() => {
     try {
       const salvo = sessionStorage.getItem(CHAVE)
-      if (!salvo) return
-      const { b, h } = JSON.parse(salvo) as { b: Bolha[]; h: Anthropic.Beta.BetaMessageParam[] }
-      queueMicrotask(() => { setBolhas(b); setHistorico(h) })
+      if (salvo) {
+        const { b, h } = JSON.parse(salvo) as { b: Bolha[]; h: Anthropic.Beta.BetaMessageParam[] }
+        queueMicrotask(() => { setBolhas(b); setHistorico(h) })
+      }
     } catch { /* sem armazenamento: começa vazio */ }
+    queueMicrotask(() => setRestaurado(true))
   }, [])
   useEffect(() => {
     try { sessionStorage.setItem(CHAVE, JSON.stringify({ b: bolhas, h: historico })) } catch { /* ignora */ }
@@ -102,6 +109,12 @@ export default function ConsultaChat({ role, autor, tela, compacto }: { role: Ni
       setPensando(false)
     }
   }
+
+  useEffect(() => {
+    if (!pedido || pensando || !restaurado) return
+    onPedidoUsado?.()
+    queueMicrotask(() => { void perguntar(pedido) })
+  })
 
   // Diagnóstico: mostra no chat o que funciona e o que falha na ligação com a IA.
   const [testando, setTestando] = useState(false)

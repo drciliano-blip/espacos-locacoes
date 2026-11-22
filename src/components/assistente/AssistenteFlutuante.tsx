@@ -12,6 +12,7 @@ import { useCurrentUser } from '@/contexts/UserContext'
 import { canAccess } from '@/lib/auth'
 import { nomeDoUsuarioAtual } from '@/lib/buffet'
 import ConsultaChat from './ConsultaChat'
+import { EVENTO_PEDIR } from '@/lib/assistente/pedir'
 
 const TELAS: [string, string][] = [
   ['/dashboard', 'Dashboard'], ['/agenda', 'Agenda'], ['/eventos', 'Eventos e Contratos'],
@@ -26,6 +27,14 @@ export default function AssistenteFlutuante() {
   const pathname = usePathname() ?? ''
   const [aberto, setAberto] = useState(false)
   const [autor, setAutor] = useState<string | undefined>()
+  const [pedido, setPedido] = useState<string | undefined>()
+
+  // Recomendação do resumo ("Pedir ao assistente"): abre o chat e manda a frase.
+  useEffect(() => {
+    const ouvir = (e: Event) => { const t = (e as CustomEvent<string>).detail; if (t) { setAberto(true); setPedido(t) } }
+    window.addEventListener(EVENTO_PEDIR, ouvir)
+    return () => window.removeEventListener(EVENTO_PEDIR, ouvir)
+  }, [])
 
   useEffect(() => {
     if (!aberto || autor) return
@@ -49,7 +58,7 @@ export default function AssistenteFlutuante() {
             </div>
           </div>
           <div className="min-h-0 flex-1">
-            <ConsultaChat role={role} autor={autor} tela={tela} compacto />
+            <ConsultaChat role={role} autor={autor} tela={tela} compacto pedido={pedido} onPedidoUsado={() => setPedido(undefined)} />
           </div>
         </div>
       )}
