@@ -8,6 +8,7 @@ import { canAccess } from '@/lib/auth'
 import { MANUAL_SISTEMA } from '@/lib/assistente/manual-sistema'
 import { BASE_JURIDICA, REGRAS_JURIDICAS } from '@/lib/assistente/base-juridica'
 import { LIMITE_HISTORICO, respostaViva } from '@/lib/assistente/resposta-viva'
+import { BUSCA_INTERNET, REGRAS_BUSCA, chamarAoVivo, esforcoDaPergunta, respostaAoVivo, ultimaResposta, type Emitir } from '@/lib/assistente/ao-vivo'
 import { executarFerramenta, ferramentasDoPerfil, type AcaoProposta } from '@/lib/assistente/ferramentas'
 import type { NivelAcesso } from '@/types'
 
@@ -41,17 +42,6 @@ Regras:
 - Na conferência do mês, deixe claro que o fechamento oficial é feito na tela Financeiro.\n\nDÚVIDAS SOBRE O SISTEMA: quando perguntarem como fazer algo no sistema, responda pelo MANUAL acima, em passos curtos com os nomes exatos dos botões e a tela onde ficam, considerando o perfil de quem pergunta (se a tela não é liberada para o perfil, diga quem pode fazer). Se o manual não cobre, diga que não tem certeza e sugira falar com o administrador; não invente botões ou telas.`
 }
 
-// Texto da última resposta da IA no histórico (vira o resumo quando a conversa recomeça).
-function ultimaResposta(h: Anthropic.Beta.BetaMessageParam[]): string {
-  for (let i = h.length - 1; i >= 0; i--) {
-    const m = h[i]
-    if (m.role !== 'assistant' || typeof m.content === 'string') continue
-    const t = m.content.filter(b => b.type === 'text').map(b => (b as { text: string }).text).join('\n').trim()
-    if (t) return t.slice(0, 4000)
-  }
-  return ''
-}
-
 export async function POST(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -63,69 +53,84 @@ export async function POST(request: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return NextResponse.json({ error: 'ANTHROPIC_API_KEY não configurada no servidor.' }, { status: 500 })
 
-  let body: { historico?: Anthropic.Beta.BetaMessageParam[]; pergunta?: string; tela?: string }
+  let body: { historico?: Anthropic.Beta.BetaMessageParam[]; pergunta?: string; tela?: string; aoVivo?: boolean }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'Pedido inválido.' }, { status: 400 }) }
   const pergunta = (body.pergunta ?? '').trim()
   if (!pergunta) return NextResponse.json({ error: 'Escreva a pergunta.' }, { status: 400 })
   if (pergunta.length > 12000) return NextResponse.json({ error: 'Pergunta muito longa.' }, { status: 400 })
 
-  // O histórico volta inteiro (com os blocos da IA como vieram), só acrescentando.
-  // Grande demais: recomeça com um resumo (a última resposta), para não ficar lento.
-  let historico = Array.isArray(body.historico) ? body.historico : []
-  let resumo = ''
-  if (JSON.stringify(historico).length > LIMITE_HISTORICO) { resumo = ultimaResposta(historico); historico = [] }
+  const papel: NivelAcesso = role
+  const historicoRecebido = Array.isArray(body.historico) ? body.historico : []
   // A tela onde a pessoa está (botão flutuante): ajuda em "como faço isso aqui?".
   const tela = (body.tela ?? '').slice(0, 80)
-  const texto = [resumo && `<resumo_da_conversa_anterior>\n${resumo}\n</resumo_da_conversa_anterior>`, tela && `[A pessoa está na tela: ${tela}]`, pergunta].filter(Boolean).join('\n')
-  const mensagens: Anthropic.Beta.BetaMessageParam[] = [...historico, { role: 'user', content: texto }]
   const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })
-  const tools = ferramentasDoPerfil(role)
-  const acoes: AcaoProposta[] = []
+  const tools = [...ferramentasDoPerfil(role), BUSCA_INTERNET]
+  const esforco = esforcoDaPergunta(pergunta)
   const client = new Anthropic({ apiKey })
 
-  return respostaViva(async () => {
-  try {
-    const inicio = Date.now()
-    for (let volta = 0; volta < MAX_VOLTAS; volta++) {
-      const msg = await client.beta.messages.create({
-        model: MODEL,
-        max_tokens: 8000,
-        betas: ['server-side-fallback-2026-07-01'],
-        fallbacks: [{ model: 'claude-opus-4-8' }],
-        system: [{ type: 'text', text: MANUAL_SISTEMA }, { type: 'text', text: BASE_JURIDICA, cache_control: { type: 'ephemeral' } }, { type: 'text', text: sistema(role, hoje) + '\n\n' + REGRAS_JURIDICAS }],
-        output_config: { effort: 'low' },
-        // Perto do limite de tempo: responde com o que já tem, sem novas consultas.
-        ...(Date.now() - inicio > 30000 ? { tool_choice: { type: 'none' as const } } : {}),
-        tools,
-        messages: mensagens,
-      })
-      mensagens.push({ role: 'assistant', content: msg.content as Anthropic.Beta.BetaContentBlockParam[] })
-
-      if (msg.stop_reason === 'refusal') return { error: 'A IA não respondeu a esta pergunta. Tente reformular.' }
-      if (msg.stop_reason !== 'tool_use') {
-        const resposta = msg.content.filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text').map(b => b.text).join('\n').trim()
-        return { resposta: resposta || '(sem resposta)', acoes, historico: mensagens }
-      }
-
-      const resultados: Anthropic.Beta.BetaToolResultBlockParam[] = []
-      for (const b of msg.content) {
-        if (b.type !== 'tool_use') continue
-        const r = await executarFerramenta(b.name, b.input as Record<string, unknown>, supabase, { role, acoes })
-        const conteudo = JSON.stringify(r)
-        resultados.push({
-          type: 'tool_result', tool_use_id: b.id,
-          content: conteudo.length > 25000 ? conteudo.slice(0, 25000) + '…(cortado: peça um período menor)' : conteudo,
-          ...(r && typeof r === 'object' && 'erro' in r ? { is_error: true } : {}),
-        })
-      }
-      mensagens.push({ role: 'user', content: resultados })
-    }
-    return { resposta: 'A consulta ficou longa demais. Tente uma pergunta mais específica (um espaço ou um período menor).', acoes, historico: mensagens }
-  } catch (err) {
-    console.error('[assistente/consulta]', err)
-    if (err instanceof Anthropic.RateLimitError) return { error: 'Muitas consultas à IA agora. Tente em 1 minuto.' }
-    if (err instanceof Anthropic.APIError) return { error: `Erro da IA (${err.status}): ${err.message}` }
-    return { error: err instanceof Error ? err.message : 'Erro ao consultar.' }
+  // O histórico volta inteiro (com os blocos da IA como vieram), só acrescentando.
+  // Grande demais (ou recusado pela IA): recomeça com um resumo (a última resposta).
+  function montar(recomecar: boolean): Anthropic.Beta.BetaMessageParam[] {
+    const longo = JSON.stringify(historicoRecebido).length > LIMITE_HISTORICO
+    const resumo = recomecar || longo ? ultimaResposta(historicoRecebido) : ''
+    const base = recomecar || longo ? [] : historicoRecebido
+    const texto = [resumo && `<resumo_da_conversa_anterior>\n${resumo}\n</resumo_da_conversa_anterior>`, tela && `[A pessoa está na tela: ${tela}]`, pergunta].filter(Boolean).join('\n')
+    return [...base, { role: 'user', content: texto }]
   }
-  })
+
+  async function trabalhar(emitir: Emitir, recomecar = false): Promise<unknown> {
+    const mensagens = montar(recomecar)
+    const acoes: AcaoProposta[] = []
+    const inicio = Date.now()
+    try {
+      for (let volta = 0; volta < MAX_VOLTAS; volta++) {
+        const msg = await chamarAoVivo(client, {
+          model: MODEL,
+          max_tokens: 16000,
+          betas: ['server-side-fallback-2026-07-01'],
+          fallbacks: [{ model: 'claude-opus-4-8' }],
+          system: [{ type: 'text', text: MANUAL_SISTEMA }, { type: 'text', text: BASE_JURIDICA, cache_control: { type: 'ephemeral' } }, { type: 'text', text: sistema(papel, hoje) + '\n\n' + REGRAS_JURIDICAS + '\n\n' + REGRAS_BUSCA }],
+          output_config: { effort: esforco },
+          // Perto do limite de tempo: responde com o que já tem, sem novas consultas.
+          ...(Date.now() - inicio > 50000 ? { tool_choice: { type: 'none' as const } } : {}),
+          tools,
+          messages: mensagens,
+        }, emitir)
+        mensagens.push({ role: 'assistant', content: msg.content as Anthropic.Beta.BetaContentBlockParam[] })
+
+        if (msg.stop_reason === 'refusal') return { error: 'A IA não respondeu a esta pergunta. Tente reformular.' }
+        // Busca na internet longa: a IA pausa e continua na próxima chamada.
+        if (msg.stop_reason === 'pause_turn') continue
+        if (msg.stop_reason !== 'tool_use') {
+          const resposta = msg.content.filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text').map(b => b.text).join('\n').trim()
+          return { resposta: resposta || '(sem resposta)', acoes, historico: mensagens }
+        }
+
+        const resultados: Anthropic.Beta.BetaToolResultBlockParam[] = []
+        for (const b of msg.content) {
+          if (b.type !== 'tool_use') continue
+          const r = await executarFerramenta(b.name, b.input as Record<string, unknown>, supabase, { role: papel, acoes })
+          const conteudo = JSON.stringify(r)
+          resultados.push({
+            type: 'tool_result', tool_use_id: b.id,
+            content: conteudo.length > 25000 ? conteudo.slice(0, 25000) + '…(cortado: peça um período menor)' : conteudo,
+            ...(r && typeof r === 'object' && 'erro' in r ? { is_error: true } : {}),
+          })
+        }
+        mensagens.push({ role: 'user', content: resultados })
+      }
+      return { resposta: 'A consulta ficou longa demais. Tente uma pergunta mais específica (um espaço ou um período menor).', acoes, historico: mensagens }
+    } catch (err) {
+      console.error('[assistente/consulta]', err)
+      // Conversa antiga que a IA não aceita mais (ex.: mudou o conjunto de
+      // ferramentas): tenta uma vez recomeçando a partir do resumo.
+      if (err instanceof Anthropic.BadRequestError && !recomecar && historicoRecebido.length > 0) return trabalhar(emitir, true)
+      if (err instanceof Anthropic.RateLimitError) return { error: 'Muitas consultas à IA agora. Tente em 1 minuto.' }
+      if (err instanceof Anthropic.APIError) return { error: `Erro da IA (${err.status}): ${err.message}` }
+      return { error: err instanceof Error ? err.message : 'Erro ao consultar.' }
+    }
+  }
+
+  // Tela nova: resposta palavra por palavra. Tela antiga (app ainda não atualizado): JSON no fim.
+  return body.aoVivo ? respostaAoVivo(e => trabalhar(e)) : respostaViva(() => trabalhar(() => {}))
 }

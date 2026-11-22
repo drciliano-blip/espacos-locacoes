@@ -27,6 +27,7 @@ import NovoEventoModal from '@/components/eventos/NovoEventoModal'
 import type { Espaco, Evento } from '@/types'
 import { questionario } from '@/lib/assistente/roteiro'
 import PropostaAssistente from './PropostaAssistente'
+import { pedirAoVivo, type AoVivo } from '@/lib/assistente/pedir-ao-vivo'
 import CartaoAcaoSistema, { type AcaoSistema } from './CartaoAcaoSistema'
 import BotaoVoz from './BotaoVoz'
 import BotaoAnexo, { textoDaFicha } from './BotaoAnexo'
@@ -93,6 +94,7 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
   const { espacosConfig } = useEspacos()
 
   const [pensando, setPensando] = useState(false)
+  const [vivo, setVivo] = useState<AoVivo>({ texto: '', etapa: '' })
   const [verOrcamento, setVerOrcamento] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
@@ -362,6 +364,7 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
   const faltam = perguntas.filter(p => !p.resposta)
 
   useEffect(() => { fimChat.current?.scrollIntoView({ behavior: 'smooth', block: 'end', inline: 'nearest' }) }, [mensagens.length, pensando])
+  useEffect(() => { if (vivo.texto) fimChat.current?.scrollIntoView({ block: 'end', inline: 'nearest' }) }, [vivo.texto])
 
   // Aplica na tela o orçamento que o assistente montou (o salvamento automático grava).
   function aplicarEstado(e: EstadoAtendimento) {
@@ -380,12 +383,9 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
     setMensagens(comPergunta)
     const agora = new Date().toISOString()
     try {
-      const res = await fetch('/api/assistente/chat', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mensagem: paraIA ?? texto, historico: iaHist, estado, preEvento: preEvento ? { status: preEvento.status } : null, clienteNovas }),
-      })
-      const j = await res.json().catch(() => ({ error: 'Resposta inválida do servidor.' }))
-      if (!res.ok || j.error) throw new Error(j.error ?? 'Erro ao falar com o assistente.')
+      setVivo({ texto: '', etapa: '' })
+      const j = await pedirAoVivo('/api/assistente/chat', { mensagem: paraIA ?? texto, historico: iaHist, estado, preEvento: preEvento ? { status: preEvento.status } : null, clienteNovas }, setVivo)
+      if (j.error) throw new Error(j.error)
       if (j.estado) aplicarEstado(j.estado as EstadoAtendimento)
       setIaHist(j.historico ?? iaHist); setIaAte(agora)
       const novas: Mensagem[] = []
@@ -522,7 +522,13 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
             </div>
           )
         })}
-        {pensando && <p className="inline-flex items-center gap-2 text-sm text-app-muted"><Loader2 className="h-4 w-4 animate-spin" /> Pensando...</p>}
+        {pensando && vivo.texto && (
+          <div className="flex gap-2">
+            <Sparkles className="mt-1 h-4 w-4 shrink-0 text-[#9A7937]" />
+            <p className="whitespace-pre-wrap [overflow-wrap:anywhere] text-sm text-app-text">{vivo.texto}<span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-app-muted align-middle" /></p>
+          </div>
+        )}
+        {pensando && !vivo.texto && <p className="inline-flex items-center gap-2 text-sm text-app-muted"><Loader2 className="h-4 w-4 animate-spin" /> {vivo.etapa || 'Pensando...'}</p>}
         {erro && <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600">{erro}</p>}
         <div ref={fimChat} />
       </div>
