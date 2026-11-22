@@ -27,8 +27,8 @@ export async function POST(request: Request) {
   const sb = await createClient()
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })
-  const { data: perfil } = await sb.from('profiles').select('role').eq('id', user.id).single()
-  if (perfil?.role !== 'admin') return NextResponse.json({ error: 'Só o administrador gera as rotinas manualmente.' }, { status: 403 })
+  const { data: perfil } = await sb.from('profiles').select('role, ativo').eq('id', user.id).single()
+  if (perfil?.role !== 'admin' || !perfil.ativo) return NextResponse.json({ error: 'Só o administrador gera as rotinas manualmente.' }, { status: 403 })
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return NextResponse.json({ error: 'ANTHROPIC_API_KEY não configurada.' }, { status: 500 })
   let body: { tipos?: string[] } = {}

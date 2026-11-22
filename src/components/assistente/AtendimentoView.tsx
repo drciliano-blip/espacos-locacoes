@@ -95,6 +95,8 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
 
   const [pensando, setPensando] = useState(false)
   const [vivo, setVivo] = useState<AoVivo>({ texto: '', etapa: '' })
+  // A lista mais recente de mensagens (o chat pode receber mensagens do cliente enquanto a IA responde).
+  const ultimas = useRef<Mensagem[]>([])
   // Como desfazer o que foi gravado direto de um cartão (vale enquanto a tela está aberta).
   const [desfazeres, setDesfazeres] = useState<Record<string, () => Promise<void>>>({})
   const [verOrcamento, setVerOrcamento] = useState(false)
@@ -270,7 +272,7 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
     return () => { vivo = false }
   }, [])
   const idsConhecidos = useRef(new Set(atendimento.mensagens.map(m => m.id)))
-  useEffect(() => { for (const m of mensagens) idsConhecidos.current.add(m.id) }, [mensagens])
+  useEffect(() => { for (const m of mensagens) idsConhecidos.current.add(m.id); ultimas.current = mensagens }, [mensagens])
   useEffect(() => {
     const t = setInterval(() => {
       if (document.hidden) return
@@ -381,8 +383,10 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
     const clienteNovas = mensagens.filter(m => m.autor === 'cliente' && (!iaAte || m.em > iaAte)).map(m => m.texto)
     if ((!texto && clienteNovas.length === 0) || pensando) return
     setErro(null); setNovoTexto(''); setPensando(true)
-    const comPergunta = texto ? [...mensagens, novaMensagem('equipe', texto, autor)] : mensagens
+    const pergunta = texto ? novaMensagem('equipe', texto, autor) : null
+    const comPergunta = pergunta ? [...mensagens, pergunta] : mensagens
     setMensagens(comPergunta)
+    ultimas.current = comPergunta
     const agora = new Date().toISOString()
     try {
       setVivo({ texto: '', etapa: '' })
@@ -399,14 +403,16 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
         if (a.tipo === 'confirmar_evento') novas.push({ ...novaMensagem('sistema', 'Converter o pré-evento em evento'), tipo: 'confirmar_evento' })
         if (a.tipo === 'sistema' && a.dados) novas.push({ ...novaMensagem('sistema', String(a.dados.resumo ?? 'Ação no sistema')), tipo: 'acao_sistema', acao: a.dados })
       }
-      await gravarMensagens([...comPergunta, ...novas])
+      // Junta com o que chegou enquanto a IA pensava (ex.: mensagem do cliente pelo WhatsApp).
+      await gravarMensagens([...ultimas.current, ...novas])
     } catch (e) {
-      // Não chegou ao assistente: tira da conversa e devolve para a caixa.
-      setMensagens(mensagens)
+      // Não chegou ao assistente: tira só a pergunta da conversa e devolve para a caixa.
+      if (pergunta) setMensagens(ms => ms.filter(m => m.id !== pergunta.id))
       if (!paraIA) setNovoTexto(texto)
+      const volta = paraIA ? 'Anexe o arquivo de novo para tentar.' : 'A mensagem voltou para a caixa: toque em enviar de novo.'
       setErro(e instanceof TypeError
-        ? 'A mensagem não chegou ao assistente (a resposta demorou ou a internet oscilou). Ela voltou para a caixa: toque em enviar de novo.'
-        : `${mensagemDeErro(e, 'Não foi possível falar com o assistente.')} A mensagem voltou para a caixa.`)
+        ? `A mensagem não chegou ao assistente (a resposta demorou ou a internet oscilou). ${volta}`
+        : `${mensagemDeErro(e, 'Não foi possível falar com o assistente.')} ${volta}`)
     } finally {
       setPensando(false)
     }

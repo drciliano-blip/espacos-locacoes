@@ -249,6 +249,18 @@ const FORMATO = `Formato da resposta (JSON):
 - secoes: cada seção com "chave", "titulo" e "itens" (uma linha curta por item, sem "•"). Use as chaves pedidas; seção sem conteúdo não entra.
 - recomendacoes: de 2 a 5 recomendações práticas para hoje, as mais importantes primeiro, adequadas a quem vai ler (gestão: dinheiro, erros, cobrança, vendas; operação: montagem, equipe, documentos, retomar orçamentos). Cada uma com "texto" (a ação, curta), "motivo" (o dado que a justifica, uma linha) e "pedido_ao_assistente" (a frase que a pessoa mandaria ao assistente do sistema para ele fazer ou preparar essa ação, em primeira pessoa e com os nomes, valores e datas, ex.: "Prepare a mensagem de cobrança para Leandro Rock, parcela de R$ 4.250,00 vencida em 05/09"). Só recomende o que o assistente consegue fazer ou mostrar: consultar agenda e recebimentos, procurar duplicados, conferir o mês, preparar baixa, conta a pagar, pré-reserva, mensagem para cliente, abrir evento para contrato, cancelamento ou nova data.`
 
+// Os dados vão inteiros; se passarem do limite, as listas maiores são
+// encurtadas (com aviso) em vez de cortar o texto no meio.
+function dadosParaIA(dados: Record<string, unknown>, limite = 150000): string {
+  let json = JSON.stringify(dados)
+  if (json.length <= limite) return json
+  const copia = JSON.parse(json) as Record<string, unknown>
+  const encurtar = (v: unknown): unknown => Array.isArray(v) ? (v.length > 40 ? [...v.slice(0, 40), `(+${v.length - 40} itens não mostrados)`] : v.map(encurtar))
+    : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, encurtar(x)])) : v
+  json = JSON.stringify(encurtar(copia))
+  return json.length <= limite ? json : json.slice(0, limite) + '…(dados cortados)'
+}
+
 async function escrever(client: Anthropic, r: Rotina): Promise<{ secoes: Secao[]; recomendacoes: Recomendacao[] }> {
   const msg = await client.beta.messages.create({
     model: MODEL,
@@ -257,7 +269,7 @@ async function escrever(client: Anthropic, r: Rotina): Promise<{ secoes: Secao[]
     fallbacks: [{ model: 'claude-opus-4-8' }],
     system: [{ type: 'text', text: SISTEMA }, { type: 'text', text: FORMATO }],
     output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMA } },
-    messages: [{ role: 'user', content: `${r.pedido}\n\n<dados>\n${JSON.stringify(r.dados).slice(0, 60000)}\n</dados>` }],
+    messages: [{ role: 'user', content: `${r.pedido}\n\n<dados>\n${dadosParaIA(r.dados)}\n</dados>` }],
   })
   if (msg.stop_reason === 'refusal') throw new Error('A IA não escreveu este resumo.')
   if (msg.stop_reason === 'max_tokens') throw new Error('O resumo veio incompleto.')

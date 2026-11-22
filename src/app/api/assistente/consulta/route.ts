@@ -8,7 +8,7 @@ import { canAccess } from '@/lib/auth'
 import { MANUAL_SISTEMA } from '@/lib/assistente/manual-sistema'
 import { BASE_JURIDICA, REGRAS_JURIDICAS } from '@/lib/assistente/base-juridica'
 import { LIMITE_HISTORICO, respostaViva } from '@/lib/assistente/resposta-viva'
-import { BUSCA_INTERNET, REGRAS_BUSCA, chamarAoVivo, esforcoDaPergunta, respostaAoVivo, ultimaResposta, type Emitir } from '@/lib/assistente/ao-vivo'
+import { BUSCA_INTERNET, REGRAS_BUSCA, chamarAoVivo, esforcoDaPergunta, mensagemErroIA, respostaAoVivo, ultimaResposta, type Emitir } from '@/lib/assistente/ao-vivo'
 import { executarFerramenta, ferramentasDoPerfil, type AcaoProposta } from '@/lib/assistente/ferramentas'
 import type { NivelAcesso } from '@/types'
 
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
     return [...base, { role: 'user', content: texto }]
   }
 
-  async function trabalhar(emitir: Emitir, recomecar = false): Promise<unknown> {
+  async function trabalhar(emitir: Emitir, recomecar = false, sinal?: AbortSignal): Promise<unknown> {
     const mensagens = montar(recomecar)
     const acoes: AcaoProposta[] = []
     const inicio = Date.now()
@@ -95,7 +95,9 @@ export async function POST(request: Request) {
           ...(Date.now() - inicio > 50000 ? { tool_choice: { type: 'none' as const } } : {}),
           tools,
           messages: mensagens,
-        }, emitir)
+          // Guarda a conversa em cache: cada rodada reaproveita a anterior (mais rápido e barato).
+          cache_control: { type: 'ephemeral' },
+        }, emitir, sinal)
         mensagens.push({ role: 'assistant', content: msg.content as Anthropic.Beta.BetaContentBlockParam[] })
 
         if (msg.stop_reason === 'refusal') return { error: 'A IA não respondeu a esta pergunta. Tente reformular.' }
@@ -124,13 +126,11 @@ export async function POST(request: Request) {
       console.error('[assistente/consulta]', err)
       // Conversa antiga que a IA não aceita mais (ex.: mudou o conjunto de
       // ferramentas): tenta uma vez recomeçando a partir do resumo.
-      if (err instanceof Anthropic.BadRequestError && !recomecar && historicoRecebido.length > 0) return trabalhar(emitir, true)
-      if (err instanceof Anthropic.RateLimitError) return { error: 'Muitas consultas à IA agora. Tente em 1 minuto.' }
-      if (err instanceof Anthropic.APIError) return { error: `Erro da IA (${err.status}): ${err.message}` }
-      return { error: err instanceof Error ? err.message : 'Erro ao consultar.' }
+      if (err instanceof Anthropic.BadRequestError && !recomecar && historicoRecebido.length > 0) return trabalhar(emitir, true, sinal)
+      return { error: mensagemErroIA(err) }
     }
   }
 
   // Tela nova: resposta palavra por palavra. Tela antiga (app ainda não atualizado): JSON no fim.
-  return body.aoVivo ? respostaAoVivo(e => trabalhar(e)) : respostaViva(() => trabalhar(() => {}))
+  return body.aoVivo ? respostaAoVivo((e, sinal) => trabalhar(e, false, sinal)) : respostaViva(() => trabalhar(() => {}))
 }
