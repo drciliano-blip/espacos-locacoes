@@ -14,6 +14,7 @@ import { br } from '@/lib/assistente/orcamento'
 import type { AcaoProposta } from '@/lib/assistente/ferramentas'
 import type { Espaco, Evento, NivelAcesso } from '@/types'
 import CartaoAcaoSistema from './CartaoAcaoSistema'
+import { hojeISO, useExecutorAcoes, type AcaoBaixa } from './executor'
 import BotaoVoz from './BotaoVoz'
 import BotaoAnexo, { textoDaFicha } from './BotaoAnexo'
 import { pedirAoVivo, type AoVivo } from '@/lib/assistente/pedir-ao-vivo'
@@ -121,8 +122,30 @@ export default function ConsultaChat({ role, autor, tela, compacto }: { role: Ni
     }
   }
 
-  function marcarFeita(bolhaId: string, i: number) {
-    setBolhas(bs => bs.map(b => (b.id === bolhaId ? { ...b, acoes: b.acoes?.map((x, j) => (j === i ? { ...x, feita: true } : x)) } : b)))
+  // Como desfazer o que foi gravado direto do cartão (vale enquanto a página está aberta).
+  const [desfazeres, setDesfazeres] = useState<Record<string, () => Promise<void>>>({})
+  function marcarFeita(bolhaId: string, i: number, desfazer?: () => Promise<void>, feita = true) {
+    setBolhas(bs => bs.map(b => (b.id === bolhaId ? { ...b, acoes: b.acoes?.map((x, j) => (j === i ? { ...x, feita } : x)) } : b)))
+    setDesfazeres(d => { const n = { ...d }; if (desfazer && feita) n[`${bolhaId}:${i}`] = desfazer; else delete n[`${bolhaId}:${i}`]; return n })
+  }
+
+  // Várias baixas na mesma resposta: confirma todas de uma vez (data e forma sugeridas).
+  const exec = useExecutorAcoes()
+  const [emLote, setEmLote] = useState<string | null>(null)
+  function baixasPendentes(b: Bolha) {
+    return (b.acoes ?? []).map((a, i) => ({ a, i })).filter((x): x is { a: AcaoBaixa & { feita?: boolean }; i: number } => x.a.tipo === 'baixa' && !x.a.feita)
+  }
+  async function confirmarTodas(b: Bolha) {
+    const lista = baixasPendentes(b)
+    if (!window.confirm(`Confirmar ${lista.length} baixas com a data e a forma de pagamento de cada cartão?`)) return
+    setEmLote(b.id); setErro(null)
+    try {
+      for (const { a, i } of lista) marcarFeita(b.id, i, await exec.darBaixa(a, a.dataPagamento ?? hojeISO(), a.forma ?? ''))
+    } catch (e) {
+      setErro(mensagemDeErro(e, 'Uma das baixas não foi gravada; as anteriores ficaram feitas.'))
+    } finally {
+      setEmLote(null)
+    }
   }
 
   async function executar(bolhaId: string, i: number, a: AcaoProposta) {
@@ -170,7 +193,7 @@ export default function ConsultaChat({ role, autor, tela, compacto }: { role: Ni
             <div className={`max-w-[90%] rounded-xl px-3 py-2 text-sm ${b.autor === 'pessoa' ? 'bg-[#072A43] text-white' : 'bg-app-surface2 text-app-text'}`}>
               <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{b.texto}</p>
               {b.acoes?.map((a, i) => a.tipo !== 'pre_evento' ? (
-                <CartaoAcaoSistema key={i} acao={a} feita={a.feita} onFeita={() => marcarFeita(b.id, i)} />
+                <CartaoAcaoSistema key={i} acao={a} feita={a.feita} onFeita={d => marcarFeita(b.id, i, d)} desfazer={desfazeres[`${b.id}:${i}`]} onDesfeita={() => marcarFeita(b.id, i, undefined, false)} />
               ) : (
                 <div key={i} className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-app-text">
                   <p className="flex items-center gap-1.5 text-xs font-semibold"><CalendarClock className="h-4 w-4 text-amber-600" /> Criar pré-evento na Agenda</p>
@@ -180,6 +203,13 @@ export default function ConsultaChat({ role, autor, tela, compacto }: { role: Ni
                     : <button type="button" onClick={() => executar(b.id, i, a)} className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg bg-[#072A43] px-3 py-1.5 text-xs font-semibold text-white">Confirmar</button>}
                 </div>
               ))}
+              {baixasPendentes(b).length >= 2 && (
+                <button type="button" onClick={() => confirmarTodas(b)} disabled={emLote === b.id || baixasPendentes(b).some(x => !x.a.forma)}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-[#072A43] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">
+                  {emLote === b.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />} Confirmar as {baixasPendentes(b).length} baixas
+                </button>
+              )}
+              {baixasPendentes(b).length >= 2 && baixasPendentes(b).some(x => !x.a.forma) && <p className="mt-1 text-[11px] text-app-muted">Para confirmar todas juntas, a forma de pagamento precisa vir em cada uma (ou confirme uma por uma).</p>}
             </div>
           </div>
         ))}

@@ -30,7 +30,7 @@ export type AcaoProposta =
   // Abre o painel do evento já na ação pedida (contrato, cancelar, reagendar, converter).
   | { tipo: 'evento'; eventoId: string; acao: 'gerar_contrato' | 'cancelar' | 'reagendar' | 'converter' | 'ver'; novaData?: string; resumo: string }
   // Abre a janela "Editar parcela" para dar baixa.
-  | { tipo: 'baixa'; receitaId: string; resumo: string }
+  | { tipo: 'baixa'; receitaId: string; resumo: string; dataPagamento?: string; forma?: string }
   // Abre "Novo Evento" preenchido com a ficha do cliente (depois oferece gerar o contrato).
   | { tipo: 'cadastro_evento'; ficha: FichaCliente; resumo: string }
   // Abre o atendimento (chat do cliente) criado com os dados, para montar o orçamento.
@@ -480,16 +480,25 @@ const FERRAMENTAS: Record<string, Ferramenta> = {
     pode: r => r === 'admin' || r === 'financeiro',
     definicao: {
       name: 'preparar_baixa',
-      description: 'Prepara a baixa (registro de pagamento) de uma parcela de cliente: mostra um cartão que abre a janela "Editar parcela" do sistema, onde a pessoa confere data, forma de pagamento e anexa o comprovante. Use recebimentos para achar o id da parcela.',
-      input_schema: { type: 'object', properties: { receita_id: { type: 'string' } }, required: ['receita_id'] },
+      description: 'Prepara a baixa (registro de pagamento) de uma parcela de cliente. Mostra um cartão com a data e a forma de pagamento já preenchidas e o botão "Confirmar baixa", que grava com um toque de quem confere (com "Desfazer"); "Abrir para ajustar" abre a janela "Editar parcela" para pagamento parcial, repasse de sócio ou anexar comprovante. Use recebimentos para achar o id. Uma chamada por parcela (várias parcelas = várias chamadas). Preencha data e forma pelo comprovante ou pelo que a pessoa disse.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          receita_id: { type: 'string' },
+          data_pagamento: { type: 'string', description: 'AAAA-MM-DD; se não souber, deixe em branco (o cartão usa hoje)' },
+          forma_pagamento: { type: 'string', enum: ['PIX', 'Transferência', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Cheque'] },
+        },
+        required: ['receita_id'],
+      },
     },
     async executar(sb, e, { acoes }) {
       const { data: r, error } = await sb.from('receitas').select('id, cliente, valor, data, status, parcela_label, descricao').eq('id', texto(e.receita_id)).maybeSingle()
       if (error) throw error
       if (!r) throw new Error('Parcela não encontrada (ou sem acesso).')
       if (r.status === 'pago') throw new Error('Esta parcela já está paga.')
-      acoes.push({ tipo: 'baixa', receitaId: r.id, resumo: `Dar baixa: ${r.cliente} · ${r.parcela_label ?? r.descricao ?? 'parcela'} · R$ ${Number(r.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} · venc. ${String(r.data).split('-').reverse().join('/')}` })
-      return { ok: true, mensagem: 'Cartão mostrado; a baixa é feita na janela "Editar parcela", com o comprovante.' }
+      const dataPagamento = ISO.test(texto(e.data_pagamento)) ? texto(e.data_pagamento) : undefined
+      acoes.push({ tipo: 'baixa', receitaId: r.id, dataPagamento, forma: texto(e.forma_pagamento) || undefined, resumo: `Dar baixa: ${r.cliente} · ${r.parcela_label ?? r.descricao ?? 'parcela'} · R$ ${Number(r.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} · venc. ${String(r.data).split('-').reverse().join('/')}` })
+      return { ok: true, mensagem: 'Cartão mostrado; a pessoa confere data e forma e toca em "Confirmar baixa". Ainda NÃO está paga: não diga que deu baixa.' }
     },
   },
 
@@ -497,7 +506,7 @@ const FERRAMENTAS: Record<string, Ferramenta> = {
     pode: r => r === 'admin' || r === 'financeiro',
     definicao: {
       name: 'preparar_conta_pagar',
-      description: 'Prepara uma nova conta a pagar (despesa) com os dados que a pessoa passou ou colou (boleto, nota, mensagem). Mostra um cartão que abre "Nova Conta a Pagar" já preenchida em Contas a Pagar; lá a pessoa confere, anexa o documento e salva (o sistema avisa se parecer duplicada). Não marca como paga.',
+      description: 'Prepara uma nova conta a pagar (despesa, pendente) com os dados que a pessoa passou ou colou (boleto, nota, mensagem). Mostra um cartão com "Lançar agora" (grava com um toque, com "Desfazer"; o cartão avisa se parecer duplicada) e "Abrir para ajustar" (abre "Nova Conta a Pagar" preenchida, para anexar o documento). Retirada de sócio e fundo de caixa só pela tela. Não marca como paga.',
       input_schema: {
         type: 'object',
         properties: {
@@ -524,7 +533,7 @@ const FERRAMENTAS: Record<string, Ferramenta> = {
         espaco: nomes.get(id)!, fornecedor: texto(e.fornecedor) || undefined, observacoes: texto(e.observacoes) || undefined,
       }
       acoes.push({ tipo: 'conta', campos, resumo: `Nova conta: ${campos.descricao} · R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} · venc. ${campos.vencimento.split('-').reverse().join('/')} · ${campos.espaco}` })
-      return { ok: true, mensagem: 'Cartão mostrado; a pessoa confere e salva em Contas a Pagar.' }
+      return { ok: true, mensagem: 'Cartão mostrado; a pessoa confere e toca em "Lançar agora". Ainda NÃO está lançada: não diga que lançou.' }
     },
   },
 }
