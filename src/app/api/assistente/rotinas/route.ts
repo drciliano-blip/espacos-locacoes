@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   let body: { tipos?: string[] } = {}
   try { body = await request.json() } catch { /* sem corpo: rotinas de hoje */ }
   const hoje = hojeSP()
-  const validos = ['manha', 'semanal', 'fechamento'] as const
+  const validos = ['manha', 'semanal', 'fechamento', 'vendas'] as const
   const tipos = body.tipos?.length ? validos.filter(t => body.tipos!.includes(t)) : rotinasDoDia(hoje)
   const feitos = await gerarRotinas(createAdminClient(), apiKey, hoje, tipos)
   return NextResponse.json({ ok: true, feitos })
