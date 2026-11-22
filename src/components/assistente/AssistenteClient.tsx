@@ -186,9 +186,11 @@ export default function AssistenteClient() {
         <main className="min-w-0">
           {aberto ? (
             <>
-              <button type="button" onClick={() => setAberto(null)} className="print:hidden mb-3 inline-flex items-center gap-1 text-sm text-app-muted lg:hidden">
-                <ArrowLeft className="h-4 w-4" /> Atendimentos
+              <div className="print:hidden sticky -top-4 z-20 -mx-1 mb-1 bg-app-bg px-1 pb-2 pt-1 lg:hidden">
+              <button type="button" onClick={() => setAberto(null)} className="inline-flex items-center gap-1.5 rounded-lg border border-app-border2 bg-app-surface px-3 py-2 text-sm font-medium text-app-text lg:hidden">
+                <ArrowLeft className="h-4 w-4" /> Voltar para a lista de atendimentos
               </button>
+              </div>
               <AtendimentoView
                 key={aberto.id}
                 atendimento={aberto}

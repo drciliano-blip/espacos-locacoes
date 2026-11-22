@@ -53,6 +53,13 @@
   --color-app-subtle:   var(--app-subtle);
 }
 
+/* iPhone: letra de 16px nas caixas de texto evita o zoom automático ao tocar. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]), textarea, select {
+    font-size: 16px !important;
+  }
+}
+
 body {
   background-color: var(--app-bg);
   color: var(--app-text);

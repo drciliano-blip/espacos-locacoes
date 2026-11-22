@@ -361,7 +361,7 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
   const perguntas = questionario(dados, espaco?.nome)
   const faltam = perguntas.filter(p => !p.resposta)
 
-  useEffect(() => { fimChat.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [mensagens.length, pensando])
+  useEffect(() => { fimChat.current?.scrollIntoView({ behavior: 'smooth', block: 'end', inline: 'nearest' }) }, [mensagens.length, pensando])
 
   // Aplica na tela o orçamento que o assistente montou (o salvamento automático grava).
   function aplicarEstado(e: EstadoAtendimento) {
