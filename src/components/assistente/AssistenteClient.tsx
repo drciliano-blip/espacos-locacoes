@@ -21,6 +21,7 @@ import { mensagemInicial } from '@/lib/assistente/roteiro'
 import AtendimentoView from './AtendimentoView'
 import ResumoDoDia from './ResumoDoDia'
 import ConsultaChat from './ConsultaChat'
+import { EVENTO_PEDIR } from '@/lib/assistente/pedir'
 
 const inputCls = 'w-full rounded-lg border border-app-border2 bg-app-surface2 px-2.5 py-1.5 text-sm text-app-text focus:outline-none'
 const FILTROS: (StatusAtendimento | 'todos')[] = ['todos', 'aberto', 'enviado', 'fechado', 'perdido']
@@ -51,6 +52,14 @@ export default function AssistenteClient() {
   const [abrindo, setAbrindo] = useState<string | null>(null)
   const [busca, setBusca] = useState('')
   const [filtro, setFiltro] = useState<StatusAtendimento | 'todos'>('todos')
+  const [pedido, setPedido] = useState<string | undefined>()
+
+  // Recomendação do resumo ("Pedir ao assistente"): vai para Consultas e manda a frase.
+  useEffect(() => {
+    const ouvir = (e: Event) => { const t = (e as CustomEvent<string>).detail; if (t) { setAba('consultas'); setPedido(t); window.scrollTo({ top: 0 }) } }
+    window.addEventListener(EVENTO_PEDIR, ouvir)
+    return () => window.removeEventListener(EVENTO_PEDIR, ouvir)
+  }, [])
 
   useEffect(() => {
     let vivo = true
@@ -137,7 +146,7 @@ export default function AssistenteClient() {
         <button type="button" onClick={() => setAba('consultas')} className={`px-3 py-2 text-sm ${aba === 'consultas' ? 'border-b-2 border-[#072A43] font-semibold text-app-text' : 'text-app-muted'}`}>Consultas</button>
       </div>
 
-      {aba === 'consultas' && <ConsultaChat role={role} autor={autor} />}
+      {aba === 'consultas' && <ConsultaChat role={role} autor={autor} pedido={pedido} onPedidoUsado={() => setPedido(undefined)} />}
 
       {aba === 'atendimentos' && semTabela && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800">

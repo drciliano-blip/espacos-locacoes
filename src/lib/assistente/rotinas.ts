@@ -169,8 +169,8 @@ async function montar(sb: SupabaseClient, tipo: Rotina['tipo'], publico: Publico
       tipo, publico, dados,
       titulo: `Resumo da manhã · ${br(hoje)}`,
       pedido: publico === 'gestao'
-        ? 'Resumo da manhã para a gestão (administração e financeiro). Seções, nesta ordem, só as que tiverem conteúdo: "Hoje" (eventos do dia, com espaço e público); "Próximos 7 dias"; "Conferir lançamentos" (cada lançamento com possível erro de digitação ou possível duplicado: o que é, o problema e a tela onde corrigir; diga que é para conferir, não que está errado); "Eventos com financeiro incompleto" (sem parcelas, sem nenhum pagamento a menos de 30 dias, soma das parcelas diferente do valor do evento); "A receber nesta semana" (cliente, valor, vencimento, total); "Em atraso" (os maiores e o total, e quem cobrar primeiro); "Orçamentos sem resposta" (cliente, há quantos dias, e uma frase curta sugerida para retomar o contato); "Pré-eventos" (os que estão há tempo sem virar evento ou com data próxima: pedir sinal ou liberar a data); "Sábados livres" (por espaço, em uma linha cada, só os próximos 4). Termine com "Para fazer hoje": no máximo 6 itens, começando pelo que evita perder dinheiro ou corrigir erro.'
-        : 'Resumo da manhã para a equipe de operação (sem valores financeiros). Seções, só as que tiverem conteúdo: "Hoje" (eventos do dia: espaço, cliente, horário, público); "Próximos 7 dias"; "Pré-eventos com data próxima"; "Orçamentos sem resposta" (cliente, há quantos dias, e uma frase curta sugerida para retomar o contato); "Sábados livres" (por espaço, em uma linha cada, só os próximos 4). Termine com "Para fazer hoje": no máximo 5 itens de operação (montagem, equipe, documentos, retomar orçamentos).',
+        ? 'Resumo da manhã para a gestão (administração e financeiro). Seções, nesta ordem, só as que tiverem conteúdo (chave entre colchetes): [hoje] "Hoje" (eventos do dia, com espaço e público); [proximos] "Próximos 7 dias"; [conferir] "Conferir lançamentos" (cada lançamento com possível erro de digitação ou possível duplicado: o que é, o problema e a tela onde corrigir; diga que é para conferir, não que está errado); [eventos_financeiro] "Eventos com financeiro incompleto" (sem parcelas, sem nenhum pagamento a menos de 30 dias, soma das parcelas diferente do valor do evento); [a_receber] "A receber nesta semana" (cliente, valor, vencimento, total); [atrasos] "Em atraso" (os maiores e o total, e quem cobrar primeiro); [orcamentos] "Orçamentos sem resposta" (cliente, há quantos dias, e uma frase curta sugerida para retomar o contato); [pre_eventos] "Pré-eventos" (os que estão há tempo sem virar evento ou com data próxima: pedir sinal ou liberar a data); [sabados] "Sábados livres" (por espaço, em uma linha cada, só os próximos 4). Termine com [para_hoje] "Para fazer hoje": no máximo 6 itens, começando pelo que evita perder dinheiro ou corrigir erro.'
+        : 'Resumo da manhã para a equipe de operação (sem valores financeiros). Seções, só as que tiverem conteúdo (chave entre colchetes): [hoje] "Hoje" (eventos do dia: espaço, cliente, horário, público); [proximos] "Próximos 7 dias"; [pre_eventos] "Pré-eventos com data próxima"; [orcamentos] "Orçamentos sem resposta" (cliente, há quantos dias, e uma frase curta sugerida para retomar o contato); [sabados] "Sábados livres" (por espaço, em uma linha cada, só os próximos 4). Termine com [para_hoje] "Para fazer hoje": no máximo 5 itens de operação (montagem, equipe, documentos, retomar orçamentos).',
     }
   }
   if (tipo === 'semanal' && publico === 'gestao') {
@@ -211,23 +211,66 @@ async function montar(sb: SupabaseClient, tipo: Rotina['tipo'], publico: Publico
 
 const SISTEMA = `Você é o assistente interno do sistema da Espaços & Locações (locação de espaços para eventos em São Paulo: Fabrique, Usine, House Pacaembu, Espaço Solon, Complexo Jussara). Você escreve resumos automáticos que a equipe lê no celular logo cedo.
 Regras:
-- Português do Brasil, frases curtas, listas com "•", valores em R$ com vírgula, datas DD/MM. Sem markdown (nada de **, # ou tabelas). Títulos de seção em uma linha própria, terminando com ":".
+- Português do Brasil, frases curtas, listas com "•", valores em R$ com vírgula, datas DD/MM. Sem markdown (nada de **, # ou tabelas).
 - Use só os dados recebidos. Nunca invente evento, valor ou data. Se uma seção não tem nada, não escreva a seção.
-- Seja curto: no máximo 30 linhas no total.
+- Seja curto: no máximo 30 itens no total.
 - Não fale de exigências legais, normas ou alvarás: isso só quando alguém perguntar ao assistente.`
 
-async function escrever(client: Anthropic, r: Rotina): Promise<string> {
+// Chaves das seções do resumo da manhã: cada pessoa escolhe quais quer ver
+// (a tela filtra pela preferência dela).
+export const SECOES_MANHA = ['hoje', 'proximos', 'conferir', 'eventos_financeiro', 'a_receber', 'atrasos', 'orcamentos', 'pre_eventos', 'sabados', 'para_hoje'] as const
+
+export interface Secao { chave: string; titulo: string; itens: string[] }
+export interface Recomendacao { texto: string; motivo: string; pedido_ao_assistente: string }
+
+const SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['secoes', 'recomendacoes'],
+  properties: {
+    secoes: {
+      type: 'array',
+      items: {
+        type: 'object', additionalProperties: false, required: ['chave', 'titulo', 'itens'],
+        properties: { chave: { type: 'string' }, titulo: { type: 'string' }, itens: { type: 'array', items: { type: 'string' } } },
+      },
+    },
+    recomendacoes: {
+      type: 'array',
+      items: {
+        type: 'object', additionalProperties: false, required: ['texto', 'motivo', 'pedido_ao_assistente'],
+        properties: { texto: { type: 'string' }, motivo: { type: 'string' }, pedido_ao_assistente: { type: 'string' } },
+      },
+    },
+  },
+} as const
+
+const FORMATO = `Formato da resposta (JSON):
+- secoes: cada seção com "chave", "titulo" e "itens" (uma linha curta por item, sem "•"). Use as chaves pedidas; seção sem conteúdo não entra.
+- recomendacoes: de 2 a 5 recomendações práticas para hoje, as mais importantes primeiro, adequadas a quem vai ler (gestão: dinheiro, erros, cobrança, vendas; operação: montagem, equipe, documentos, retomar orçamentos). Cada uma com "texto" (a ação, curta), "motivo" (o dado que a justifica, uma linha) e "pedido_ao_assistente" (a frase que a pessoa mandaria ao assistente do sistema para ele fazer ou preparar essa ação, em primeira pessoa e com os nomes, valores e datas, ex.: "Prepare a mensagem de cobrança para Leandro Rock, parcela de R$ 4.250,00 vencida em 05/09"). Só recomende o que o assistente consegue fazer ou mostrar: consultar agenda e recebimentos, procurar duplicados, conferir o mês, preparar baixa, conta a pagar, pré-reserva, mensagem para cliente, abrir evento para contrato, cancelamento ou nova data.`
+
+async function escrever(client: Anthropic, r: Rotina): Promise<{ secoes: Secao[]; recomendacoes: Recomendacao[] }> {
   const msg = await client.beta.messages.create({
     model: MODEL,
     max_tokens: 8000,
     betas: ['server-side-fallback-2026-07-01'],
     fallbacks: [{ model: 'claude-opus-4-8' }],
-    system: [{ type: 'text', text: SISTEMA }],
-    output_config: { effort: 'medium' },
+    system: [{ type: 'text', text: SISTEMA }, { type: 'text', text: FORMATO }],
+    output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMA } },
     messages: [{ role: 'user', content: `${r.pedido}\n\n<dados>\n${JSON.stringify(r.dados).slice(0, 60000)}\n</dados>` }],
   })
   if (msg.stop_reason === 'refusal') throw new Error('A IA não escreveu este resumo.')
-  return msg.content.filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text').map(b => b.text).join('\n').trim()
+  if (msg.stop_reason === 'max_tokens') throw new Error('O resumo veio incompleto.')
+  const json = msg.content.filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text').map(b => b.text).join('')
+  const out = JSON.parse(json) as { secoes: Secao[]; recomendacoes: Recomendacao[] }
+  return { secoes: out.secoes ?? [], recomendacoes: (out.recomendacoes ?? []).slice(0, 5) }
+}
+
+// Versão em texto corrido (para quem ainda está com a tela antiga).
+function emTexto(secoes: Secao[], recomendacoes: Recomendacao[]) {
+  const partes = secoes.map(s => `${s.titulo}:\n${s.itens.map(i => `• ${i}`).join('\n')}`)
+  if (recomendacoes.length) partes.push(`Recomendações:\n${recomendacoes.map(r => `• ${r.texto} (${r.motivo})`).join('\n')}`)
+  return partes.join('\n\n')
 }
 
 // Gera e grava as rotinas do dia. Cada rotina é independente: uma falha não
@@ -239,10 +282,15 @@ export async function gerarRotinas(sb: SupabaseClient, apiKey: string, hoje = ho
     try {
       const r = await montar(sb, t, p, hoje)
       if (!r) return null
-      let texto: string
-      try { texto = await escrever(client, r) } catch (e) { texto = `Não foi possível escrever este resumo agora (${e instanceof Error ? e.message : 'erro'}). Use "Gerar agora" para tentar de novo.` }
+      let texto: string, secoes: Secao[] = [], recomendacoes: Recomendacao[] = []
+      try {
+        ({ secoes, recomendacoes } = await escrever(client, r))
+        texto = emTexto(secoes, recomendacoes) || 'Nada a apontar hoje.'
+      } catch (e) {
+        texto = `Não foi possível escrever este resumo agora (${e instanceof Error ? e.message : 'erro'}). Use "Gerar agora" para tentar de novo.`
+      }
       const { error } = await sb.from('assistente_rotinas').upsert(
-        { tipo: r.tipo, publico: r.publico, data: hoje, titulo: r.titulo, texto, dados: r.dados, perfis: PERFIS[r.publico], created_at: new Date().toISOString() },
+        { tipo: r.tipo, publico: r.publico, data: hoje, titulo: r.titulo, texto, dados: { entrada: r.dados, secoes, recomendacoes }, perfis: PERFIS[r.publico], created_at: new Date().toISOString() },
         { onConflict: 'tipo,publico,data' },
       )
       if (error) throw error
