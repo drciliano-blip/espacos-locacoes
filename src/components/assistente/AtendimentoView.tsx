@@ -95,6 +95,8 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
 
   const [pensando, setPensando] = useState(false)
   const [vivo, setVivo] = useState<AoVivo>({ texto: '', etapa: '' })
+  // Como desfazer o que foi gravado direto de um cartão (vale enquanto a tela está aberta).
+  const [desfazeres, setDesfazeres] = useState<Record<string, () => Promise<void>>>({})
   const [verOrcamento, setVerOrcamento] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
@@ -511,7 +513,9 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
           )
           if (m.tipo === 'acao_sistema' && m.acao) return (
             <div key={m.id} className="max-w-[92%]">
-              <CartaoAcaoSistema acao={m.acao as unknown as AcaoSistema} feita={m.feita} onFeita={() => gravarMensagens(mensagens.map(x => (x.id === m.id ? { ...x, feita: true } : x)))} />
+              <CartaoAcaoSistema acao={m.acao as unknown as AcaoSistema} feita={m.feita} desfazer={desfazeres[m.id]}
+                onFeita={d => { if (d) setDesfazeres(x => ({ ...x, [m.id]: d })); gravarMensagens(mensagens.map(x => (x.id === m.id ? { ...x, feita: true } : x))) }}
+                onDesfeita={() => { setDesfazeres(x => { const n = { ...x }; delete n[m.id]; return n }); gravarMensagens(mensagens.map(x => (x.id === m.id ? { ...x, feita: false } : x))) }} />
             </div>
           )
           if (m.autor === 'sistema') return <p key={m.id} className="text-center text-xs text-app-muted">{m.texto}</p>
