@@ -9,7 +9,6 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { canAccess, veValoresAReceber } from '@/lib/auth'
 import type { FichaCliente, NivelAcesso } from '@/types'
 import { aplicarPatch } from './calculo-estado'
-import { novoNumero } from './orcamento'
 import { mensagemInicial } from './roteiro'
 
 type Tool = Anthropic.Beta.BetaTool
@@ -34,7 +33,8 @@ export type AcaoProposta =
   // Abre "Novo Evento" preenchido com a ficha do cliente (depois oferece gerar o contrato).
   | { tipo: 'cadastro_evento'; ficha: FichaCliente; resumo: string }
   // Abre o atendimento (chat do cliente) criado com os dados, para montar o orçamento.
-  | { tipo: 'atendimento'; atendimentoId: string; resumo: string }
+  // Novo orçamento: o atendimento só é criado quando a pessoa toca no cartão.
+  | { tipo: 'atendimento'; atendimentoId?: string; novo?: { titulo: string; estado: Record<string, unknown>; mensagens: Record<string, unknown>[]; espaco_slug: string | null; data_evento: string | null }; resumo: string }
   // Abre "Nova Conta a Pagar" já preenchida.
   | { tipo: 'conta'; campos: { descricao: string; valor: number; vencimento: string; categoria: string; subcategoria: string; espaco: string; fornecedor?: string; observacoes?: string }; resumo: string }
 
@@ -122,6 +122,7 @@ const FERRAMENTAS: Record<string, Ferramenta> = {
       return {
         periodo: { de, ate },
         total: data?.length ?? 0,
+        ...((data?.length ?? 0) >= LIMITE ? { aviso: `Mostrando só os primeiros ${LIMITE} eventos do período: pode haver mais. Peça um período menor.` } : {}),
         eventos: (data ?? []).map(ev => ({
           id: ev.id, data: ev.data, espaco: nomes.get(ev.espaco_id), cliente: ev.cliente, evento: ev.nome_evento ?? undefined,
           status: ev.status === 'em_negociacao' ? 'pré-evento (em negociação)' : ev.status,
@@ -153,7 +154,8 @@ const FERRAMENTAS: Record<string, Ferramenta> = {
     async executar(sb, e) {
       const { id, nomes } = await filtroEspaco(sb, e.espaco)
       const hoje = hojeSP()
-      let q = sb.from('receitas').select('id, cliente, descricao, parcela_label, espaco_id, valor, data, data_recebimento, status, evento_id').order('data').limit(LIMITE)
+      // Busca até 5.000 para o total sair certo; a lista mostrada à IA vai até 200.
+      let q = sb.from('receitas').select('id, cliente, descricao, parcela_label, espaco_id, valor, data, data_recebimento, status, evento_id').order('data').limit(5000)
       const sit = texto(e.situacao)
       if (sit === 'vencidos') q = q.neq('status', 'pago').lt('data', hoje)
       else if (sit === 'a_receber') q = q.neq('status', 'pago')
@@ -169,7 +171,11 @@ const FERRAMENTAS: Record<string, Ferramenta> = {
         valor: Number(r.valor), vencimento: r.data, recebido_em: r.data_recebimento ?? undefined, situacao: r.status,
         dias_em_atraso: r.status !== 'pago' && r.data < hoje ? Math.round(dias(hoje, r.data)) : undefined,
       }))
-      return { total_parcelas: lista.length, soma: Math.round(lista.reduce((s, r) => s + r.valor, 0) * 100) / 100, parcelas: lista }
+      const soma = Math.round(lista.reduce((s, r) => s + r.valor, 0) * 100) / 100
+      return {
+        total_parcelas: lista.length, soma, parcelas: lista.slice(0, LIMITE),
+        ...(lista.length > LIMITE ? { aviso: `A lista mostra só ${LIMITE} de ${lista.length} parcelas (as de vencimento mais antigo); o total e a soma consideram todas. Para ver as demais, peça um período ou um espaço.` } : {}),
+      }
     },
   },
 
@@ -402,7 +408,7 @@ const FERRAMENTAS: Record<string, Ferramenta> = {
     pode: r => r === 'admin' || r === 'operacional',
     definicao: {
       name: 'abrir_orcamento',
-      description: 'Começa um orçamento para um cliente: cria o atendimento (chat do cliente) já com os dados que a pessoa passou e mostra um cartão para abrir; lá o assistente monta o Orçamento de Locação e o de Serviços, os PDFs e as mensagens. Use sempre que pedirem para fazer/montar/gerar um orçamento.',
+      description: 'Começa um orçamento para um cliente: mostra um cartão que, ao ser tocado, abre o atendimento (chat do cliente) já com os dados que a pessoa passou; lá o assistente monta o Orçamento de Locação e o de Serviços, os PDFs e as mensagens. Use sempre que pedirem para fazer/montar/gerar um orçamento.',
       input_schema: {
         type: 'object',
         properties: {
@@ -427,15 +433,13 @@ const FERRAMENTAS: Record<string, Ferramenta> = {
         { id: crypto.randomUUID(), autor: 'equipe', texto: `Pedido: ${resumoPedido || '(sem detalhes ainda)'}`, em: new Date(agora + 1).toISOString() },
         { id: crypto.randomUUID(), autor: 'assistente', tipo: 'rascunho_cliente', enviada: false, texto: mensagemInicial(), em: new Date(agora + 2).toISOString() },
       ]
-      const { data: { user } } = await sb.auth.getUser()
-      const { data, error } = await sb.from('assistente_atendimentos').insert({
-        numero: `${novoNumero()}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`,
-        titulo, estado, mensagens, espaco_slug: estado.slug || null, data_evento: estado.dados.data || null,
-        created_by: user?.id ?? null,
-      }).select('id').single()
-      if (error) throw error
-      acoes.push({ tipo: 'atendimento', atendimentoId: data.id, resumo: `Orçamento: ${titulo}${resumoPedido ? ` · ${resumoPedido}` : ''}` })
-      return { ok: true, avisos, mensagem: 'Atendimento criado. Diga à pessoa para abrir o cartão: lá o orçamento é montado.' }
+      // Nada é gravado aqui: o cartão cria o atendimento quando a pessoa toca nele.
+      acoes.push({
+        tipo: 'atendimento',
+        novo: { titulo, estado: estado as unknown as Record<string, unknown>, mensagens, espaco_slug: estado.slug || null, data_evento: estado.dados.data || null },
+        resumo: `Orçamento: ${titulo}${resumoPedido ? ` · ${resumoPedido}` : ''}`,
+      })
+      return { ok: true, avisos, mensagem: 'Cartão mostrado. Diga à pessoa para tocar nele: o atendimento é aberto e o orçamento montado lá.' }
     },
   },
 

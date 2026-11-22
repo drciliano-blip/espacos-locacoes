@@ -6,6 +6,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
 import { canAccess } from '@/lib/auth'
 import { MANUAL_SISTEMA } from '@/lib/assistente/manual-sistema'
+import { mensagemErroIA } from '@/lib/assistente/ao-vivo'
 import type { NivelAcesso } from '@/types'
 
 // Lê um arquivo anexado no chat do assistente (print de tela, foto, PDF) e
@@ -57,8 +58,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ descricao })
   } catch (err) {
     console.error('[assistente/anexo]', err)
-    if (err instanceof Anthropic.RateLimitError) return NextResponse.json({ error: 'Muitas consultas à IA agora. Tente em 1 minuto.' }, { status: 429 })
-    if (err instanceof Anthropic.APIError) return NextResponse.json({ error: `Erro da IA (${err.status}): ${err.message}` }, { status: 502 })
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Erro ao ler o arquivo.' }, { status: 502 })
+    return NextResponse.json({ error: mensagemErroIA(err) }, { status: err instanceof Anthropic.RateLimitError ? 429 : 502 })
   }
 }

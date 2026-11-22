@@ -137,7 +137,7 @@ export default function AssistenteClient() {
         )}
       </div>
 
-      <ResumoDoDia compacto={!!aberto} />
+      <ResumoDoDia compacto />
 
       <div className="print:hidden flex gap-1 border-b border-app-border">
         {temAtendimentos && (

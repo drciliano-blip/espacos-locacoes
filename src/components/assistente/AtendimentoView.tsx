@@ -95,6 +95,8 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
 
   const [pensando, setPensando] = useState(false)
   const [vivo, setVivo] = useState<AoVivo>({ texto: '', etapa: '' })
+  // A lista mais recente de mensagens (o chat pode receber mensagens do cliente enquanto a IA responde).
+  const ultimas = useRef<Mensagem[]>([])
   // Como desfazer o que foi gravado direto de um cartão (vale enquanto a tela está aberta).
   const [desfazeres, setDesfazeres] = useState<Record<string, () => Promise<void>>>({})
   const [verOrcamento, setVerOrcamento] = useState(false)
@@ -270,7 +272,7 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
     return () => { vivo = false }
   }, [])
   const idsConhecidos = useRef(new Set(atendimento.mensagens.map(m => m.id)))
-  useEffect(() => { for (const m of mensagens) idsConhecidos.current.add(m.id) }, [mensagens])
+  useEffect(() => { for (const m of mensagens) idsConhecidos.current.add(m.id); ultimas.current = mensagens }, [mensagens])
   useEffect(() => {
     const t = setInterval(() => {
       if (document.hidden) return
@@ -381,8 +383,10 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
     const clienteNovas = mensagens.filter(m => m.autor === 'cliente' && (!iaAte || m.em > iaAte)).map(m => m.texto)
     if ((!texto && clienteNovas.length === 0) || pensando) return
     setErro(null); setNovoTexto(''); setPensando(true)
-    const comPergunta = texto ? [...mensagens, novaMensagem('equipe', texto, autor)] : mensagens
+    const pergunta = texto ? novaMensagem('equipe', texto, autor) : null
+    const comPergunta = pergunta ? [...mensagens, pergunta] : mensagens
     setMensagens(comPergunta)
+    ultimas.current = comPergunta
     const agora = new Date().toISOString()
     try {
       setVivo({ texto: '', etapa: '' })
@@ -399,14 +403,16 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
         if (a.tipo === 'confirmar_evento') novas.push({ ...novaMensagem('sistema', 'Converter o pré-evento em evento'), tipo: 'confirmar_evento' })
         if (a.tipo === 'sistema' && a.dados) novas.push({ ...novaMensagem('sistema', String(a.dados.resumo ?? 'Ação no sistema')), tipo: 'acao_sistema', acao: a.dados })
       }
-      await gravarMensagens([...comPergunta, ...novas])
+      // Junta com o que chegou enquanto a IA pensava (ex.: mensagem do cliente pelo WhatsApp).
+      await gravarMensagens([...ultimas.current, ...novas])
     } catch (e) {
-      // Não chegou ao assistente: tira da conversa e devolve para a caixa.
-      setMensagens(mensagens)
+      // Não chegou ao assistente: tira só a pergunta da conversa e devolve para a caixa.
+      if (pergunta) setMensagens(ms => ms.filter(m => m.id !== pergunta.id))
       if (!paraIA) setNovoTexto(texto)
+      const volta = paraIA ? 'Anexe o arquivo de novo para tentar.' : 'A mensagem voltou para a caixa: toque em enviar de novo.'
       setErro(e instanceof TypeError
-        ? 'A mensagem não chegou ao assistente (a resposta demorou ou a internet oscilou). Ela voltou para a caixa: toque em enviar de novo.'
-        : `${mensagemDeErro(e, 'Não foi possível falar com o assistente.')} A mensagem voltou para a caixa.`)
+        ? `A mensagem não chegou ao assistente (a resposta demorou ou a internet oscilou). ${volta}`
+        : `${mensagemDeErro(e, 'Não foi possível falar com o assistente.')} ${volta}`)
     } finally {
       setPensando(false)
     }
@@ -431,16 +437,16 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
     <div className="flex min-h-[60vh] flex-col">
       <div className="print:hidden flex flex-wrap items-center justify-between gap-2 border-b border-app-border pb-3">
         <div className="min-w-0">
-          <h2 className="truncate text-lg font-semibold text-app-text">{titulo}</h2>
-          <p className="truncate text-xs text-app-muted">
+          <h2 className="text-lg font-semibold leading-tight text-app-text [overflow-wrap:anywhere]">{titulo}</h2>
+          <p className="mt-0.5 text-xs text-app-muted">
             {espaco ? `${espaco.nome} · ` : ''}{dados.data ? `${br(dados.data)} · ` : ''}{dados.convidados ? `${dados.convidados} pessoas · ` : ''}
             {espaco ? `Locação ${formatCurrency(totalLoc)}` : 'sem espaço'}{totalServ ? ` · Serviços ${formatCurrency(totalServ)}` : ''}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
           <button type="button" className={btnSec} onClick={() => setVerOrcamento(true)}><FileDown className="h-4 w-4" /> Orçamento</button>
-          <select className={`${inputCls} w-auto`} value={status} onChange={e => mudarStatus(e.target.value as StatusAtendimento)} aria-label="Situação do atendimento">
-            {(Object.keys(STATUS_ATENDIMENTO) as StatusAtendimento[]).map(s => <option key={s} value={s}>{STATUS_ATENDIMENTO[s].label}</option>)}
+          <select className={`${inputCls} min-w-0 flex-1 sm:w-auto sm:flex-none`} value={status} onChange={e => mudarStatus(e.target.value as StatusAtendimento)} aria-label="Situação do atendimento">
+            {(Object.keys(STATUS_ATENDIMENTO) as StatusAtendimento[]).map(s => <option key={s} value={s}>{s === 'enviado' ? 'Enviado' : STATUS_ATENDIMENTO[s].label}</option>)}
           </select>
           {podeExcluir && (
             <button type="button" className={btnSec} aria-label="Excluir atendimento" onClick={() => { if (window.confirm('Excluir este atendimento e toda a conversa? Não dá para desfazer.')) onExcluir() }}>

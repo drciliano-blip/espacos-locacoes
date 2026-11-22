@@ -30,21 +30,23 @@ const SUGESTOES: Record<string, string[]> = {
   admin: [
     'O que tem na agenda nos próximos 7 dias?',
     'Quais clientes estão com pagamento atrasado?',
+    'A Mendoza pagou a parcela 2 por PIX ontem, dá baixa',
+    'Lança a conta de energia da Fabrique de R$ 1.850,40, vence 10/12',
     'Tem lançamento duplicado no mês passado?',
-    'Confere o mês passado do Espaço Solon para o fechamento.',
-    'Como faço o fechamento do mês?',
+    'Evento de 800 pessoas na Fabrique precisa de alvará?',
   ],
   financeiro: [
     'Quais clientes estão com pagamento atrasado?',
+    'A Mendoza pagou a parcela 2 por PIX ontem, dá baixa',
+    'Lança a conta de energia da Fabrique de R$ 1.850,40, vence 10/12',
     'Tem lançamento duplicado no mês passado?',
     'Confere o mês passado de todos os espaços.',
-    'Quanto entra de parcelas nos próximos 15 dias?',
-    'Como dou baixa numa conta paga?',
   ],
   operacional: [
     'O que tem na agenda nos próximos 7 dias?',
     'O Fabrique está livre nos sábados de dezembro?',
     'Quais pré-eventos estão em aberto?',
+    'Evento de 1.200 pessoas precisa de brigada e ambulância?',
     'Como gero o contrato de um evento?',
   ],
 }
@@ -102,9 +104,10 @@ export default function ConsultaChat({ role, autor, tela, compacto, pedido, onPe
       // para não parecer que foi respondida (senão a próxima pergunta vai sem ela).
       setBolhas(b => b.filter(x => x.id !== idBolha))
       if (!paraIA) setPergunta(q)
+      const volta = paraIA ? 'Anexe o arquivo de novo para tentar.' : 'A mensagem voltou para a caixa: toque em enviar de novo.'
       setErro(e instanceof TypeError
-        ? 'A mensagem não chegou ao assistente (a resposta demorou ou a internet oscilou). Ela voltou para a caixa: toque em enviar de novo.'
-        : `${mensagemDeErro(e, 'Não foi possível consultar.')} A mensagem voltou para a caixa.`)
+        ? `A mensagem não chegou ao assistente (a resposta demorou ou a internet oscilou). ${volta}`
+        : `${mensagemDeErro(e, 'Não foi possível consultar.')} ${volta}`)
     } finally {
       setPensando(false)
     }
@@ -148,12 +151,15 @@ export default function ConsultaChat({ role, autor, tela, compacto, pedido, onPe
   function baixasPendentes(b: Bolha) {
     return (b.acoes ?? []).map((a, i) => ({ a, i })).filter((x): x is { a: AcaoBaixa & { feita?: boolean }; i: number } => x.a.tipo === 'baixa' && !x.a.feita)
   }
+  // Data e forma que cada cartão de baixa está mostrando (a pessoa pode ter mudado).
+  const [valores, setValores] = useState<Record<string, { dataPagamento: string; forma: string }>>({})
+  const valorDe = (bolhaId: string, i: number, a: AcaoBaixa) => valores[`${bolhaId}:${i}`] ?? { dataPagamento: a.dataPagamento ?? hojeISO(), forma: a.forma ?? '' }
   async function confirmarTodas(b: Bolha) {
     const lista = baixasPendentes(b)
     if (!window.confirm(`Confirmar ${lista.length} baixas com a data e a forma de pagamento de cada cartão?`)) return
     setEmLote(b.id); setErro(null)
     try {
-      for (const { a, i } of lista) marcarFeita(b.id, i, await exec.darBaixa(a, a.dataPagamento ?? hojeISO(), a.forma ?? ''))
+      for (const { a, i } of lista) { const v = valorDe(b.id, i, a); marcarFeita(b.id, i, await exec.darBaixa(a, v.dataPagamento, v.forma)) }
     } catch (e) {
       setErro(mensagemDeErro(e, 'Uma das baixas não foi gravada; as anteriores ficaram feitas.'))
     } finally {
@@ -186,7 +192,7 @@ export default function ConsultaChat({ role, autor, tela, compacto, pedido, onPe
     <div className={`flex flex-col bg-app-surface ${compacto ? 'h-full' : 'min-h-[60vh] rounded-xl border border-app-border'}`}>
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-app-border px-4 py-2.5">
         <p className="min-w-0 basis-full text-xs text-app-muted sm:basis-0 sm:flex-1 sm:text-sm">Tire dúvidas, consulte agenda e financeiro ou peça tarefas. A IA usa o seu nível de acesso e não altera nada sozinha.</p>
-        <button type="button" onClick={testar} disabled={testando} className="shrink-0 text-xs text-app-muted underline disabled:opacity-50">{testando ? 'Testando…' : 'Testar a IA'}</button>
+        {role === 'admin' && <button type="button" onClick={testar} disabled={testando} className="shrink-0 text-xs text-app-muted underline disabled:opacity-50">{testando ? 'Testando…' : 'Testar a IA'}</button>}
         {bolhas.length > 0 && <button type="button" onClick={limpar} className="inline-flex shrink-0 items-center gap-1 text-xs text-app-muted"><RotateCcw className="h-3.5 w-3.5" /> Nova conversa</button>}
       </div>
 
@@ -206,7 +212,8 @@ export default function ConsultaChat({ role, autor, tela, compacto, pedido, onPe
             <div className={`max-w-[90%] rounded-xl px-3 py-2 text-sm ${b.autor === 'pessoa' ? 'bg-[#072A43] text-white' : 'bg-app-surface2 text-app-text'}`}>
               <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{b.texto}</p>
               {b.acoes?.map((a, i) => a.tipo !== 'pre_evento' ? (
-                <CartaoAcaoSistema key={i} acao={a} feita={a.feita} onFeita={d => marcarFeita(b.id, i, d)} desfazer={desfazeres[`${b.id}:${i}`]} onDesfeita={() => marcarFeita(b.id, i, undefined, false)} />
+                <CartaoAcaoSistema key={i} acao={a} feita={a.feita} onFeita={d => marcarFeita(b.id, i, d)} desfazer={desfazeres[`${b.id}:${i}`]} onDesfeita={() => marcarFeita(b.id, i, undefined, false)}
+                  bloqueado={emLote === b.id} onValores={v => setValores(x => (x[`${b.id}:${i}`]?.forma === v.forma && x[`${b.id}:${i}`]?.dataPagamento === v.dataPagamento ? x : { ...x, [`${b.id}:${i}`]: v }))} />
               ) : (
                 <div key={i} className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-app-text">
                   <p className="flex items-center gap-1.5 text-xs font-semibold"><CalendarClock className="h-4 w-4 text-amber-600" /> Criar pré-evento na Agenda</p>
@@ -217,12 +224,12 @@ export default function ConsultaChat({ role, autor, tela, compacto, pedido, onPe
                 </div>
               ))}
               {baixasPendentes(b).length >= 2 && (
-                <button type="button" onClick={() => confirmarTodas(b)} disabled={emLote === b.id || baixasPendentes(b).some(x => !x.a.forma)}
+                <button type="button" onClick={() => confirmarTodas(b)} disabled={emLote === b.id || baixasPendentes(b).some(x => !valorDe(b.id, x.i, x.a).forma)}
                   className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-[#072A43] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">
                   {emLote === b.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />} Confirmar as {baixasPendentes(b).length} baixas
                 </button>
               )}
-              {baixasPendentes(b).length >= 2 && baixasPendentes(b).some(x => !x.a.forma) && <p className="mt-1 text-[11px] text-app-muted">Para confirmar todas juntas, a forma de pagamento precisa vir em cada uma (ou confirme uma por uma).</p>}
+              {baixasPendentes(b).length >= 2 && baixasPendentes(b).some(x => !valorDe(b.id, x.i, x.a).forma) && <p className="mt-1 text-[11px] text-app-muted">Escolha a forma de pagamento em cada cartão para confirmar todas juntas.</p>}
             </div>
           </div>
         ))}
@@ -237,9 +244,9 @@ export default function ConsultaChat({ role, autor, tela, compacto, pedido, onPe
         {erro && (
           <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600">
             <p>{erro}</p>
-            <button type="button" onClick={testar} disabled={testando} className="mt-1.5 inline-flex items-center gap-1 rounded-lg border border-red-500/40 bg-white px-2.5 py-1 text-xs font-semibold text-red-700 disabled:opacity-50">
+            {role === 'admin' && <button type="button" onClick={testar} disabled={testando} className="mt-1.5 inline-flex items-center gap-1 rounded-lg border border-red-500/40 bg-white px-2.5 py-1 text-xs font-semibold text-red-700 disabled:opacity-50">
               {testando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Testar a IA
-            </button>
+            </button>}
           </div>
         )}
         <div ref={fim} />

@@ -17,7 +17,9 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })
   const { data: perfil } = await sb.from('profiles').select('role').eq('id', user.id).single()
   const role = perfil?.role as NivelAcesso | undefined
-  passos.push({ passo: 'Login e perfil', ok: !!role && canAccess(role, 'assistente'), detalhe: role ?? 'sem perfil' })
+  // Teste técnico (faz chamadas pagas): só o administrador.
+  if (role !== 'admin') return NextResponse.json({ error: 'Só o administrador pode testar a IA.' }, { status: 403 })
+  passos.push({ passo: 'Login e perfil', ok: canAccess(role, 'assistente'), detalhe: role })
 
   const apiKey = process.env.ANTHROPIC_API_KEY
   passos.push({ passo: 'Chave da IA (ANTHROPIC_API_KEY)', ok: !!apiKey, detalhe: apiKey ? `configurada (termina em …${apiKey.slice(-4)})` : 'não configurada no Vercel' })

@@ -78,5 +78,7 @@ export default function BotaoAnexo({ onLido, onErro, disabled, pergunta }: {
 
 // Texto que vai para o assistente com a leitura do arquivo (o chat mostra só o nome).
 export function textoDaFicha(f: FichaLida, pedido: string): string {
-  return `${pedido || 'Veja o arquivo que anexei.'}\n\n<anexo arquivo="${f.arquivo}">\n${f.descricao}\n</anexo>`
+  // Nome do arquivo e leitura sem marcação: um nome ou texto forjado não fecha a etiqueta <anexo>.
+  const limpo = (t: string) => t.replace(/[<>"]/g, ' ')
+  return `${pedido || 'Veja o arquivo que anexei.'}\n\n<anexo arquivo="${limpo(f.arquivo)}">\n${limpo(f.descricao)}\n</anexo>`
 }

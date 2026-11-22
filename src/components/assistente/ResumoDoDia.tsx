@@ -119,12 +119,12 @@ export default function ResumoDoDia({ compacto }: { compacto?: boolean }) {
       <div className="flex items-center justify-between gap-2">
         <p className="inline-flex items-center gap-1.5 text-sm font-semibold text-app-text"><Sparkles className="h-4 w-4 text-[#9A7937]" /> Resumo do assistente</p>
         <div className="flex items-center gap-1.5">
-          <button type="button" onClick={() => setPersonalizando(p => !p)} className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-app-border2 px-2 py-1 text-xs text-app-text">
-            <SlidersHorizontal className="h-3.5 w-3.5" /> Personalizar
+          <button type="button" onClick={() => setPersonalizando(p => !p)} aria-label="Personalizar o resumo" title="Personalizar o resumo" className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-app-border2 px-2 py-1 text-xs text-app-text">
+            <SlidersHorizontal className="h-3.5 w-3.5" /><span className="hidden sm:inline">Personalizar</span>
           </button>
           {role === 'admin' && (
-            <button type="button" onClick={gerarAgora} disabled={gerando} className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-app-border2 px-2 py-1 text-xs text-app-text disabled:opacity-50">
-              {gerando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Gerar agora
+            <button type="button" onClick={gerarAgora} disabled={gerando} aria-label="Gerar o resumo agora" title="Gerar o resumo agora" className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-app-border2 px-2 py-1 text-xs text-app-text disabled:opacity-50">
+              {gerando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}<span className="hidden sm:inline">Gerar agora</span>
             </button>
           )}
         </div>
@@ -154,7 +154,7 @@ export default function ResumoDoDia({ compacto }: { compacto?: boolean }) {
           return (
             <div key={r.id} className="rounded-lg border border-app-border2">
               <button type="button" onClick={() => setAberto(a => (a === r.id ? null : r.id))} className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm font-medium text-app-text">
-                <span>{r.titulo}</span>
+                <span>{r.titulo}{aberto !== r.id && verRecomendacoes && (r.recomendacoes?.length ?? 0) > 0 && <span className="ml-1.5 inline-block whitespace-nowrap rounded-full bg-[#9A7937]/15 px-2 py-0.5 text-[11px] font-semibold text-[#7a5f2a]">{r.recomendacoes!.length} recomendaç{r.recomendacoes!.length > 1 ? 'ões' : 'ão'}</span>}</span>
                 <ChevronDown className={`h-4 w-4 shrink-0 text-app-muted transition-transform ${aberto === r.id ? 'rotate-180' : ''}`} />
               </button>
               {aberto === r.id && (
