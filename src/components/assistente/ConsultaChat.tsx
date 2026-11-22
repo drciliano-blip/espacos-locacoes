@@ -30,21 +30,23 @@ const SUGESTOES: Record<string, string[]> = {
   admin: [
     'O que tem na agenda nos próximos 7 dias?',
     'Quais clientes estão com pagamento atrasado?',
+    'A Mendoza pagou a parcela 2 por PIX ontem, dá baixa',
+    'Lança a conta de energia da Fabrique de R$ 1.850,40, vence 10/12',
     'Tem lançamento duplicado no mês passado?',
-    'Confere o mês passado do Espaço Solon para o fechamento.',
-    'Como faço o fechamento do mês?',
+    'Evento de 800 pessoas na Fabrique precisa de alvará?',
   ],
   financeiro: [
     'Quais clientes estão com pagamento atrasado?',
+    'A Mendoza pagou a parcela 2 por PIX ontem, dá baixa',
+    'Lança a conta de energia da Fabrique de R$ 1.850,40, vence 10/12',
     'Tem lançamento duplicado no mês passado?',
     'Confere o mês passado de todos os espaços.',
-    'Quanto entra de parcelas nos próximos 15 dias?',
-    'Como dou baixa numa conta paga?',
   ],
   operacional: [
     'O que tem na agenda nos próximos 7 dias?',
     'O Fabrique está livre nos sábados de dezembro?',
     'Quais pré-eventos estão em aberto?',
+    'Evento de 1.200 pessoas precisa de brigada e ambulância?',
     'Como gero o contrato de um evento?',
   ],
 }
@@ -186,7 +188,7 @@ export default function ConsultaChat({ role, autor, tela, compacto, pedido, onPe
     <div className={`flex flex-col bg-app-surface ${compacto ? 'h-full' : 'min-h-[60vh] rounded-xl border border-app-border'}`}>
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-app-border px-4 py-2.5">
         <p className="min-w-0 basis-full text-xs text-app-muted sm:basis-0 sm:flex-1 sm:text-sm">Tire dúvidas, consulte agenda e financeiro ou peça tarefas. A IA usa o seu nível de acesso e não altera nada sozinha.</p>
-        <button type="button" onClick={testar} disabled={testando} className="shrink-0 text-xs text-app-muted underline disabled:opacity-50">{testando ? 'Testando…' : 'Testar a IA'}</button>
+        {role === 'admin' && <button type="button" onClick={testar} disabled={testando} className="shrink-0 text-xs text-app-muted underline disabled:opacity-50">{testando ? 'Testando…' : 'Testar a IA'}</button>}
         {bolhas.length > 0 && <button type="button" onClick={limpar} className="inline-flex shrink-0 items-center gap-1 text-xs text-app-muted"><RotateCcw className="h-3.5 w-3.5" /> Nova conversa</button>}
       </div>
 

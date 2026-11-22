@@ -431,16 +431,16 @@ export default function AtendimentoView({ atendimento, autor, podeExcluir, onAtu
     <div className="flex min-h-[60vh] flex-col">
       <div className="print:hidden flex flex-wrap items-center justify-between gap-2 border-b border-app-border pb-3">
         <div className="min-w-0">
-          <h2 className="truncate text-lg font-semibold text-app-text">{titulo}</h2>
-          <p className="truncate text-xs text-app-muted">
+          <h2 className="text-lg font-semibold leading-tight text-app-text [overflow-wrap:anywhere]">{titulo}</h2>
+          <p className="mt-0.5 text-xs text-app-muted">
             {espaco ? `${espaco.nome} · ` : ''}{dados.data ? `${br(dados.data)} · ` : ''}{dados.convidados ? `${dados.convidados} pessoas · ` : ''}
             {espaco ? `Locação ${formatCurrency(totalLoc)}` : 'sem espaço'}{totalServ ? ` · Serviços ${formatCurrency(totalServ)}` : ''}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
           <button type="button" className={btnSec} onClick={() => setVerOrcamento(true)}><FileDown className="h-4 w-4" /> Orçamento</button>
-          <select className={`${inputCls} w-auto`} value={status} onChange={e => mudarStatus(e.target.value as StatusAtendimento)} aria-label="Situação do atendimento">
-            {(Object.keys(STATUS_ATENDIMENTO) as StatusAtendimento[]).map(s => <option key={s} value={s}>{STATUS_ATENDIMENTO[s].label}</option>)}
+          <select className={`${inputCls} min-w-0 flex-1 sm:w-auto sm:flex-none`} value={status} onChange={e => mudarStatus(e.target.value as StatusAtendimento)} aria-label="Situação do atendimento">
+            {(Object.keys(STATUS_ATENDIMENTO) as StatusAtendimento[]).map(s => <option key={s} value={s}>{s === 'enviado' ? 'Enviado' : STATUS_ATENDIMENTO[s].label}</option>)}
           </select>
           {podeExcluir && (
             <button type="button" className={btnSec} aria-label="Excluir atendimento" onClick={() => { if (window.confirm('Excluir este atendimento e toda a conversa? Não dá para desfazer.')) onExcluir() }}>

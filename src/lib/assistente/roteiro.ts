@@ -6,8 +6,11 @@ import type { DadosEvento } from './orcamento'
 
 // Mensagem padrão que a equipe já usa no primeiro contato.
 export function mensagemInicial(nomeAtendente?: string): string {
-  const nome = (nomeAtendente ?? '').trim().split(/\s+/)[0]
-  return `Olá! ${nome ? `Meu nome é ${nome}, muito prazer.` : 'Muito prazer!'}
+  // Nome de login (ex.: "drciliano") não vai para o cliente: só nome de pessoa,
+  // cadastrado com inicial maiúscula em Usuários.
+  const primeiro = (nomeAtendente ?? '').trim().split(/\s+/)[0] ?? ''
+  const nome = /^\p{Lu}\p{Ll}+$/u.test(primeiro) ? primeiro : ''
+  return `Olá! ${nome ? `Meu nome é ${nome}, da Espaços & Locações, muito prazer.` : 'Aqui é da Espaços & Locações, muito prazer!'}
 
 Por favor, responda às perguntas abaixo para ser atendido.
 
