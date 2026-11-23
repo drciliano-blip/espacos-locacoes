@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/proxy'
 import { paginaInicial, ROLE_PERMISSIONS, ROLES_SEM_API } from '@/lib/auth'
 import type { NivelAcesso } from '@/types'
 
-const publicPaths = ['/login', '/ficha-cliente', '/api/whatsapp/webhook', '/api/assistente/rotinas']
+const publicPaths = ['/login', '/ficha-cliente', '/api/whatsapp/webhook', '/api/assistente/rotinas', '/api/whatsapp/cloud/webhook', '/api/whatsapp/cloud/cron']
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl

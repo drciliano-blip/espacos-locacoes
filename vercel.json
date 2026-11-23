@@ -1,5 +1,6 @@
 {
   "crons": [
-    { "path": "/api/assistente/rotinas", "schedule": "0 11 * * *" }
+    { "path": "/api/assistente/rotinas", "schedule": "0 11 * * *" },
+    { "path": "/api/whatsapp/cloud/cron", "schedule": "0 13 * * *" }
   ]
 }

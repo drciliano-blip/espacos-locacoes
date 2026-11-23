@@ -3,11 +3,12 @@ import type { NivelAcesso } from '@/types'
 // Relatórios foi incorporado na aba Financeiro (visualização + exportação
 // PDF/Excel) — não existe mais como página própria.
 export const ROLE_PERMISSIONS: Record<NivelAcesso, string[]> = {
-  admin: ['dashboard', 'assistente', 'agenda', 'pagamentos', 'eventos', 'fechamento', 'espacos', 'contas-a-pagar', 'usuarios', 'calculadora-staff', 'credenciamento', 'buffet'],
+  admin: ['dashboard', 'assistente', 'agenda', 'pagamentos', 'eventos', 'fechamento', 'espacos', 'contas-a-pagar', 'usuarios', 'calculadora-staff', 'credenciamento', 'buffet', 'campanhas'],
   financeiro: ['dashboard', 'assistente', 'pagamentos', 'eventos', 'fechamento', 'contas-a-pagar', 'buffet'],
   // Buffet EL: operadores montam e enviam orçamentos (sócio dos espaços não
   // vê — o buffet tem quadro societário próprio).
-  operacional: ['dashboard', 'assistente', 'agenda', 'eventos', 'espacos', 'calculadora-staff', 'credenciamento', 'buffet'],
+  // WhatsApp (Meta): operacional atende a caixa de entrada; campanhas e importação só o admin.
+  operacional: ['dashboard', 'assistente', 'agenda', 'eventos', 'espacos', 'calculadora-staff', 'credenciamento', 'buffet', 'campanhas'],
   visualizador: ['dashboard'],
   // Somente leitura, e restrito aos espaços vinculados a ele via RLS —
   // o filtro de dados por espaço acontece no banco, isso aqui só libera as páginas.

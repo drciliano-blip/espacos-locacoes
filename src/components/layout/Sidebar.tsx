@@ -18,6 +18,7 @@ import {
   Calculator,
   BadgeCheck,
   ChefHat,
+  Megaphone,
   X,
 } from 'lucide-react'
 import { useEspacos } from '@/contexts/EspacosContext'
@@ -32,6 +33,8 @@ const navItemsBefore = [
   { href: '/dashboard',      label: 'Dashboard',     icon: LayoutDashboard, page: 'dashboard' },
   // Copiloto de atendimento: lê o pedido e prepara os orçamentos (Plano 2027).
   { href: '/assistente',     label: 'Assistente de IA', icon: Bot,         page: 'assistente' },
+  // WhatsApp direto pela Meta: campanhas, contatos e caixa de entrada.
+  { href: '/campanhas',      label: 'WhatsApp Campanhas', icon: Megaphone, page: 'campanhas' },
   { href: '/fechamento',     label: 'Financeiro',    icon: Landmark,        page: 'fechamento' },
   { href: '/agenda',         label: 'Agenda',        icon: CalendarDays,    page: 'agenda' },
   { href: '/calculadora-staff', label: 'Calculadora de Staff', icon: Calculator, page: 'calculadora-staff' },
