@@ -22,9 +22,16 @@ const mesAnterior = (iso: string) => { const d = new Date(Date.parse(iso.slice(0
 
 interface Rotina { tipo: 'manha' | 'semanal' | 'fechamento' | 'vendas'; publico: Publico; titulo: string; dados: Record<string, unknown>; pedido: string }
 
+// Falha passageira do banco (ex.: "JWT issued at future", relógio dos
+// servidores um pouco fora): tenta de novo até 2 vezes antes de desistir.
 async function ferramenta(sb: SupabaseClient, nome: string, entrada: Record<string, unknown>, publico: Publico) {
-  const acoes: AcaoProposta[] = []
-  return executarFerramenta(nome, entrada, sb, { role: PAPEL[publico], acoes })
+  let r: unknown
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    if (tentativa) await new Promise(ok => setTimeout(ok, 2000 * tentativa))
+    r = await executarFerramenta(nome, entrada, sb, { role: PAPEL[publico], acoes: [] as AcaoProposta[] })
+    if (!(r && typeof r === 'object' && 'erro' in r)) return r
+  }
+  return r
 }
 
 // Que rotinas rodam hoje (segunda = conferência; sexta = vendas da semana; dia 1º = pré-fechamento).
