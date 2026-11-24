@@ -102,8 +102,10 @@ export function segmentoDoNome(nome: string | null | undefined): string | null {
   const trechos = i >= 0 ? [n.slice(i + 7), n] : [n]
   for (const t of trechos) {
     if (/\bclub\s*a\b/.test(t)) return 'Club A'
-    for (const s of SEGMENTOS) if (s !== 'Club A' && new RegExp(`\\b${semAcento(s)}\\b`).test(t)) return s
+    for (const s of SEGMENTOS) if (s !== 'Club A' && s !== 'Geral' && new RegExp(`\\b${semAcento(s)}\\b`).test(t)) return s
   }
+  // "Cliente 33" / "Club 33": cliente normal, sem espaço específico.
+  if (i >= 0 && /^\s*(club\s*)?33\b/.test(n.slice(i + 7))) return 'Geral'
   return null
 }
 
