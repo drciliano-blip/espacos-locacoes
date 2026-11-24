@@ -10,7 +10,7 @@ import { Megaphone, Upload, Search, Send, Pause, Play, Plus, UserX, RefreshCw, I
 import { createClient } from '@/lib/supabase/client'
 import { useCurrentUser } from '@/contexts/UserContext'
 import { mensagemDeErro } from '@/lib/utils'
-import { SEGMENTOS } from '@/lib/whatsapp/segmentos'
+import { SEGMENTOS, primeiroNome } from '@/lib/whatsapp/segmentos'
 import Toast from '@/components/shared/Toast'
 
 type Aba = 'caixa' | 'campanhas' | 'contatos'
@@ -22,13 +22,13 @@ interface Contato {
 interface Campanha {
   id: string; nome: string; template_name: string; template_lang: string; segmento: string | null; status: string
   total: number; enviados: number; entregues: number; lidos: number; falhas: number; respostas: number
-  created_by_nome: string | null; created_at: string
+  created_by_nome: string | null; created_at: string; parametros: string[] | null; template_texto: string | null
 }
 interface Mensagem {
   id: string; direction: 'in' | 'out'; tipo: string; conteudo: { texto?: string; template?: string }
   status: string; erro: unknown; enviado_por_nome: string | null; created_at: string; campaign_id: string | null
 }
-interface Situacao { configurado: boolean; webhookPronto: boolean; limite: number; usada: number; modelos: { name: string; language: string; category: string }[]; erroModelos?: string }
+interface Situacao { configurado: boolean; webhookPronto: boolean; limite: number; usada: number; modelos: { name: string; language: string; category: string; status: string; texto: string; variaveis: number; suportado: boolean }[]; erroModelos?: string }
 
 const JANELA = 24 * 60 * 60 * 1000
 const STATUS_CAMPANHA: Record<string, [string, string]> = {
@@ -67,7 +67,7 @@ async function todosContatos(): Promise<Contato[]> {
 
 // CSV "telefone;nome" (ou com vírgula), com aspas e BOM.
 function lerCsv(texto: string): { telefone: string; nome: string; segmento?: string }[] {
-  const linhas = texto.replace(/^﻿/, '').split(/\r?\n/).filter(l => l.trim())
+  const linhas = texto.replace(/^\ufeff/, '').split(/\r?\n/).filter(l => l.trim())
   if (linhas.length === 0) return []
   const sep = linhas[0].includes(';') ? ';' : ','
   const campos = (l: string) => {
@@ -297,6 +297,7 @@ function Campanhas({ campanhas, contatos, situacao, recarregar, avisar }: { camp
   const [rodando, setRodando] = useState<string | null>(null)
   const parar = useRef(false)
 
+  const modeloSel = situacao?.modelos.find(m => `${m.name}|${m.language}` === modelo)
   const alcance = (seg: string | null) => contatos.filter(c => !c.opt_out && (!seg || c.segmento === seg)).length
 
   async function criar() {
@@ -347,7 +348,11 @@ function Campanhas({ campanhas, contatos, situacao, recarregar, avisar }: { camp
           <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome da campanha" className={input} />
           <select value={modelo} onChange={e => setModelo(e.target.value)} className={input}>
             <option value="">Modelo aprovado…</option>
-            {situacao?.modelos.map(m => <option key={`${m.name}|${m.language}`} value={`${m.name}|${m.language}`}>{m.name} ({m.language}, {m.category.toLowerCase()})</option>)}
+            {situacao?.modelos.map(m => (
+              <option key={`${m.name}|${m.language}`} value={`${m.name}|${m.language}`} disabled={m.status !== 'APPROVED' || !m.suportado}>
+                {m.name} ({m.language}, {m.category.toLowerCase()}){m.status !== 'APPROVED' ? ' · aguardando aprovação da Meta' : !m.suportado ? ' · formato não suportado' : ''}
+              </option>
+            ))}
           </select>
           <select value={segmento} onChange={e => setSegmento(e.target.value)} className={input}>
             <option value="">Todos os segmentos ({alcance(null)})</option>
@@ -355,6 +360,7 @@ function Campanhas({ campanhas, contatos, situacao, recarregar, avisar }: { camp
           </select>
           <button onClick={criar} disabled={!nome.trim() || !modelo} className="rounded-lg bg-[#25D366] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">Criar rascunho</button>
           {situacao?.erroModelos && <p className="md:col-span-4 text-xs text-red-600">{situacao.erroModelos}</p>}
+          {modeloSel && <Previa texto={modeloSel.texto} variaveis={modeloSel.variaveis} contatos={contatos.filter(c => !c.opt_out && (!segmento || c.segmento === segmento))} />}
         </div>
       )}
 
@@ -367,6 +373,7 @@ function Campanhas({ campanhas, contatos, situacao, recarregar, avisar }: { camp
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <p className="text-sm font-semibold text-app-text">{c.nome}<span className={`ml-2 rounded-full border px-2 py-0.5 text-[10px] font-medium ${cls}`}>{rot}</span></p>
+                {c.template_texto && <p className="mt-0.5 line-clamp-2 text-xs text-app-subtle">{c.template_texto}</p>}
                 <p className="text-xs text-app-muted">Modelo {c.template_name} ({c.template_lang}) · {c.segmento ?? 'todos os segmentos'} · criada {quando(c.created_at)}{c.created_by_nome ? ` por ${c.created_by_nome}` : ''}</p>
               </div>
               <div className="flex gap-1.5">
@@ -385,6 +392,21 @@ function Campanhas({ campanhas, contatos, situacao, recarregar, avisar }: { camp
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// Como a mensagem chega para alguns contatos do público ({{1}} = primeiro nome).
+function Previa({ texto, variaveis, contatos }: { texto: string; variaveis: number; contatos: Contato[] }) {
+  const amostra = contatos.slice(0, 4)
+  const semNome = variaveis ? contatos.filter(c => primeiroNome(c.nome) === 'tudo bem').length : 0
+  return (
+    <div className="md:col-span-4 space-y-1 rounded-lg bg-app-surface2 p-2 text-xs text-app-muted">
+      <p className="font-medium text-app-text">Prévia</p>
+      {(variaveis ? amostra : amostra.slice(0, 1)).map(c => (
+        <p key={c.id} className="whitespace-pre-wrap"><span className="text-app-subtle">{c.nome || c.telefone}: </span>{texto.replace(/\{\{\s*1\s*\}\}/g, primeiroNome(c.nome))}</p>
+      ))}
+      {variaveis > 0 && semNome > 0 && <p className="text-app-subtle">{semNome} contato(s) sem nome aproveitável recebem “tudo bem” no lugar do nome.</p>}
     </div>
   )
 }

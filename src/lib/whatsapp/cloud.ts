@@ -13,7 +13,6 @@
 //   WHATSAPP_DAILY_LIMIT      contatos únicos por 24 h (250 hoje; 2000 após verificar a empresa)
 
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import { SEGMENTOS } from './segmentos'
 
 export const JANELA_24H_MS = 24 * 60 * 60 * 1000
 
@@ -64,63 +63,44 @@ async function postarMensagem(corpo: Record<string, unknown>): Promise<string> {
   return json.messages[0].id
 }
 
-export function enviarTemplate(telefone: string, nome: string, idioma: string): Promise<string> {
-  return postarMensagem({ to: telefone, type: 'template', template: { name: nome, language: { code: idioma } } })
+// corpo: valores de {{1}}, {{2}}... do corpo do modelo, em ordem.
+export function enviarTemplate(telefone: string, nome: string, idioma: string, corpo: string[] = []): Promise<string> {
+  const template: Record<string, unknown> = { name: nome, language: { code: idioma } }
+  if (corpo.length) template.components = [{ type: 'body', parameters: corpo.map(text => ({ type: 'text', text })) }]
+  return postarMensagem({ to: telefone, type: 'template', template })
 }
 
 export function enviarTextoCloud(telefone: string, texto: string): Promise<string> {
   return postarMensagem({ to: telefone, type: 'text', text: { preview_url: false, body: texto } })
 }
 
-export interface ModeloMeta { name: string; language: string; status: string; category: string }
+export interface ModeloMeta {
+  name: string; language: string; status: string; category: string
+  texto: string          // corpo, com {{1}}...
+  variaveis: number      // quantos {{n}} no corpo
+  suportado: boolean     // o sistema sabe preencher (só corpo; até 1 variável = primeiro nome; sem cabeçalho de mídia)
+}
 
-// Modelos aprovados da conta (para escolher na campanha).
+interface ComponenteMeta { type: string; text?: string; format?: string }
+
+// Modelos da conta (para escolher na campanha).
 export async function listarModelos(): Promise<ModeloMeta[]> {
   const waba = process.env.WHATSAPP_WABA_ID
   if (!waba || !process.env.WHATSAPP_TOKEN) return []
-  const res = await fetch(`https://graph.facebook.com/${versao()}/${waba}/message_templates?fields=name,language,status,category&limit=200`, {
+  const res = await fetch(`https://graph.facebook.com/${versao()}/${waba}/message_templates?fields=name,language,status,category,components&limit=200`, {
     headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` },
     cache: 'no-store',
   })
   if (!res.ok) throw new ErroMeta(`Não consegui ler os modelos na Meta (HTTP ${res.status}).`, res.status, await res.text().catch(() => ''))
-  const json = (await res.json()) as { data?: ModeloMeta[] }
-  return json.data ?? []
+  const json = (await res.json()) as { data?: (Omit<ModeloMeta, 'texto' | 'variaveis' | 'suportado'> & { components?: ComponenteMeta[] })[] }
+  return (json.data ?? []).map(({ components = [], ...m }) => {
+    const corpo = components.find(c => c.type === 'BODY')?.text ?? ''
+    const cabecalho = components.find(c => c.type === 'HEADER')
+    const variaveis = new Set(corpo.match(/\{\{\s*\d+\s*\}\}/g) ?? []).size
+    const cabecalhoOk = !cabecalho || (cabecalho.format === 'TEXT' && !/\{\{/.test(cabecalho.text ?? ''))
+    return { ...m, texto: corpo, variaveis, suportado: variaveis <= 1 && cabecalhoOk }
+  })
 }
 
-// --- Contatos -----------------------------------------------------------------
-
-function semAcento(s: string): string {
-  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
-}
-
-// "Fulano Cliente Fabrique Clipe" → "Fabrique"; "06/04 Áurea Daniel - HYPE Cliente Aurea" → "Aurea".
-// Procura primeiro depois do último "cliente", depois no nome todo.
-export function segmentoDoNome(nome: string | null | undefined): string | null {
-  if (!nome) return null
-  const n = semAcento(nome).replace(/\btrilplex\b/g, 'triplex') // erros de digitação vistos na lista
-  const i = n.lastIndexOf('cliente')
-  const trechos = i >= 0 ? [n.slice(i + 7), n] : [n]
-  for (const t of trechos) {
-    if (/\bclub\s*a\b/.test(t)) return 'Club A'
-    for (const s of SEGMENTOS) if (s !== 'Club A' && s !== 'Geral' && new RegExp(`\\b${semAcento(s)}\\b`).test(t)) return s
-  }
-  // "Cliente 33" / "Club 33": cliente normal, sem espaço específico.
-  if (i >= 0 && /^\s*(club\s*)?33\b/.test(n.slice(i + 7))) return 'Geral'
-  return null
-}
-
-// Telefone para E.164 sem "+" (Brasil por padrão). null se não der para usar.
-export function normalizarTelefone(v: string | null | undefined): string | null {
-  if (!v) return null
-  const d = v.replace(/\D/g, '')
-  if (d.length === 10 || d.length === 11) return `55${d}` // DDD + número, sem país
-  if (d.length >= 12 && d.length <= 15) return d
-  return null
-}
-
-// Pedido de saída: botão "Não tenho interesse" ou texto SAIR/PARAR etc.
-export function pedeSaida(texto: string | null | undefined): boolean {
-  if (!texto) return false
-  const t = semAcento(texto).trim().replace(/[.!]+$/, '')
-  return t === 'nao tenho interesse' || ['sair', 'parar', 'pare', 'stop', 'cancelar', 'descadastrar'].includes(t)
-}
+// Nomes, segmentos e telefones: funções puras em ./segmentos (a tela também usa).
+export { SEGMENTOS, SEM_NOME, normalizarTelefone, pedeSaida, primeiroNome, segmentoDoNome, valorParametro } from './segmentos'

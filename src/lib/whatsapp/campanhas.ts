@@ -7,7 +7,7 @@
 // mesmo com o botão e o agendador rodando ao mesmo tempo.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { ErroMeta, cloudConfigurado, enviarTemplate, limiteDiario } from './cloud'
+import { ErroMeta, cloudConfigurado, enviarTemplate, limiteDiario, valorParametro } from './cloud'
 
 const LOTE_MAX = 60
 const PARALELO = 6
@@ -43,8 +43,8 @@ export async function cotaUsada(sb: SupabaseClient): Promise<number> {
 
 async function pendentesDaCampanha(sb: SupabaseClient, c: { id: string; segmento: string | null }) {
   const [contatos, jaFeitos] = await Promise.all([
-    todas<{ id: string; telefone: string }>((de, ate) => {
-      let q = sb.from('wa_contacts').select('id, telefone').eq('opt_out', false)
+    todas<{ id: string; telefone: string; nome: string | null }>((de, ate) => {
+      let q = sb.from('wa_contacts').select('id, telefone, nome').eq('opt_out', false)
       if (c.segmento) q = q.eq('segmento', c.segmento)
       return q.order('created_at').range(de, ate)
     }),
@@ -73,6 +73,9 @@ export async function processarCampanha(sb: SupabaseClient, campanhaId: string, 
     return { ...base, status: 'concluida' }
   }
 
+  const parametros = (c.parametros ?? []) as string[]
+  const corpoDe = (contato: { nome: string | null }) => parametros.map(p => valorParametro(p, contato))
+
   let cota = limiteDiario() - (await cotaUsada(sb))
   let enviadas = 0, falhas = 0
   let aviso: string | undefined
@@ -86,11 +89,11 @@ export async function processarCampanha(sb: SupabaseClient, campanhaId: string, 
     await Promise.all(pendentes.slice(i, i + PARALELO).map(async contato => {
       const { data: msg, error: eIns } = await sb.from('wa_messages').insert({
         campaign_id: c.id, contact_id: contato.id, direction: 'out', tipo: 'template', status: 'pendente',
-        conteudo: { template: c.template_name, idioma: c.template_lang },
+        conteudo: { template: c.template_name, idioma: c.template_lang, ...(corpoDe(contato).length ? { parametros: corpoDe(contato) } : {}) },
       }).select('id').single()
       if (eIns || !msg) return // já enviada por outro processo (índice único)
       try {
-        const waId = await enviarTemplate(contato.telefone, c.template_name, c.template_lang)
+        const waId = await enviarTemplate(contato.telefone, c.template_name, c.template_lang, corpoDe(contato))
         await sb.from('wa_messages').update({ wa_message_id: waId, status: 'accepted' }).eq('id', msg.id)
         await sb.from('wa_contacts').update({ ultima_saida_at: new Date().toISOString() }).eq('id', contato.id)
         enviadas++; cota--

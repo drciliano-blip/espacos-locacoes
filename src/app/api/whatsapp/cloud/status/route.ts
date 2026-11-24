@@ -11,7 +11,7 @@ export async function GET() {
   let modelos: ModeloMeta[] = []
   let erroModelos: string | undefined
   if (quem.role === 'admin') {
-    try { modelos = (await listarModelos()).filter(m => m.status === 'APPROVED') } catch (e) { erroModelos = e instanceof Error ? e.message : String(e) }
+    try { modelos = (await listarModelos()).filter(m => m.status !== 'REJECTED' && m.status !== 'DISABLED') } catch (e) { erroModelos = e instanceof Error ? e.message : String(e) }
   }
   return NextResponse.json({
     configurado: cloudConfigurado(),

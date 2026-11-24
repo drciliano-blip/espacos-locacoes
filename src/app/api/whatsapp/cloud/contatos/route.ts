@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   for (const c of body.contatos ?? []) {
     const telefone = normalizarTelefone(c.telefone)
     if (!telefone) { invalidos++; continue }
-    const nome = c.nome?.replace(/[‎‏﻿]/g, '').trim() || null
+    const nome = c.nome?.replace(/[\u200e\u200f\ufeff]/g, '').trim() || null
     porTelefone.set(telefone, { telefone, nome, segmento: c.segmento?.trim() || segmentoDoNome(nome), origem })
   }
   const linhas = [...porTelefone.values()]
