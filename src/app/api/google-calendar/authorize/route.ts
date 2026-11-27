@@ -28,7 +28,8 @@ export async function GET(request: Request) {
     client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!,
     redirect_uri: redirectUri,
     response_type: 'code',
-    scope: 'https://www.googleapis.com/auth/calendar',
+    // userinfo.email: só para mostrar na tela qual conta Google ficou ligada ao espaço.
+    scope: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email',
     access_type: 'offline',
     prompt: 'consent',
     state: espacoId,
