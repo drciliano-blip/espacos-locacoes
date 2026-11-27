@@ -18,6 +18,7 @@ const MODEL = 'claude-opus-5-5'
 const INSTRUCAO = `Um funcionário do sistema da Espaços & Locações anexou este arquivo no chat do assistente interno. Descreva o conteúdo para o assistente, que NÃO vê o arquivo.
 - Print de tela do sistema: diga qual tela parece ser (use o MANUAL acima para reconhecer), transcreva os textos visíveis relevantes (títulos, campos preenchidos, valores, datas, nomes, botões), mensagens de erro ou aviso exatamente como aparecem, e o que parece estar destacado ou selecionado.
 - Documento (ficha de cliente, comprovante, boleto, nota, contrato, conversa de WhatsApp): transcreva todos os dados úteis (nomes, CPF/CNPJ, telefone, e-mail, endereço, datas, horários, valores, espaço, forma de pagamento, códigos).
+- Extrato bancário: diga o banco, a conta e o período, e transcreva TODAS as movimentações, uma por linha, no formato "AAAA-MM-DD | descrição | valor | identificador", com valor positivo para entrada (crédito) e negativo para saída (débito), sem pular nenhuma. Ignore linhas de saldo. Se não couber tudo, diga até que data transcreveu.
 - Outra imagem: descreva objetivamente.
 Seja fiel: não invente nem complete o que não está legível (diga "ilegível"). Responda em português, em texto corrido ou lista curta, sem markdown.`
 
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
   try {
     const msg = await new Anthropic({ apiKey }).beta.messages.create({
       model: MODEL,
-      max_tokens: 3000,
+      max_tokens: 8000,
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: [{ model: 'claude-opus-4-8' }],
       system: [{ type: 'text', text: MANUAL_SISTEMA, cache_control: { type: 'ephemeral' } }, { type: 'text', text: INSTRUCAO }],

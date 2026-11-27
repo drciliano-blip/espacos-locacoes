@@ -29,25 +29,27 @@ interface Bolha {
 const SUGESTOES: Record<string, string[]> = {
   admin: [
     'O que tem na agenda nos próximos 7 dias?',
-    'Quais clientes estão com pagamento atrasado?',
-    'A Mendoza pagou a parcela 2 por PIX ontem, dá baixa',
-    'Lança a conta de energia da Fabrique de R$ 1.850,40, vence 10/12',
-    'Tem lançamento duplicado no mês passado?',
-    'Evento de 800 pessoas na Fabrique precisa de alvará?',
+    'Quem está devendo? Prepara as mensagens de cobrança',
+    'O que vence para pagar essa semana?',
+    'Prepara o fechamento de outubro da Usine',
+    'Faturamento de cada espaço de janeiro a novembro',
+    'Acha o contrato assinado do último evento da Fabrique',
   ],
   financeiro: [
-    'Quais clientes estão com pagamento atrasado?',
+    'Quem está devendo? Prepara as mensagens de cobrança',
+    'O que vence para pagar essa semana?',
     'A Mendoza pagou a parcela 2 por PIX ontem, dá baixa',
-    'Lança a conta de energia da Fabrique de R$ 1.850,40, vence 10/12',
+    'Prepara o fechamento de outubro da Usine',
+    'Faturamento de cada espaço de janeiro a novembro',
     'Tem lançamento duplicado no mês passado?',
-    'Confere o mês passado de todos os espaços.',
   ],
   operacional: [
     'O que tem na agenda nos próximos 7 dias?',
-    'O Fabrique está livre nos sábados de dezembro?',
+    'Datas livres de sábado em março no Fabrique e na Usine, para mandar ao cliente',
+    'Muda o horário do evento de sábado na Usine para 22h às 5h',
     'Quais pré-eventos estão em aberto?',
+    'Acha o contrato do último evento do House',
     'Evento de 1.200 pessoas precisa de brigada e ambulância?',
-    'Como gero o contrato de um evento?',
   ],
 }
 

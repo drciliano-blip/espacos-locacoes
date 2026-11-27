@@ -214,6 +214,17 @@ export default function ContasPagarPage() {
     subcategoria: SUBCATEGORIAS.includes(searchParams.get('subcategoria') ?? '') ? searchParams.get('subcategoria') ?? '' : '',
     espaco: searchParams.get('espaco') ?? '', fornecedor: searchParams.get('fornecedor') ?? '', observacoes: searchParams.get('observacoes') ?? '',
   } : null)
+  // Assistente de IA: ?baixa=<id> abre "Dar baixa" dessa conta (com o comprovante, como sempre).
+  // As contas chegam depois da página: abre assim que a conta aparecer, uma vez só por id.
+  const baixaParam = searchParams.get('baixa')
+  const [baixaParamUsado, setBaixaParamUsado] = useState<string | null>(null)
+  if (baixaParam && baixaParam !== baixaParamUsado) {
+    const alvo = contas.find(c => c.id === baixaParam)
+    if (alvo) {
+      setBaixaParamUsado(baixaParam)
+      if (alvo.status !== 'pago') setContaBaixa(alvo)
+    }
+  }
   const abaDoParam = abaParam === 'atraso' || abaParam === 'pagas' ? abaParam : null
   const [tab,               setTab]               = useState<'apagar' | 'pagas' | 'atraso'>(abaDoParam ?? 'apagar')
   const [abaParamVisto,     setAbaParamVisto]     = useState(abaParam)

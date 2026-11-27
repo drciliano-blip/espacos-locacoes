@@ -45,6 +45,8 @@ interface Props {
   // Relatórios) — esconde o seletor de tipo, igual já acontece quando vem de
   // dentro de um evento.
   fixedTipoEntrada?: TipoEntrada
+  // Assistente de IA: aporte já preenchido (a pessoa confere e salva).
+  inicial?: { socio?: string; valor?: string; data?: string; descricao?: string }
 }
 
 interface Draft {
@@ -71,7 +73,7 @@ function emptyDraft(categoriaId: string, espaco: string, cliente: string, tipoEn
 }
 
 export default function NovaReceitaModal({
-  categorias, onClose, onSave, eventoId, espacoPadrao, clientePadrao, excludeSlugs, fixedTipoEntrada,
+  categorias, onClose, onSave, eventoId, espacoPadrao, clientePadrao, excludeSlugs, fixedTipoEntrada, inicial,
 }: Props) {
   const { espacosNomes } = useEspacos()
   // Aberta de dentro de um evento, ou com um tipo já travado (ex: "+" de Aporte
@@ -80,12 +82,18 @@ export default function NovaReceitaModal({
   const categoriasDisponiveis = excludeSlugs
     ? categorias.filter(c => !excludeSlugs.includes(c.slug))
     : categorias
-  const [draft, setDraft] = useState<Draft>(() => emptyDraft(
-    categoriasDisponiveis[0]?.id ?? '',
-    espacoPadrao ?? '',
-    clientePadrao ?? '',
-    fixedTipoEntrada ?? 'evento',
-  ))
+  const [draft, setDraft] = useState<Draft>(() => ({
+    ...emptyDraft(
+      categoriasDisponiveis[0]?.id ?? '',
+      espacoPadrao ?? '',
+      clientePadrao ?? '',
+      fixedTipoEntrada ?? 'evento',
+    ),
+    ...(inicial?.socio ? { socioResponsavel: inicial.socio } : {}),
+    ...(inicial?.valor ? { valor: inicial.valor } : {}),
+    ...(inicial?.data ? { data: inicial.data } : {}),
+    ...(inicial?.descricao ? { descricao: inicial.descricao } : {}),
+  }))
   const [comprovante, setComprovante] = useState<File | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const cameraRef = useRef<HTMLInputElement>(null)

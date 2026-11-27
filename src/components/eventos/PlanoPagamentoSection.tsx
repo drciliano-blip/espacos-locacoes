@@ -58,6 +58,16 @@ interface Props {
   // junto do plano, e o atalho "Mês do evento".
   eventoId?: string
   dataEvento?: string
+  // Plano proposto pelo Assistente de IA: abre já em "Editar plano" com estas
+  // parcelas; só vale depois do "Salvar plano" de quem confere.
+  parcelasIniciais?: ParcelaPlano[]
+}
+
+function draftSugerido(sugeridas: ParcelaPlano[], parcelas: Receita[]): DraftParcela[] {
+  return sugeridas.map(s => {
+    const atual = parcelas.find(p => p.parcelaNumero === s.numero)
+    return { id: atual?.id, numero: s.numero, label: s.label, data: s.data, valor: String(s.valor), status: atual?.status ?? 'pendente' }
+  })
 }
 
 function toDraft(parcelas: Receita[]): DraftParcela[] {
@@ -434,8 +444,9 @@ export function EditarParcelaModal({ parcela, dataEvento, onClose, onSalvar }: {
   )
 }
 
-export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEditarPlano, onSync, onBaixa, onValorEventoChange, eventoId, dataEvento }: Props) {
-  const [editando, setEditando] = useState(false)
+export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEditarPlano, onSync, onBaixa, onValorEventoChange, eventoId, dataEvento, parcelasIniciais }: Props) {
+  const sugerido = podeEditarPlano && !!parcelasIniciais?.length
+  const [editando, setEditando] = useState(sugerido)
   // Comprovantes à vista, sem abrir cada parcela: os anexados em cada parcela
   // (module 'receitas') e os do sinal anexados no evento (aba Documentos).
   const [comprovantes, setComprovantes] = useState<StoredFile[]>([])
@@ -452,7 +463,7 @@ export default function PlanoPagamentoSection({ valorEvento, parcelas, podeEdita
     return () => { ativo = false }
   }, [idsParcelas, eventoId, versaoComprovantes])
   const comprovantesDoEvento = comprovantes.filter(f => f.module === 'agenda')
-  const [draft, setDraft] = useState<DraftParcela[]>(() => toDraft(parcelas))
+  const [draft, setDraft] = useState<DraftParcela[]>(() => (sugerido ? draftSugerido(parcelasIniciais!, parcelas) : toDraft(parcelas)))
   const [saving, setSaving] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [parcelaEditando, setParcelaEditando] = useState<Receita | null>(null)

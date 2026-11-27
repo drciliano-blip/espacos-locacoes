@@ -41,19 +41,21 @@ interface Props {
   onClose: () => void
   onSave: (c: ContaPagar) => Promise<void>
   onSaved: () => void
+  // Assistente de IA: campos já preenchidos (a pessoa confere e salva).
+  inicial?: { socio?: string; valor?: string; data?: string; descricao?: string }
 }
 
 // Retirada de Sócio é uma movimentação societária, não despesa (ver
 // isDespesaOperacional em ContasPagarContext) — cada retirada fica vinculada
 // exatamente ao sócio que recebeu o dinheiro (campo `fornecedor`), nunca
 // rateada automaticamente pelo percentual societário.
-export default function NovaRetiradaSocioModal({ espacoPadrao, onClose, onSave, onSaved }: Props) {
+export default function NovaRetiradaSocioModal({ espacoPadrao, onClose, onSave, onSaved, inicial }: Props) {
   const { espacosNomes } = useEspacos()
   const [espaco, setEspaco] = useState(espacoPadrao ?? espacosNomes[0] ?? '')
-  const [socio, setSocio] = useState('')
-  const [valor, setValor] = useState('')
-  const [data, setData] = useState(() => new Date().toISOString().split('T')[0])
-  const [descricao, setDescricao] = useState('')
+  const [socio, setSocio] = useState(inicial?.socio ?? '')
+  const [valor, setValor] = useState(inicial?.valor ?? '')
+  const [data, setData] = useState(() => inicial?.data ?? new Date().toISOString().split('T')[0])
+  const [descricao, setDescricao] = useState(inicial?.descricao ?? '')
   const [observacoes, setObservacoes] = useState('')
   const [comprovante, setComprovante] = useState<File | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)

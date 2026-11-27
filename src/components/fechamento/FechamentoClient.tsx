@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import {
   ArrowUpCircle, ArrowDownCircle, Wallet, HardHat, Vault, Plus, X, Eye, Landmark, Lock, RotateCcw,
 } from 'lucide-react'
@@ -60,7 +61,7 @@ export default function FechamentoClient() {
   const { eventos } = useEventos()
   const { contas: contasPagar, addConta, updateConta, deleteConta } = useContasPagar()
   const { espacosConfig } = useEspacos()
-  const { espacosEmEscopo: selectedSpaces, espacoUnico, precisaEspacoEspecifico } = useEspacoAtivo()
+  const { espacosEmEscopo: selectedSpaces, espacoUnico, precisaEspacoEspecifico, setEspacoUnico } = useEspacoAtivo()
   const { fundos, movimentacoes, addFundo } = useFundos()
   const { repasses, addRepasse } = useRepasses()
   const { fechamentos, loading: fechamentosLoading, fecharPeriodo, reabrirPeriodo } = useFechamentos()
@@ -150,6 +151,44 @@ export default function FechamentoClient() {
   // Trocar de espaço ativo reabre a chance de aplicar o período padrão —
   // o filtro manual anterior era do espaço anterior, não deve "vazar".
   useEffect(() => { setFiltroTocado(false) }, [espacoUnico])
+
+  // Assistente de IA: ?espaco=&de=&ate=&fechar=1 abre "Fechar Período" no espaço e
+  // período certos; ?espaco=&lancar=aporte|retirada&socio=&valor=&data=&descricao=
+  // abre "+ Aporte"/"+ Retirada" preenchido. Vale uma vez; o resto é o fluxo de sempre.
+  const searchParams = useSearchParams()
+  const [pedidoAssistente, setPedidoAssistente] = useState(() => {
+    const espaco = searchParams.get('espaco')
+    if (!espaco) return null
+    const de = searchParams.get('de'), ate = searchParams.get('ate'), lancar = searchParams.get('lancar')
+    return {
+      espaco, de: de && /^\d{4}-\d{2}-\d{2}$/.test(de) ? de : null, ate: ate && /^\d{4}-\d{2}-\d{2}$/.test(ate) ? ate : null,
+      fechar: searchParams.get('fechar') === '1', lancar: lancar === 'aporte' || lancar === 'retirada' ? lancar : null,
+    }
+  })
+  const [inicialSocio] = useState(() => ({
+    socio: searchParams.get('socio') ?? undefined, valor: searchParams.get('valor') ?? undefined,
+    data: searchParams.get('data') ?? undefined, descricao: searchParams.get('descricao') ?? undefined,
+  }))
+  // Precisa ser efeito: espera o espaço global (contexto) trocar e os fechamentos
+  // carregarem, e roda depois do efeito do período padrão para prevalecer.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (!pedidoAssistente) return
+    if (espacoUnico !== pedidoAssistente.espaco) { setEspacoUnico(pedidoAssistente.espaco); return }
+    if (fechamentosLoading) return
+    // Depois do efeito que reaplica o período padrão: este vem por último e vale.
+    if (pedidoAssistente.de && pedidoAssistente.ate) {
+      setFiltroTocado(true)
+      setFilters({ periodo: 'mensal', dataInicio: pedidoAssistente.de, dataFim: pedidoAssistente.ate })
+    }
+    if (podeLancar) {
+      if (pedidoAssistente.fechar) setFecharPeriodoOpen(true)
+      if (pedidoAssistente.lancar === 'aporte') setNovoAporteOpen(true)
+      if (pedidoAssistente.lancar === 'retirada') setNovaRetiradaOpen(true)
+    }
+    setPedidoAssistente(null)
+  }, [pedidoAssistente, espacoUnico, fechamentosLoading, podeLancar, setEspacoUnico])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // selectedSpaces/espacoUnico vêm do contexto global (EspacoAtivoContext) —
   // Financeiro não tem mais filtro de espaço próprio.
@@ -1257,6 +1296,7 @@ export default function FechamentoClient() {
           categorias={categorias}
           fixedTipoEntrada="aporte_societario"
           espacoPadrao={espacoUnico ?? undefined}
+          inicial={inicialSocio}
           onClose={() => setNovoAporteOpen(false)}
           onSave={async input => {
             const nova = await addReceita(input)
@@ -1269,6 +1309,7 @@ export default function FechamentoClient() {
       {novaRetiradaOpen && (
         <NovaRetiradaSocioModal
           espacoPadrao={espacoUnico ?? undefined}
+          inicial={inicialSocio}
           onClose={() => setNovaRetiradaOpen(false)}
           onSave={addConta}
           onSaved={() => showToast('Retirada de sócio registrada.')}

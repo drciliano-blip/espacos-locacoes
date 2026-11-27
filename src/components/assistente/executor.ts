@@ -7,13 +7,16 @@
 
 import { useReceitas, type BaixaReceitaInput, type Receita } from '@/contexts/ReceitasContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
+import { useEventos } from '@/contexts/EventosContext'
 import { useAtividades } from '@/contexts/AtividadesContext'
 import { normalizarTexto } from '@/lib/conciliacao-bancaria'
 import type { AcaoProposta } from '@/lib/assistente/ferramentas'
-import type { CategoriaContaPagar, ContaPagar } from '@/types'
+import type { CategoriaContaPagar, ContaPagar, Evento } from '@/types'
 
 export type AcaoBaixa = Extract<AcaoProposta, { tipo: 'baixa' }>
 export type AcaoConta = Extract<AcaoProposta, { tipo: 'conta' }>
+export type AcaoEditarEvento = Extract<AcaoProposta, { tipo: 'editar_evento' }>
+export type AcaoBaixaConta = Extract<AcaoProposta, { tipo: 'baixa_conta' }>
 
 // Formas que gravam direto. Repasse de sócio e lucro de sócio têm regras
 // próprias (geram repasse): só pela janela "Editar parcela".
@@ -28,7 +31,8 @@ export const hojeISO = () => new Date().toLocaleDateString('sv-SE', { timeZone: 
 
 export function useExecutorAcoes() {
   const { receitas, updateReceita } = useReceitas()
-  const { contas, addConta, deleteConta } = useContasPagar()
+  const { contas, addConta, deleteConta, updateConta, darBaixa: pagarConta } = useContasPagar()
+  const { eventos, updateEvento } = useEventos()
   const { logAtividade } = useAtividades()
 
   const registrar = (acao: string, detalhes: string, espaco?: string) =>
@@ -94,5 +98,33 @@ export function useExecutorAcoes() {
     }
   }
 
-  return { parcelaDe, darBaixa, possivelDuplicada, podeLancarDireto, lancarConta }
+  // Aplica os campos propostos no evento (o objeto inteiro vai para o banco,
+  // como na edição da tela); desfazer volta o evento como estava.
+  async function editarEvento(a: AcaoEditarEvento): Promise<() => Promise<void>> {
+    const ev = eventos.find(e => e.id === a.eventoId)
+    if (!ev) throw new Error('Evento ainda carregando ou sem acesso. Tente de novo em instantes.')
+    const novo: Evento = { ...ev, ...(a.alteracoes as Partial<Evento>) }
+    if (!/^\d{2}:\d{2}/.test(novo.horaInicio ?? '') || !/^\d{2}:\d{2}/.test(novo.horaFim ?? '')) throw new Error('Informe o horário de início e de término do evento.')
+    await updateEvento(novo)
+    return async () => { await updateEvento(ev) }
+  }
+
+  // Conta paga pelo extrato do banco (conciliação): o extrato faz as vezes do
+  // comprovante, como em "Criar lançamento" da tela de Conciliação.
+  async function pagarContaPeloExtrato(a: AcaoBaixaConta): Promise<() => Promise<void>> {
+    const c = contas.find(x => x.id === a.contaId)
+    if (!c) throw new Error('Conta ainda carregando ou sem acesso. Tente de novo em instantes.')
+    if (c.status === 'pago') throw new Error('Esta conta já está paga.')
+    const data = a.dataPagamento
+    if (!data || !/^\d{4}-\d{2}-\d{2}$/.test(data) || data > hojeISO()) throw new Error('Data de pagamento inválida.')
+    await pagarConta(c.id, data, undefined, 'Extrato bancário', a.identificador)
+    const rotulo = `${c.descricao} · ${brl(c.valor)} · pago em ${brData(data)} (pelo extrato)`
+    await registrar('Conta paga', rotulo, c.espaco === 'Todos' ? undefined : c.espaco)
+    return async () => {
+      await updateConta(c)
+      await registrar('Pagamento desfeito', rotulo, c.espaco === 'Todos' ? undefined : c.espaco)
+    }
+  }
+
+  return { parcelaDe, darBaixa, possivelDuplicada, podeLancarDireto, lancarConta, editarEvento, pagarContaPeloExtrato }
 }

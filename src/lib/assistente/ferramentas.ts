@@ -4,15 +4,20 @@
 // grava nada: ações (ex.: pré-reservar) voltam como proposta e só acontecem
 // quando a pessoa clica em Confirmar na tela.
 
-import type Anthropic from '@anthropic-ai/sdk'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { canAccess, veValoresAReceber } from '@/lib/auth'
 import type { FichaCliente, NivelAcesso } from '@/types'
 import { aplicarPatch } from './calculo-estado'
 import { mensagemInicial } from './roteiro'
+import { ISO, LIMITE, dias, filtroEspaco, hojeSP, juntar, norm, periodo, texto, type Entrada, type Ferramenta, type Tool } from './ferramentas-util'
+import { FERRAMENTAS_EXTRA } from './ferramentas-extra'
 
-type Tool = Anthropic.Beta.BetaTool
-type Entrada = Record<string, unknown>
+// Campos de evento que o assistente pode propor alterar (nomes do tipo Evento).
+export type AlteracoesEvento = Partial<Record<
+  'horaInicio' | 'horaFim' | 'horaInicioMontagem' | 'numeroPessoas' | 'nomeEvento' | 'telefoneContato' | 'email' | 'responsavel'
+  | 'observacoes' | 'observacoesTecnicas' | 'tipoEvento' | 'decoracao' | 'statusVistoria' | 'valor' | 'cliente',
+  string | number
+>>
 
 export type AcaoProposta =
   | {
@@ -37,58 +42,20 @@ export type AcaoProposta =
   | { tipo: 'atendimento'; atendimentoId?: string; novo?: { titulo: string; estado: Record<string, unknown>; mensagens: Record<string, unknown>[]; espaco_slug: string | null; data_evento: string | null }; resumo: string }
   // Abre "Nova Conta a Pagar" já preenchida.
   | { tipo: 'conta'; campos: { descricao: string; valor: number; vencimento: string; categoria: string; subcategoria: string; espaco: string; fornecedor?: string; observacoes?: string }; resumo: string }
-
-interface Ferramenta {
-  definicao: Tool
-  pode: (role: NivelAcesso) => boolean
-  executar: (sb: SupabaseClient, e: Entrada, ctx: { role: NivelAcesso; acoes: AcaoProposta[] }) => Promise<unknown>
-}
-
-const ISO = /^\d{4}-\d{2}-\d{2}$/
-const texto = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
-const norm = (s?: string | null) => (s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
-const hojeSP = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' })
-const dias = (a: string, b: string) => Math.abs((Date.parse(a) - Date.parse(b)) / 86400000)
-const LIMITE = 200
-
-// Junta várias consultas simples (sem filtro "or"), sem repetir linhas.
-async function juntar<T extends { id: string }>(consultas: PromiseLike<{ data: T[] | null; error: unknown }>[]): Promise<T[]> {
-  const rs = await Promise.all(consultas)
-  const vistos = new Map<string, T>()
-  for (const r of rs) {
-    if (r.error) throw r.error
-    for (const x of r.data ?? []) vistos.set(x.id, x)
-  }
-  return [...vistos.values()]
-}
-
-function periodo(e: Entrada, padraoDias = 31): { de: string; ate: string } {
-  const de = ISO.test(texto(e.de)) ? texto(e.de) : hojeSP()
-  let ate = ISO.test(texto(e.ate)) ? texto(e.ate) : ''
-  if (!ate) {
-    const d = new Date(de + 'T12:00:00')
-    d.setDate(d.getDate() + padraoDias)
-    ate = d.toISOString().slice(0, 10)
-  }
-  return { de, ate }
-}
-
-async function espacos(sb: SupabaseClient) {
-  const { data, error } = await sb.from('espacos').select('id, slug, nome')
-  if (error) throw error
-  return (data ?? []) as { id: string; slug: string; nome: string }[]
-}
-
-// "fabrique", "Fabrique", "espaço solon" → id
-async function filtroEspaco(sb: SupabaseClient, v: unknown) {
-  const todos = await espacos(sb)
-  const nomes = new Map(todos.map(e => [e.id, e.nome]))
-  const q = norm(texto(v))
-  if (!q) return { id: undefined as string | undefined, nomes }
-  const achado = todos.find(e => norm(e.slug) === q || norm(e.nome) === q) ?? todos.find(e => norm(e.nome).includes(q) || q.includes(norm(e.nome)))
-  if (!achado) throw new Error(`Espaço "${texto(v)}" não encontrado. Espaços: ${todos.map(e => e.nome).join(', ')}.`)
-  return { id: achado.id, nomes }
-}
+  // Altera campos de um evento: grava com um toque (com Desfazer) ou abre a edição preenchida.
+  | { tipo: 'editar_evento'; eventoId: string; alteracoes: AlteracoesEvento; mudancas: string[]; resumo: string }
+  // Baixa de conta a pagar existente. viaExtrato: o extrato do banco é o comprovante (como na Conciliação).
+  | { tipo: 'baixa_conta'; contaId: string; resumo: string; dataPagamento?: string; identificador?: string; viaExtrato?: boolean }
+  // Texto pronto para o staff mandar ao cliente (copiar ou abrir no WhatsApp do celular).
+  | { tipo: 'mensagem'; titulo: string; texto: string; telefone?: string; resumo: string }
+  // Documento guardado no sistema (abrir ou baixar).
+  | { tipo: 'arquivo'; fileId: string; nome: string; resumo: string }
+  // Novo plano de pagamento proposto: abre o painel do evento com o plano já na edição (só admin salva).
+  | { tipo: 'plano'; eventoId: string; parcelas: { numero: number; label: string; data: string; valor: number }[]; linhas: string[]; resumo: string }
+  // Abre a tela Financeiro no espaço e período certos, com "Fechar Período" aberto.
+  | { tipo: 'fechamento'; espaco: string; de: string; ate: string; resumo: string }
+  // Abre "+ Aporte" ou "+ Retirada" preenchido na tela Financeiro.
+  | { tipo: 'socio'; lancamento: 'aporte' | 'retirada'; espaco: string; socio: string; valor?: number; data?: string; descricao?: string; resumo: string }
 
 const FERRAMENTAS: Record<string, Ferramenta> = {
   consultar_agenda: {
@@ -540,6 +507,13 @@ const FERRAMENTAS: Record<string, Ferramenta> = {
       return { ok: true, mensagem: 'Cartão mostrado; a pessoa confere e toca em "Lançar agora". Ainda NÃO está lançada: não diga que lançou.' }
     },
   },
+
+  ...FERRAMENTAS_EXTRA,
+}
+
+// Usada pelo preparar_fechamento (ferramentas-extra) para reaproveitar a conferência.
+export function conferirMes(sb: SupabaseClient, e: Entrada, ctx: { role: NivelAcesso; acoes: AcaoProposta[] }) {
+  return FERRAMENTAS.conferir_mes.executar(sb, e, ctx)
 }
 
 export function ferramentasDoPerfil(role: NivelAcesso): Tool[] {

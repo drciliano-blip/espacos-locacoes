@@ -6,7 +6,7 @@ import type { Evento, StatusVistoria, TipoEvento, Contrato, TipoMinuta } from '@
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useCurrentUser } from '@/contexts/UserContext'
 import { veValoresAReceber } from '@/lib/auth'
-import { useReceitas, type BaixaReceitaInput } from '@/contexts/ReceitasContext'
+import { useReceitas, type BaixaReceitaInput, type ParcelaPlano } from '@/contexts/ReceitasContext'
 import { useRepasses } from '@/contexts/RepassesContext'
 import { useContasPagar } from '@/contexts/ContasPagarContext'
 import { useContratos } from '@/contexts/ContratosContext'
@@ -63,11 +63,15 @@ interface EventoDrawerProps {
   onUpdate: (updated: Evento) => void | Promise<void>
   onDelete: (id: string, motivo: string) => Promise<void>
   // Assistente de IA: abre o painel já na ação pedida (o resto do fluxo é o de sempre).
-  acaoInicial?: 'gerar_contrato' | 'cancelar' | 'reagendar' | 'converter'
+  acaoInicial?: 'gerar_contrato' | 'cancelar' | 'reagendar' | 'converter' | 'editar'
   novaData?: string
+  // 'editar': campos que o assistente propôs, já aplicados na edição (a pessoa confere e salva).
+  alteracoes?: Partial<Evento>
+  // Plano de pagamento proposto pelo assistente: abre "Editar plano" preenchido (só admin salva).
+  planoSugerido?: ParcelaPlano[]
 }
 
-export default function EventoDrawer({ evento, onClose, onUpdate, onDelete, acaoInicial, novaData }: EventoDrawerProps) {
+export default function EventoDrawer({ evento, onClose, onUpdate, onDelete, acaoInicial, novaData, alteracoes, planoSugerido }: EventoDrawerProps) {
   const { role } = useCurrentUser()
   const { confirmarPreEvento, solicitarExclusao, recusarExclusao } = useEventos()
   const exclusaoPendente = !!evento.exclusaoSolicitadaEm
@@ -113,8 +117,12 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete, acao
   const { addConta, recarregar: recarregarContas } = useContasPagar()
   const { contratos, addContrato, recarregar: recarregarContratos } = useContratos()
   const [tab, setTab] = useState<DrawerTab>('detalhes')
-  const [editing, setEditing] = useState(acaoInicial === 'reagendar')
-  const [draft, setDraft] = useState<Evento>(() => ({ ...evento, ...(acaoInicial === 'reagendar' && novaData ? { data: novaData } : {}) }))
+  const [editing, setEditing] = useState(acaoInicial === 'reagendar' || acaoInicial === 'editar')
+  const [draft, setDraft] = useState<Evento>(() => ({
+    ...evento,
+    ...(acaoInicial === 'reagendar' && novaData ? { data: novaData } : {}),
+    ...(acaoInicial === 'editar' && alteracoes ? alteracoes : {}),
+  }))
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [motivoExclusao, setMotivoExclusao] = useState('')
   const [motivoErro, setMotivoErro] = useState(false)
@@ -673,6 +681,7 @@ export default function EventoDrawer({ evento, onClose, onUpdate, onDelete, acao
                 onValorEventoChange={handleValorEventoChange}
                 eventoId={evento.id}
                 dataEvento={evento.data}
+                parcelasIniciais={role === 'admin' ? planoSugerido : undefined}
               />
             )}
 
